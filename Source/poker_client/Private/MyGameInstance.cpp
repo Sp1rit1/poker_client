@@ -1,40 +1,57 @@
 // MyGameInstance.cpp
-#include "MyGameInstance.h" // Ваш заголовочный файл
+#include "MyGameInstance.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
-#include "TimerManager.h" // Убедитесь, что инклюд есть
+#include "TimerManager.h"
 
 // --- Вспомогательная функция ---
 
 void UMyGameInstance::SwitchScreen(TSubclassOf<UUserWidget> NewScreenClass)
 {
+    // --- ЛОГ 1: Проверка переданного класса ---
+    if (!NewScreenClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SwitchScreen FAILED: NewScreenClass is NULL!"));
+        return;
+    }
+    // Логируем имя класса, который пытаемся показать
+    // Используем GetName() или GetClass()->GetName() для получения имени
+    UE_LOG(LogTemp, Log, TEXT("SwitchScreen Attempting to show: %s"), *NewScreenClass->GetName());
+
     // Удаляем предыдущий экран
     if (CurrentScreenWidget && CurrentScreenWidget->IsValidLowLevel())
     {
+        UE_LOG(LogTemp, Log, TEXT("SwitchScreen Removing previous widget: %s"), *CurrentScreenWidget->GetName());
         CurrentScreenWidget->RemoveFromParent();
         CurrentScreenWidget = nullptr;
     }
+    else {
+        UE_LOG(LogTemp, Log, TEXT("SwitchScreen No previous widget to remove."));
+    }
 
     // Создаем и добавляем новый экран
-    if (NewScreenClass)
+    // --- ЛОГ 2: Проверка PlayerController ---
+    APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+    if (!PlayerController)
     {
-        APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
-        if (PlayerController)
-        {
-            CurrentScreenWidget = CreateWidget<UUserWidget>(PlayerController, NewScreenClass);
-            if (CurrentScreenWidget)
-            {
-                CurrentScreenWidget->AddToViewport();
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("Failed to create widget for class %s"), *NewScreenClass->GetName());
-            }
-        }
+        UE_LOG(LogTemp, Error, TEXT("SwitchScreen FAILED: Could not get PlayerController!"));
+        return;
+    }
+    UE_LOG(LogTemp, Log, TEXT("SwitchScreen Found PlayerController: %s"), *PlayerController->GetName());
+
+    // --- ЛОГ 3: Попытка создания виджета ---
+    UE_LOG(LogTemp, Log, TEXT("SwitchScreen Calling CreateWidget..."));
+    CurrentScreenWidget = CreateWidget<UUserWidget>(PlayerController, NewScreenClass);
+
+    // --- ЛОГ 4: Проверка результата создания ---
+    if (CurrentScreenWidget)
+    {
+        UE_LOG(LogTemp, Log, TEXT("SwitchScreen Widget %s CREATED successfully! Adding to viewport."), *CurrentScreenWidget->GetName());
+        CurrentScreenWidget->AddToViewport(); // ZOrder можно добавить при необходимости: AddToViewport(10);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SwitchScreen called with null NewScreenClass"));
+        UE_LOG(LogTemp, Error, TEXT("SwitchScreen FAILED: CreateWidget returned NULL for class %s! Check if class is valid and assigned in BP_MyGameInstance."), *NewScreenClass->GetName());
     }
 }
 
@@ -42,138 +59,115 @@ void UMyGameInstance::SwitchScreen(TSubclassOf<UUserWidget> NewScreenClass)
 
 void UMyGameInstance::Init()
 {
-    Super::Init(); // Важно вызвать родительский Init
-    ShowStartScreen(); // Показываем стартовый экран при запуске
+    Super::Init();
+    UE_LOG(LogTemp, Warning, TEXT("===== MyGameInstance Init() CALLED ====="));
+    // ShowStartScreen(); // <-- ЗАКОММЕНТИРУЙТЕ ИЛИ УДАЛИТЕ ЭТОТ ВЫЗОВ
+    // Инициализация статусов остается
+    SetLoginStatus(false, -1, TEXT(""));
+    SetOfflineMode(false);
 }
 
 void UMyGameInstance::ShowStartScreen()
 {
+    // --- ЛОГ 6: Проверка вызова ShowStartScreen ---
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowStartScreen() CALLED ====="));
     // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    if (GetWorld()) // Добавим проверку на валидность GetWorld()
+    {
+        GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    }
     SwitchScreen(StartScreenClass);
     // Сбрасываем статусы при возврате на стартовый экран
     SetLoginStatus(false, -1, TEXT(""));
     SetOfflineMode(false);
 }
 
+// ... добавьте аналогичные UE_LOG(LogTemp, Warning, ...) в начало
+// других ваших функций Show...Screen(), чтобы отслеживать навигацию ...
+
 void UMyGameInstance::ShowLoginScreen()
 {
-    // Очищаем таймер на всякий случай
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowLoginScreen() CALLED ====="));
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
     SwitchScreen(LoginScreenClass);
 }
 
 void UMyGameInstance::ShowRegisterScreen()
 {
-    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-    SwitchScreen(RegisterScreenClass); // Используем новую переменную класса
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowRegisterScreen() CALLED ====="));
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(RegisterScreenClass);
 }
 
 void UMyGameInstance::ShowLoadingScreen(float Duration)
 {
-    // Показываем виджет загрузки
-    SwitchScreen(LoadingScreenClass);
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowLoadingScreen() CALLED (Duration: %.2f) ====="), Duration);
+    SwitchScreen(LoadingScreenClass); // Сначала покажем виджет
 
-    // Очищаем старый таймер, если он был
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-
-    // Запускаем новый таймер
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingScreenTimerHandle,          // Хендл для управления таймером
-        this,                              // Объект, чей метод будет вызван
-        &UMyGameInstance::OnLoadingScreenTimerComplete, // Указатель на метод для вызова
-        Duration,                          // Задержка в секундах
-        false                              // false = таймер сработает один раз
-    );
-    UE_LOG(LogTemp, Log, TEXT("Showing Loading Screen. Timer set for %.2f seconds."), Duration);
+    // Таймер запускаем только если есть мир
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        World->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+        World->GetTimerManager().SetTimer(
+            LoadingScreenTimerHandle,
+            this,
+            &UMyGameInstance::OnLoadingScreenTimerComplete,
+            Duration,
+            false
+        );
+    }
+    else {
+        UE_LOG(LogTemp, Error, TEXT("ShowLoadingScreen FAILED: GetWorld() returned NULL, cannot set timer!"));
+    }
 }
 
+void UMyGameInstance::OnLoadingScreenTimerComplete()
+{
+    UE_LOG(LogTemp, Warning, TEXT("===== OnLoadingScreenTimerComplete() CALLED ====="));
+    ShowMainMenu();
+}
 
 void UMyGameInstance::ShowMainMenu()
 {
-    // Очищаем таймер на всякий случай (если сюда попали не по таймеру)
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowMainMenu() CALLED ====="));
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
     SwitchScreen(MainMenuClass);
-    // Возможно, здесь понадобится обновить UI главного меню
-    // в зависимости от bIsLoggedIn или bIsInOfflineMode,
-    // но это можно сделать и в самом виджете WBP_MainMenu
 }
 
 
 void UMyGameInstance::ShowProfileScreen()
 {
-    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-    SwitchScreen(ProfileScreenClass); // Используем новую переменную класса
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowProfileScreen() CALLED ====="));
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(ProfileScreenClass);
 }
 
 
 void UMyGameInstance::ShowSettingsScreen()
 {
-    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
-    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-    SwitchScreen(SettingsScreenClass); // Используем новую переменную класса
+    UE_LOG(LogTemp, Warning, TEXT("===== ShowSettingsScreen() CALLED ====="));
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(SettingsScreenClass);
 }
 
-void UMyGameInstance::OnLoadingScreenTimerComplete()
-{
-    // Этот метод будет вызван автоматически по истечению времени таймера
-    UE_LOG(LogTemp, Log, TEXT("Loading screen timer finished."));
-    // Показываем главное меню (SwitchScreen сам удалит экран загрузки)
-    ShowMainMenu();
-}
-
-
-// --- Методы Управления Состоянием ---
-
+// --- Методы Управления Состоянием (логи можно оставить как есть) ---
 void UMyGameInstance::SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername)
 {
-    // (Реализация остается той же, что и раньше)
     bIsLoggedIn = bNewIsLoggedIn;
     LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1;
     LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT("");
-    if (bIsLoggedIn)
-    {
-        bIsInOfflineMode = false;
-    }
-    UE_LOG(LogTemp, Log, TEXT("Login Status Updated: LoggedIn=%s, UserID=%lld, Username=%s"),
-        bIsLoggedIn ? TEXT("true") : TEXT("false"), LoggedInUserId, *LoggedInUsername);
+    if (bIsLoggedIn) { bIsInOfflineMode = false; }
+    UE_LOG(LogTemp, Log, TEXT("Login Status Updated: LoggedIn=%s, UserID=%lld, Username=%s"), bIsLoggedIn ? TEXT("true") : TEXT("false"), LoggedInUserId, *LoggedInUsername);
 }
 
 void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 {
-    // (Реализация остается той же, что и раньше)
     bIsInOfflineMode = bNewIsOffline;
-    if (bIsInOfflineMode)
-    {
-        SetLoginStatus(false, -1, TEXT(""));
-    }
-    UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"),
-        bIsInOfflineMode ? TEXT("true") : TEXT("false"));
+    if (bIsInOfflineMode) { SetLoginStatus(false, -1, TEXT("")); }
+    UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"), bIsInOfflineMode ? TEXT("true") : TEXT("false"));
 }
 
-// --- Реализации HTTP методов (будут в Шаге 2.7) ---
-
-void UMyGameInstance::RequestLogin(const FString& Username, const FString& Password)
-{
-    UE_LOG(LogTemp, Warning, TEXT("RequestLogin function called but not implemented yet."));
-    // Здесь будет логика HTTP запроса...
-    // При УСПЕШНОМ ответе сервера нужно будет вызвать НЕ ShowMainMenu(),
-    // а ShowLoadingScreen()!
-    // Примерно так:
-    // if (Success) {
-    //     SetLoginStatus(true, ReceivedUserId, ReceivedUsername);
-    //     ShowLoadingScreen(5.0f); // Запускаем экран загрузки на 5 секунд
-    // } else { ... обработка ошибки ... }
-}
-
-void UMyGameInstance::RequestRegister(const FString& Username, const FString& Password, const FString& Email)
-{
-    UE_LOG(LogTemp, Warning, TEXT("RequestRegister function called but not implemented yet."));
-    // Здесь будет логика HTTP запроса...
-    // При УСПЕШНОМ ответе сервера (201 Created) обычно просто показываем сообщение
-    // на экране логина или ничего не делаем, оставаясь на нем.
-}
-
-// ... реализации OnLoginResponseReceived и OnRegisterResponseReceived ...
+// --- Заглушки HTTP Методов ---
+void UMyGameInstance::RequestLogin(const FString& Username, const FString& Password) { UE_LOG(LogTemp, Warning, TEXT("RequestLogin function called but not implemented yet.")); }
+void UMyGameInstance::RequestRegister(const FString& Username, const FString& Password, const FString& Email) { UE_LOG(LogTemp, Warning, TEXT("RequestRegister function called but not implemented yet.")); }
