@@ -49,6 +49,14 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
     TSubclassOf<UUserWidget> MainMenuClass;
 
+    /** Класс виджета для ЭКРАНА НАСТРОЕК (назначается в Blueprint) */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
+    TSubclassOf<UUserWidget> SettingsScreenClass; // <--- НОВОЕ ПОЛЕ
+
+
+    /** Класс виджета для ЭКРАНА ПРОФИЛЯ (назначается в Blueprint) */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
+    TSubclassOf<UUserWidget> ProfileScreenClass; // <--- НОВОЕ ПОЛЕ
 
 
     // Указатель на текущий отображаемый виджет (чтобы его удалять)
@@ -88,6 +96,14 @@ public:
     /** Показать главное меню */
     UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
     void ShowMainMenu();
+
+    /** Показать экран настроек */
+    UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
+    void ShowSettingsScreen(); // <--- НОВЫЙ МЕТОД
+
+    /** Показать экран профиля */
+    UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
+    void ShowProfileScreen(); // <--- НОВЫЙ МЕТОД
 
 
     // --- Методы Управления Состоянием ---

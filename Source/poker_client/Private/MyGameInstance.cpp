@@ -89,13 +89,6 @@ void UMyGameInstance::ShowLoadingScreen(float Duration)
     UE_LOG(LogTemp, Log, TEXT("Showing Loading Screen. Timer set for %.2f seconds."), Duration);
 }
 
-void UMyGameInstance::OnLoadingScreenTimerComplete()
-{
-    // Этот метод будет вызван автоматически по истечению времени таймера
-    UE_LOG(LogTemp, Log, TEXT("Loading screen timer finished."));
-    // Показываем главное меню (SwitchScreen сам удалит экран загрузки)
-    ShowMainMenu();
-}
 
 void UMyGameInstance::ShowMainMenu()
 {
@@ -106,6 +99,31 @@ void UMyGameInstance::ShowMainMenu()
     // в зависимости от bIsLoggedIn или bIsInOfflineMode,
     // но это можно сделать и в самом виджете WBP_MainMenu
 }
+
+
+void UMyGameInstance::ShowProfileScreen()
+{
+    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
+    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(ProfileScreenClass); // Используем новую переменную класса
+}
+
+
+void UMyGameInstance::ShowSettingsScreen()
+{
+    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
+    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(SettingsScreenClass); // Используем новую переменную класса
+}
+
+void UMyGameInstance::OnLoadingScreenTimerComplete()
+{
+    // Этот метод будет вызван автоматически по истечению времени таймера
+    UE_LOG(LogTemp, Log, TEXT("Loading screen timer finished."));
+    // Показываем главное меню (SwitchScreen сам удалит экран загрузки)
+    ShowMainMenu();
+}
+
 
 // --- Методы Управления Состоянием ---
 
