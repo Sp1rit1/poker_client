@@ -37,6 +37,10 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
     TSubclassOf<UUserWidget> LoginScreenClass;
 
+    // Класс виджета для ЭКРАНА РЕГИСТРАЦИИ (назначается в Blueprint) - НОВОЕ
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
+    TSubclassOf<UUserWidget> RegisterScreenClass;
+
     // Класс виджета для ЭКРАНА ЗАГРУЗКИ (назначается в Blueprint) - НОВОЕ
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
     TSubclassOf<UUserWidget> LoadingScreenClass;
@@ -44,6 +48,8 @@ public:
     // Класс виджета для главного меню (назначается в Blueprint)
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Screen Classes")
     TSubclassOf<UUserWidget> MainMenuClass;
+
+
 
     // Указатель на текущий отображаемый виджет (чтобы его удалять)
     UPROPERTY() // Не нужен доступ извне, просто храним ссылку
@@ -71,6 +77,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
     void ShowLoginScreen();
 
+    /** Показать экран регистрации */
+    UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
+    void ShowRegisterScreen();
+
     /** Показать ЭКРАН ЗАГРУЗКИ и запустить таймер */
     UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
     void ShowLoadingScreen(float Duration = 5.0f); // <-- Установите здесь желаемую длительность видео/загрузки
@@ -78,6 +88,7 @@ public:
     /** Показать главное меню */
     UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
     void ShowMainMenu();
+
 
     // --- Методы Управления Состоянием ---
 

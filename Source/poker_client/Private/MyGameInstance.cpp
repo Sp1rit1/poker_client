@@ -63,6 +63,13 @@ void UMyGameInstance::ShowLoginScreen()
     SwitchScreen(LoginScreenClass);
 }
 
+void UMyGameInstance::ShowRegisterScreen()
+{
+    // Очищаем таймер, если вдруг перешли сюда с экрана загрузки
+    GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+    SwitchScreen(RegisterScreenClass); // Используем новую переменную класса
+}
+
 void UMyGameInstance::ShowLoadingScreen(float Duration)
 {
     // Показываем виджет загрузки
