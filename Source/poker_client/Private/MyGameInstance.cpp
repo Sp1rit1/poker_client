@@ -160,8 +160,6 @@ void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 
 
 
-
-// --- Заглушки HTTP Методов ---
 void UMyGameInstance::RequestLogin(const FString& Username, const FString& Password)
 {
     UE_LOG(LogTemp, Log, TEXT("Attempting login for user: %s"), *Username);
@@ -178,7 +176,7 @@ void UMyGameInstance::RequestLogin(const FString& Username, const FString& Passw
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/login")); // Используем ApiBaseUrl из .h
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/login")); 
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
@@ -202,7 +200,7 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
     TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
     RequestJson->SetStringField(TEXT("username"), Username);
     RequestJson->SetStringField(TEXT("password"), Password);
-    RequestJson->SetStringField(TEXT("email"), Email); // Добавляем email
+    RequestJson->SetStringField(TEXT("email"), Email); 
 
     FString RequestBody;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
@@ -212,7 +210,7 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/register")); // Эндпоинт регистрации
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/register")); 
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
