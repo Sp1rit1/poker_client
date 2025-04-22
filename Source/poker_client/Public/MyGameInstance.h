@@ -5,7 +5,16 @@
 #include "Engine/GameInstance.h"
 #include "TimerManager.h" // <--- ДОБАВЛЕНО: Необходимо для FTimerHandle и GetTimerManager()
 #include "Blueprint/UserWidget.h" // Для UUserWidget и TSubclassOf
-// #include "Interfaces/IHttpRequest.h" // Добавим позже для шага 2.7
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "Json.h"
+#include "JsonUtilities.h"
+#include "Serialization/JsonSerializer.h" // Для FJsonSerializer
+#include "JsonObjectConverter.h" // Потенциально полезно, но пока хватит JsonSerializer
+#include "Components/TextBlock.h" // Для доступа к TextBlock в BP через C++ (если потребуется)
+#include "Components/EditableTextBox.h" // Для доступа к EditableTextBox в BP через C++ (если потребуется)
+#include "Kismet/GameplayStatics.h"
 #include "MyGameInstance.generated.h" // Должен быть последним
 
 UCLASS()
@@ -125,14 +134,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Network")
     void RequestRegister(const FString& Username, const FString& Password, const FString& Email);
 
+
+    // Вызывает Blueprint-функцию для показа ошибки на экране логина
+    void DisplayLoginError(const FString& Message);
+    // Вызывает Blueprint-функцию для показа ошибки на экране регистрации
+    void DisplayRegisterError(const FString& Message);
+    // Вызывает Blueprint-функцию для показа сообщения об успехе на экране логина
+    void DisplayLoginSuccessMessage(const FString& Message);
+
 private:
     // --- Приватные Методы ---
 
     /** Вспомогательная функция для смены экрана */
     void SwitchScreen(TSubclassOf<UUserWidget> NewScreenClass);
 
+    // Опционально: Функции для очистки ошибок
+    // void ClearLoginError();
+    // void ClearRegisterError();
+
     // Объявления обработчиков HTTP (реализация будет в Шаге 2.7)
-    // void OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
-    // void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+    void OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful); 
+    void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
 };
