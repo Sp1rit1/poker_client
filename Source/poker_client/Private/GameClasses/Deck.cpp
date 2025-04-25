@@ -1,4 +1,4 @@
-#include "Game/Public/Deck.h" // Включаем .h файл
+#include "GameClasses/Deck.h" // Включаем .h файл
 #include "Algo/RandomShuffle.h" // Для перемешивания
 #include "Containers/EnumAsByte.h" // Для итерации по Enum
 
