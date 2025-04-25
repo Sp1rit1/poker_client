@@ -565,7 +565,6 @@ void UMyGameInstance::DisplayRegisterError(const FString& Message)
 		UFunction* Function = RegisterWidget->GetClass()->FindFunctionByName(FunctionName);
 		if (Function)
 		{
-			int a = 2;
 			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
 			Params.Message = Message;
