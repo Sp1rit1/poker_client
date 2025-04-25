@@ -565,10 +565,15 @@ void CallWidgetFunction(UUserWidget* Widget, FName FunctionName, const FString& 
 
 void UMyGameInstance::DisplayLoginError(const FString& Message)
 {
-    UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
-    // Ошибку логина показываем в виджете верхнего уровня (это будет либо контейнер, либо сам экран логина, если что-то пошло не так)
-    // Предполагаем, что функция называется "DisplayErrorMessage"
-    CallWidgetFunction(CurrentTopLevelWidget, FName(TEXT("DisplayErrorMessage")), Message);
+	UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
+	// Добавляем лог для проверки имени виджета
+	if (CurrentTopLevelWidget) {
+		UE_LOG(LogTemp, Log, TEXT("DisplayLoginError: Attempting to call function on widget: %s"), *CurrentTopLevelWidget->GetName());
+	}
+	else {
+		UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: CurrentTopLevelWidget is NULL!"));
+	}
+	CallWidgetFunction(CurrentTopLevelWidget, FName(TEXT("DisplayErrorMessage")), Message);
 }
 
 void UMyGameInstance::DisplayRegisterError(const FString& Message)
