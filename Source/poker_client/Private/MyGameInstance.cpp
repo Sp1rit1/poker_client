@@ -8,6 +8,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/PanelWidget.h" 
 #include "UObject/UnrealType.h" 
+#include "OfflineGameManager.h"
 
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
@@ -20,6 +21,16 @@
 void UMyGameInstance::Init()
 {
 	Super::Init();
+
+	OfflineGameManager = NewObject<UOfflineGameManager>(this); 
+	if (OfflineGameManager)
+	{
+		UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully."));
+	}
+	else {
+		UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!"));
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Initialized."));
 }
 

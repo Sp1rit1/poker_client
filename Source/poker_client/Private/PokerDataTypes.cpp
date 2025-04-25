@@ -1,4 +1,4 @@
-#include "GameClasses/PokerDataTypes.h" // Важно указать правильный путь к .h файлу
+#include "PokerDataTypes.h" // Важно указать правильный путь к .h файлу
 #include "UObject/Package.h" // Для StaticEnum
 
 // Реализация метода ToString для структуры FCard

@@ -7,7 +7,8 @@
 #include "Engine/Engine.h"                 
 #include "Interfaces/IHttpRequest.h"        
 #include "Interfaces/IHttpResponse.h"       
-#include "TimerManager.h"                 
+#include "TimerManager.h"   
+#include "OfflineGameManager.h" 
 #include "MyGameInstance.generated.h" 
 
 
@@ -55,6 +56,11 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> ProfileScreenClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Managers")
+	UOfflineGameManager* OfflineGameManager;
+
+
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowStartScreen();
