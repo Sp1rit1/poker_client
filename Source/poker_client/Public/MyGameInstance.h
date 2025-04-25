@@ -66,7 +66,7 @@ public:
 	void ShowRegisterScreen();
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
-	void ShowLoadingScreen(float Duration = 2.0f); 
+	void ShowLoadingScreen(float Duration = 7.0f); 
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowMainMenu();
