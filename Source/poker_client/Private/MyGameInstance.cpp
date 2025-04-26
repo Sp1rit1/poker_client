@@ -1,212 +1,271 @@
-#include "MyGameInstance.h" // Включаем заголовочный файл нашего класса GameInstance.
+// Включаем заголовочный файл нашего кастомного GameInstance.
+#include "MyGameInstance.h"
 
-// --- Основные инклуды UE ---
-#include "GameFramework/PlayerController.h"   // Для получения PlayerController (управление вводом, мышью, создание виджетов).
-#include "GameFramework/GameUserSettings.h" // Для доступа к настройкам игры (разрешение, режим окна).
-#include "Engine/Engine.h"                  // Для доступа к глобальному объекту GEngine (через него получаем GameUserSettings).
-#include "Kismet/GameplayStatics.h"         // Содержит статические вспомогательные функции (например, GetPlayerController, хотя GetFirstLocalPlayerController предпочтительнее в GameInstance).
-#include "TimerManager.h"                   // Для работы с таймерами (FTimerHandle, SetTimer, ClearTimer).
-#include "Blueprint/UserWidget.h"           // Для работы с классом UUserWidget и его создания.
-#include "Components/PanelWidget.h"         // Для приведения (Cast) виджетов-панелей (как UBorder) к базовому типу, чтобы получить дочерние элементы в FindWidgetInContainer.
-#include "UObject/UnrealType.h"             // Для работы с системой рефлексии (FObjectProperty) в FindWidgetInContainer.
+// --- Основные инклуды Unreal Engine ---
+// Класс для управления локальным игроком: ввод, отображение мыши, создание виджетов.
+#include "GameFramework/PlayerController.h"
+// Класс для доступа и изменения настроек игры пользователя (разрешение, режим окна).
+#include "GameFramework/GameUserSettings.h"
+// Глобальный объект движка, через который можно получить доступ ко многим подсистемам, включая GameUserSettings.
+#include "Engine/Engine.h"
+// Набор статических утилитарных функций для общих игровых задач (получение контроллера, управление уровнями и т.д.).
+#include "Kismet/GameplayStatics.h"
+// Система для управления таймерами (одноразовыми или повторяющимися).
+#include "TimerManager.h"
+// Базовый класс для всех виджетов, создаваемых в UMG (Unreal Motion Graphics).
+#include "Blueprint/UserWidget.h"
+// Базовый класс для виджетов-контейнеров (как Border, VerticalBox и т.д.), позволяет работать с дочерними элементами.
+#include "Components/PanelWidget.h"
+// Необходим для работы с системой рефлексии Unreal (интроспекция типов), используется для поиска свойств по имени.
+#include "UObject/UnrealType.h"
+// Включаем наш класс для управления логикой оффлайн игры.
+#include "OfflineGameManager.h"
 
-// --- Инклуды для HTTP и JSON ---
-#include "HttpModule.h"                 // Основной модуль для работы с HTTP.
-#include "Interfaces/IHttpRequest.h"    // Интерфейс для создания и настройки HTTP запроса.
-#include "Interfaces/IHttpResponse.h"   // Интерфейс для работы с HTTP ответом.
-#include "Json.h"                       // Основные классы для работы с JSON (FJsonObject, FJsonValue).
-#include "JsonUtilities.h"              // Вспомогательные функции для работы с JSON (хотя мы используем FJsonSerializer).
-#include "Serialization/JsonSerializer.h" // Класс для сериализации (C++ -> JSON) и десериализации (JSON -> C++) объектов JSON.
+// --- Инклуды для работы с HTTP и JSON ---
+// Модуль Unreal Engine, предоставляющий функциональность для HTTP запросов.
+#include "HttpModule.h"
+// Интерфейс для создания, настройки и отправки HTTP запроса.
+#include "Interfaces/IHttpRequest.h"
+// Интерфейс для получения и анализа ответа на HTTP запрос.
+#include "Interfaces/IHttpResponse.h"
+// Базовые классы для представления JSON данных (FJsonObject, FJsonValue).
+#include "Json.h"
+// Вспомогательные утилиты для работы с JSON (не используются напрямую в этом коде, но могут быть полезны).
+#include "JsonUtilities.h"
+// Класс для преобразования между структурами данных C++ (через FJsonObject) и строковым представлением JSON.
+#include "Serialization/JsonSerializer.h"
 
 
 // =============================================================================
-// Инициализация и Завершение
+// Инициализация и Завершение Работы GameInstance
 // =============================================================================
 
-// Функция Init() вызывается один раз при создании экземпляра GameInstance (в начале игры).
+
+/*@brief <краткое описание>
+Назначение: Предоставляет краткое, однострочное описание сущности(класса, функции, переменной, enum и т.д.), к которой относится комментарий.
+@param <имя_параметра> <описание>
+Назначение: Описывает входной параметр функции или метода.
+@return <описание>
+Назначение: Описывает значение, возвращаемое функцией или методом.
+@warning <описание предупреждения>
+Назначение: Выделяет важное предупреждение или информацию о потенциальных проблемах, побочных эффектах или особых условиях использования.
+@note <описание заметки>
+Назначение: Добавляет дополнительную заметку или примечание, которое не является ни основным описанием, ни предупреждением, но может быть полезно для понимания.
+*/
+
+
+/**
+ * @brief Вызывается один раз при создании экземпляра GameInstance (в начале игры).
+ * Идеальное место для инициализации глобальных менеджеров и систем,
+ * которые должны существовать на протяжении всей сессии игры.
+ */
 void UMyGameInstance::Init()
 {
-	// Вызываем реализацию Init() из базового класса UGameInstance. Важно для корректной работы движка.
+	// Обязательно вызываем Init() базового класса UGameInstance.
 	Super::Init();
-	// НЕ вызываем здесь ShowStartScreen, так как PlayerController может быть еще не полностью инициализирован.
-	// Показ первого экрана лучше делать из GameMode::BeginPlay.
-	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Initialized.")); // Выводим сообщение в лог о завершении инициализации.
+
+	// --- Создание Менеджера Оффлайн Игры ---
+	// Создаем экземпляр UOfflineGameManager. 'this' (текущий UMyGameInstance)
+	// передается как Outer (владелец), связывая жизненные циклы.
+	OfflineGameManager = NewObject<UOfflineGameManager>(this);
+	// Проверяем, успешно ли был создан объект.
+	if (OfflineGameManager)
+	{
+		// Логируем успех.
+		UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully."));
+	}
+	else {
+		// Логируем критическую ошибку, если создать не удалось.
+		UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!"));
+	}
+
+	// Логируем завершение основной инициализации GameInstance.
+	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Initialized."));
 }
 
-// Функция Shutdown() вызывается при завершении работы GameInstance (при закрытии игры).
+/**
+ * @brief Вызывается при уничтожении экземпляра GameInstance (при закрытии игры).
+ * Место для освобождения ресурсов, сохранения прогресса и т.п.
+ */
 void UMyGameInstance::Shutdown()
 {
-	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown.")); // Выводим сообщение в лог о начале завершения работы.
-	// Опционально: можно вернуть окно в оконный режим при выходе.
-	// ApplyWindowMode(false);
-	// Вызываем реализацию Shutdown() из базового класса UGameInstance.
+	// Логируем начало процесса завершения работы.
+	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown."));
+	// Обязательно вызываем Shutdown() базового класса.
 	Super::Shutdown();
 }
 
 
 // =============================================================================
-// Вспомогательные Функции для UI/Окна/Ввода
+// Вспомогательные Функции для Управления UI, Окном и Вводом
 // =============================================================================
 
-// Устанавливает режим ввода и видимость курсора мыши.
+/**
+ * @brief Настраивает режим ввода для PlayerController и видимость курсора мыши.
+ * @param bIsUIOnly Если true, устанавливается режим "только UI" (ввод обрабатывается только виджетами). Если false, "игра и UI".
+ * @param bShowMouse Управляет видимостью системного курсора мыши.
+ */
 void UMyGameInstance::SetupInputMode(bool bIsUIOnly, bool bShowMouse)
 {
-	// Получаем первого локального игрока-контроллера. В GameInstance обычно работаем с ним.
+	// Получаем указатель на первого локального игрока-контроллера.
 	APlayerController* PC = GetFirstLocalPlayerController();
-	// Проверяем, что PlayerController успешно получен.
+	// Всегда проверяем указатели перед использованием.
 	if (PC)
 	{
-		// Устанавливаем видимость системного курсора мыши.
+		// Устанавливаем видимость курсора.
 		PC->SetShowMouseCursor(bShowMouse);
-		// Если нужен режим "Только UI" (для оконных виджетов).
+		// Выбираем режим ввода.
 		if (bIsUIOnly)
 		{
-			// Создаем структуру настроек для режима FInputModeUIOnly.
+			// Режим "Только UI": ввод идет только на виджеты, игра "на паузе".
 			FInputModeUIOnly InputModeData;
-			// Устанавливаем поведение блокировки мыши: DoNotLock - не блокировать курсор в пределах окна.
+			// Не блокировать курсор в пределах окна, чтобы можно было легко кликнуть вне его.
 			InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			// Применяем установленный режим ввода к PlayerController.
+			// Применяем режим.
 			PC->SetInputMode(InputModeData);
-			// Логируем установленный режим и видимость мыши.
+			// Логируем (Verbose - детальный лог).
 			UE_LOG(LogTemp, Verbose, TEXT("Input Mode set to UI Only. Mouse Visible: %s"), bShowMouse ? TEXT("True") : TEXT("False"));
 		}
-		// Иначе используем режим "Игра и UI" (для полноэкранных меню или игры).
 		else
 		{
-			// Создаем структуру настроек для режима FInputModeGameAndUI.
+			// Режим "Игра и UI": ввод идет и на виджеты, и в игру (если не перехвачен виджетами).
 			FInputModeGameAndUI InputModeData;
-			// Устанавливаем поведение блокировки мыши: можно не блокировать, чтобы можно было легко переключаться между окнами.
+			// Также не блокируем курсор.
 			InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			// Указываем не скрывать курсор автоматически при клике в окне (т.к. мы управляем видимостью сами).
+			// Не скрывать курсор автоматически при клике в игровом окне (мы управляем им вручную).
 			InputModeData.SetHideCursorDuringCapture(false);
-			// Применяем установленный режим ввода.
+			// Применяем режим.
 			PC->SetInputMode(InputModeData);
-			// Логируем установленный режим и видимость мыши.
+			// Логируем.
 			UE_LOG(LogTemp, Verbose, TEXT("Input Mode set to Game And UI. Mouse Visible: %s"), bShowMouse ? TEXT("True") : TEXT("False"));
 		}
 	}
 	else {
-		// Выводим предупреждение, если не удалось получить PlayerController.
+		// Предупреждение, если PlayerController не найден.
 		UE_LOG(LogTemp, Warning, TEXT("SetupInputMode: PlayerController is null."));
 	}
 }
 
-// Применяет оконный или полноэкранный режим к основному окну игры.
+/**
+ * @brief Устанавливает режим окна (оконный или полноэкранный) и соответствующее разрешение.
+ * @param bWantFullscreen Если true, устанавливается полноэкранный режим (без рамок), иначе оконный.
+ */
 void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
 {
-	// Получаем доступ к объекту настроек игры через глобальный объект GEngine.
+	// Получаем доступ к настройкам пользователя через GEngine.
 	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
-	// Проверяем, что объект настроек успешно получен.
+	// Проверяем, что настройки доступны.
 	if (Settings)
 	{
-		// Получаем текущий режим окна.
+		// Определяем текущий и целевой режимы окна.
 		EWindowMode::Type CurrentMode = Settings->GetFullscreenMode();
-		// Определяем целевой режим: WindowedFullscreen для полноэкранного, Windowed для оконного.
+		// Используем WindowedFullscreen для полноэкранного режима (обычно лучший вариант).
 		EWindowMode::Type TargetMode = bWantFullscreen ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed;
 
-		// Флаг, указывающий, нужно ли применять изменения.
-		bool bSettingsChanged = false;
-		// Если текущий режим не совпадает с целевым, устанавливаем новый режим.
+		// Флаг для отслеживания изменений.
+		bool bModeChanged = false;
+		// Если режим нужно изменить.
 		if (CurrentMode != TargetMode)
 		{
-			Settings->SetFullscreenMode(TargetMode);
-			bSettingsChanged = true; // Отмечаем, что настройки изменились.
-			// Логируем изменение режима окна. UEnum::GetValueAsString используется для получения строкового представления enum.
-			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting FullscreenMode to %s"), *UEnum::GetValueAsString(TargetMode));
+			Settings->SetFullscreenMode(TargetMode); // Устанавливаем новый режим.
+			bModeChanged = true;                    // Помечаем, что были изменения.
+			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting FullscreenMode to %s"), *UEnum::GetValueAsString(TargetMode)); // Логируем.
 		}
 
-		// Определяем целевое разрешение экрана.
+		// Определяем целевое разрешение.
 		FIntPoint TargetResolution;
-		// Если нужен полноэкранный режим, берем текущее разрешение рабочего стола.
 		if (bWantFullscreen)
 		{
+			// Для полноэкранного режима используем нативное разрешение рабочего стола.
 			TargetResolution = Settings->GetDesktopResolution();
 		}
-		// Если нужен оконный режим.
 		else
 		{
-			// Пытаемся взять последнее подтвержденное пользователем разрешение.
+			// Для оконного режима сначала пытаемся взять последнее подтвержденное разрешение.
 			TargetResolution = Settings->GetLastConfirmedScreenResolution();
-			// Если оно невалидно (0 или меньше), пытаемся взять разрешение по умолчанию из настроек проекта.
+			// Если оно невалидно, берем разрешение по умолчанию из настроек проекта.
 			if (TargetResolution.X <= 0 || TargetResolution.Y <= 0)
 			{
 				TargetResolution = FIntPoint(Settings->GetDefaultResolution().X, Settings->GetDefaultResolution().Y);
 			}
-			// Если и оно невалидно, используем запасное значение (например, 720x540).
+			// Если и оно невалидно, используем жестко заданное значение (наше "оконное" разрешение).
 			if (TargetResolution.X <= 0 || TargetResolution.Y <= 0)
 			{
-				TargetResolution = FIntPoint(720, 540); // Запасное значение
+				TargetResolution = FIntPoint(720, 540); // Запасное значение.
 			}
 		}
 
-		// Если текущее разрешение отличается от целевого, устанавливаем новое разрешение.
+		// Если текущее разрешение отличается от целевого.
 		if (Settings->GetScreenResolution() != TargetResolution)
 		{
-			Settings->SetScreenResolution(TargetResolution);
-			bSettingsChanged = true; // Отмечаем, что настройки изменились.
-			// Логируем изменение разрешения.
-			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting Resolution to %dx%d"), TargetResolution.X, TargetResolution.Y);
+			Settings->SetScreenResolution(TargetResolution); // Устанавливаем новое разрешение.
+			bModeChanged = true;                             // Помечаем, что были изменения.
+			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting Resolution to %dx%d"), TargetResolution.X, TargetResolution.Y); // Логируем.
 		}
 
-		// Применяем настройки к окну игры, только если что-то действительно изменилось.
-		if (bSettingsChanged)
+		// Если были какие-либо изменения (режима или разрешения).
+		if (bModeChanged)
 		{
-			// false в ApplySettings означает, что не нужно ждать подтверждения пользователя (настройки применяются сразу).
+			// Применяем все измененные настройки. false - не требовать подтверждения.
 			Settings->ApplySettings(false);
 			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Settings Applied."));
 		}
 		else {
-			// Логируем, что изменения не потребовались.
+			// Логируем, если изменять ничего не пришлось.
 			UE_LOG(LogTemp, Verbose, TEXT("ApplyWindowMode: Window Mode and Resolution already match target. No change needed."));
 		}
 
 	}
 	else {
-		// Выводим предупреждение, если не удалось получить доступ к настройкам игры.
+		// Предупреждение, если не удалось получить GameUserSettings.
 		UE_LOG(LogTemp, Warning, TEXT("ApplyWindowMode: Could not get GameUserSettings."));
 	}
 }
 
-// Шаблонная вспомогательная функция для создания и показа виджета (оконного или полноэкранного).
-// <typename T = UUserWidget>: Определяет шаблонный параметр T, по умолчанию UUserWidget. Позволяет функции возвращать указатель нужного типа.
+/**
+ * @brief Шаблонная функция для унифицированного создания, показа и управления виджетами верхнего уровня.
+ * Удаляет предыдущий виджет верхнего уровня перед показом нового.
+ * Настраивает режим окна и ввода в зависимости от флага bIsFullscreenWidget.
+ * @tparam T Тип виджета, который нужно создать (по умолчанию UUserWidget). Позволяет вернуть корректный тип указателя.
+ * @param WidgetClassToShow Класс виджета (TSubclassOf<UUserWidget>), экземпляр которого нужно создать.
+ * @param bIsFullscreenWidget Если true, виджет считается полноэкранным (применяется полноэкранный режим окна, ввод GameAndUI, мышь скрыта).
+ *                            Если false, виджет считается "оконным" (применяется оконный режим, ввод UIOnly, мышь показана).
+ * @return T* Указатель на созданный экземпляр виджета типа T, или nullptr в случае ошибки.
+ */
 template <typename T>
 T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget)
 {
 	// Получаем PlayerController.
 	APlayerController* PC = GetFirstLocalPlayerController();
-	// Проверяем PlayerController.
+	// Проверяем PlayerController и переданный класс виджета.
 	if (!PC) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: PlayerController is null.")); return nullptr; }
-	// Проверяем, что класс виджета передан и валиден.
 	if (!WidgetClassToShow) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: WidgetClassToShow is null.")); return nullptr; }
 
-	// 1. Применяем нужный режим окна (полноэкранный или оконный).
-	ApplyWindowMode(bIsFullscreenWidget);
-	// 2. Устанавливаем соответствующий режим ввода и видимость курсора.
-	//    !bIsFullscreenWidget передается в bIsUIOnly и bShowMouse:
-	//    - Если НЕ полноэкранный (оконный): bIsUIOnly=true, bShowMouse=true.
-	//    - Если полноэкранный: bIsUIOnly=false, bShowMouse=false.
-	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget);
+	// --- Шаг 1: Настройка режима окна и ввода ---
+	ApplyWindowMode(bIsFullscreenWidget);                 // Устанавливаем оконный/полноэкранный режим.
+	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Устанавливаем режим ввода и видимость мыши (инвертировано от bIsFullscreenWidget).
 
-	// 3. Удаляем предыдущий виджет верхнего уровня, если он существует.
+	// --- Шаг 2: Удаление предыдущего виджета верхнего уровня ---
+	// Если есть указатель на предыдущий виджет.
 	if (CurrentTopLevelWidget)
 	{
 		UE_LOG(LogTemp, Verbose, TEXT("ShowWidget: Removing previous top level widget: %s"), *CurrentTopLevelWidget->GetName());
-		// Удаляем виджет из Viewport и уничтожаем его.
+		// Удаляем виджет из вьюпорта и памяти.
 		CurrentTopLevelWidget->RemoveFromParent();
 	}
 	// Обнуляем указатели на старые виджеты.
 	CurrentTopLevelWidget = nullptr;
-	CurrentContainerInstance = nullptr; // Сбрасываем контейнер, т.к. показываем новый виджет верхнего уровня.
+	CurrentContainerInstance = nullptr; // Также сбрасываем указатель на контейнер, если он был активен.
 
-	// 4. Создаем новый экземпляр виджета указанного класса.
-	//    CreateWidget<T> использует шаблонный тип T для возвращаемого значения.
+	// --- Шаг 3: Создание и показ нового виджета ---
+	// Создаем экземпляр виджета нужного класса. CreateWidget возвращает тип UUserWidget*, но так как функция шаблонная, мы можем привести к T*.
 	T* NewWidget = CreateWidget<T>(PC, WidgetClassToShow);
 	// Проверяем, успешно ли создан виджет.
 	if (NewWidget)
 	{
-		// Добавляем созданный виджет в Viewport (делаем видимым).
+		// Добавляем виджет в основной вьюпорт игры.
 		NewWidget->AddToViewport();
-		// Запоминаем указатель на новый виджет как текущий виджет верхнего уровня.
+		// Сохраняем указатель на новый виджет как текущий виджет верхнего уровня.
 		CurrentTopLevelWidget = NewWidget;
 		UE_LOG(LogTemp, Log, TEXT("ShowWidget: Added new widget: %s"), *WidgetClassToShow->GetName());
 		// Возвращаем указатель на созданный виджет.
@@ -214,98 +273,104 @@ T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool 
 	}
 	else
 	{
-		// Логируем ошибку, если не удалось создать виджет.
+		// Логируем ошибку создания виджета.
 		UE_LOG(LogTemp, Error, TEXT("ShowWidget: Failed to create widget: %s"), *WidgetClassToShow->GetName());
-		// Возвращаем nullptr в случае ошибки.
+		// Возвращаем nullptr.
 		return nullptr;
 	}
 }
 
 
 // =============================================================================
-// Функции Навигации
+// Функции Навигации Между Экранами
 // =============================================================================
 
-// Показывает стартовый экран (в оконном режиме внутри контейнера).
+/**
+ * @brief Показывает стартовый экран приложения (например, с кнопками "Войти", "Оффлайн", "Выход").
+ * Использует виджет-контейнер для имитации оконного режима.
+ */
 void UMyGameInstance::ShowStartScreen()
 {
-	// Проверяем, назначены ли классы контейнера и стартового экрана в Blueprint.
+	// Проверяем, что классы виджетов контейнера и стартового экрана заданы в настройках GameInstance (в Blueprint).
 	if (!WindowContainerClass || !StartScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: WindowContainerClass or StartScreenClass is not set!"));
-		return; // Выходим, если классы не заданы.
+		return; // Прерываем, если классы не заданы.
 	}
-	// Вызываем вспомогательную функцию ShowWidget для показа контейнера.
-	// false указывает, что нужен оконный режим. Возвращаем как UUserWidget*.
+
+	// Вызываем ShowWidget для отображения виджета-контейнера в оконном режиме (false).
 	UUserWidget* Container = ShowWidget<UUserWidget>(WindowContainerClass, false);
 
-	// Если контейнер успешно создан и показан.
+	// Если контейнер был успешно создан и показан.
 	if (Container)
 	{
-		// Запоминаем указатель на текущий экземпляр контейнера.
+		// Сохраняем указатель на текущий экземпляр контейнера.
 		CurrentContainerInstance = Container;
 
-		// Вызываем Blueprint-функцию "SetContentWidget" внутри контейнера.
-		FName FunctionName = FName(TEXT("SetContentWidget")); // Точное имя функции в Blueprint.
-		// Ищем функцию по имени в классе контейнера.
+		// --- Вызов Blueprint-функции внутри контейнера для установки контента ---
+		FName FunctionName = FName(TEXT("SetContentWidget")); // Имя функции в Blueprint (WBP_WindowContainer).
+		// Ищем функцию по имени в классе виджета-контейнера.
 		UFunction* Function = CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName);
 		// Если функция найдена.
 		if (Function)
 		{
-			// Создаем структуру для передачи параметра (класса виджета).
+			// Подготавливаем структуру для передачи параметров в Blueprint-функцию.
+			// Структура должна совпадать с параметрами функции в BP.
 			struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
 			FSetContentParams Params;
-			// Устанавливаем параметр - класс стартового экрана.
-			Params.WidgetClassToSet = StartScreenClass;
-			// Вызываем Blueprint-функцию через ProcessEvent, передавая параметры.
+			Params.WidgetClassToSet = StartScreenClass; // Указываем класс стартового экрана как параметр.
+			// Вызываем Blueprint-функцию через систему рефлексии ProcessEvent.
 			CurrentContainerInstance->ProcessEvent(Function, &Params);
 			UE_LOG(LogTemp, Log, TEXT("ShowStartScreen: Set content to StartScreenClass."));
 		}
 		else {
-			// Логируем ошибку, если функция не найдена в контейнере.
+			// Ошибка, если обязательная функция не найдена в виджете контейнера.
 			UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: Function 'SetContentWidget' not found in %s!"), *WindowContainerClass->GetName());
 		}
 	}
-	// Останавливаем таймер загрузки, если он был запущен.
+	// Останавливаем таймер экрана загрузки, если он был активен (например, при возврате из игры).
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
-// Показывает экран логина (в оконном режиме внутри контейнера).
+/**
+ * @brief Показывает экран входа пользователя (логин/пароль).
+ * Использует виджет-контейнер.
+ */
 void UMyGameInstance::ShowLoginScreen()
 {
-	// Проверяем, назначены ли классы контейнера и экрана логина.
+	// Проверка наличия классов контейнера и экрана логина.
 	if (!WindowContainerClass || !LoginScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: WindowContainerClass or LoginScreenClass is not set!"));
 		return;
 	}
-	// Пытаемся получить текущий активный контейнер.
+
+	// --- Логика переиспользования/создания контейнера ---
+	// Пытаемся получить текущий экземпляр контейнера.
 	UUserWidget* Container = CurrentContainerInstance;
-	// Если контейнера нет или текущий виджет верхнего уровня - не этот контейнер.
+	// Если контейнера нет ИЛИ текущий виджет верхнего уровня - это НЕ наш контейнер
+	// (значит, был показан какой-то другой виджет, например, полноэкранный).
 	if (!Container || CurrentTopLevelWidget != CurrentContainerInstance)
 	{
-		// Создаем и показываем контейнер заново.
+		// Нужно создать и показать контейнер заново.
 		Container = ShowWidget<UUserWidget>(WindowContainerClass, false);
-		// Если создание успешно, запоминаем новый контейнер.
+		// Если успешно создан, сохраняем указатель.
 		if (Container) CurrentContainerInstance = Container;
-		// Если создать не удалось, выходим.
-		else return;
+		else return; // Если не удалось создать контейнер, выходим.
 	}
 	else {
-		// Контейнер уже существует и активен, просто настраиваем режим ввода/мыши для UI.
+		// Контейнер уже активен, просто убедимся, что режим ввода и мышь настроены для UI.
 		SetupInputMode(true, true);
 	}
 
-	// Вызываем Blueprint-функцию "SetContentWidget" в контейнере, чтобы установить LoginScreenClass.
-	FName FunctionName = FName(TEXT("SetContentWidget"));
-	// Ищем функцию в классе текущего контейнера.
+	// --- Установка контента внутри контейнера ---
+	FName FunctionName = FName(TEXT("SetContentWidget")); // Имя функции в BP.
+	// Ищем функцию в классе ТЕКУЩЕГО контейнера.
 	UFunction* Function = CurrentContainerInstance ? CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName) : nullptr;
-	// Если функция найдена.
 	if (Function)
 	{
-		// Готовим параметры.
+		// Готовим параметры и вызываем функцию, передавая LoginScreenClass.
 		struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
 		FSetContentParams Params;
-		Params.WidgetClassToSet = LoginScreenClass; // Указываем класс экрана логина.
-		// Вызываем функцию.
+		Params.WidgetClassToSet = LoginScreenClass;
 		CurrentContainerInstance->ProcessEvent(Function, &Params);
 		UE_LOG(LogTemp, Log, TEXT("ShowLoginScreen: Set content to LoginScreenClass."));
 	}
@@ -314,10 +379,13 @@ void UMyGameInstance::ShowLoginScreen()
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
-// Показывает экран регистрации (в оконном режиме внутри контейнера).
+/**
+ * @brief Показывает экран регистрации нового пользователя.
+ * Использует виджет-контейнер.
+ */
 void UMyGameInstance::ShowRegisterScreen()
 {
-	// Проверяем классы.
+	// Проверка наличия классов.
 	if (!WindowContainerClass || !RegisterScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: WindowContainerClass or RegisterScreenClass is not set!"));
 		return;
@@ -334,14 +402,14 @@ void UMyGameInstance::ShowRegisterScreen()
 		SetupInputMode(true, true);
 	}
 
-	// Вызываем "SetContentWidget" в контейнере для RegisterScreenClass.
+	// Установка RegisterScreenClass как контента контейнера.
 	FName FunctionName = FName(TEXT("SetContentWidget"));
 	UFunction* Function = CurrentContainerInstance ? CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName) : nullptr;
 	if (Function)
 	{
 		struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
 		FSetContentParams Params;
-		Params.WidgetClassToSet = RegisterScreenClass; // Указываем класс экрана регистрации.
+		Params.WidgetClassToSet = RegisterScreenClass;
 		CurrentContainerInstance->ProcessEvent(Function, &Params);
 		UE_LOG(LogTemp, Log, TEXT("ShowRegisterScreen: Set content to RegisterScreenClass."));
 	}
@@ -350,28 +418,39 @@ void UMyGameInstance::ShowRegisterScreen()
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
-// Показывает экран загрузки (полноэкранный режим).
+/**
+ * @brief Показывает полноэкранный виджет "загрузки" на заданное время.
+ * По истечении времени автоматически вызывает OnLoadingScreenTimerComplete (которая покажет главное меню).
+ * @param Duration Время в секундах, на которое показывается экран загрузки.
+ */
 void UMyGameInstance::ShowLoadingScreen(float Duration)
 {
-	// Проверяем класс экрана загрузки.
+	// Проверка класса виджета загрузки.
 	if (!LoadingScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowLoadingScreen: LoadingScreenClass is not set!")); return; }
 
-	// Вызываем ShowWidget для показа LoadingScreenClass. true означает полноэкранный режим.
+	// Показываем виджет загрузки в полноэкранном режиме (true).
 	UUserWidget* LoadingWidget = ShowWidget<UUserWidget>(LoadingScreenClass, true);
 
 	// Если виджет успешно создан.
 	if (LoadingWidget)
 	{
-		// Очищаем предыдущий таймер (на всякий случай).
+		// Останавливаем предыдущий таймер (если был).
 		GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-		// Запускаем новый таймер, который по завершении вызовет OnLoadingScreenTimerComplete.
-		// Duration - время задержки, false - таймер не повторяющийся.
-		GetWorld()->GetTimerManager().SetTimer(LoadingScreenTimerHandle, this, &UMyGameInstance::OnLoadingScreenTimerComplete, Duration, false);
+		// Запускаем новый таймер.
+		GetWorld()->GetTimerManager().SetTimer(
+			LoadingScreenTimerHandle, // Хэндл таймера для возможности его остановки.
+			this,                     // Объект, на котором будет вызван метод.
+			&UMyGameInstance::OnLoadingScreenTimerComplete, // Указатель на метод-колбэк.
+			Duration,                 // Задержка перед вызовом.
+			false);                   // false - таймер не повторяющийся.
 		UE_LOG(LogTemp, Log, TEXT("ShowLoadingScreen: Timer Started for %.2f seconds."), Duration);
 	}
 }
 
-// Функция обратного вызова для таймера экрана загрузки.
+/**
+ * @brief Метод, вызываемый по завершении таймера экрана загрузки.
+ * Переводит игру на главный экран.
+ */
 void UMyGameInstance::OnLoadingScreenTimerComplete()
 {
 	UE_LOG(LogTemp, Log, TEXT("Loading Screen Timer Complete. Showing Main Menu."));
@@ -379,152 +458,181 @@ void UMyGameInstance::OnLoadingScreenTimerComplete()
 	ShowMainMenu();
 }
 
-// Показывает главное меню (полноэкранный режим).
+/**
+ * @brief Показывает главное меню игры (полноэкранный режим).
+ */
 void UMyGameInstance::ShowMainMenu()
 {
-	// Проверяем класс главного меню.
+	// Проверка класса.
 	if (!MainMenuClass) { UE_LOG(LogTemp, Error, TEXT("ShowMainMenu: MainMenuClass is not set!")); return; }
-	// Вызываем ShowWidget для показа MainMenuClass. true означает полноэкранный режим.
+	// Показываем виджет главного меню в полноэкранном режиме (true).
 	ShowWidget<UUserWidget>(MainMenuClass, true);
-	// Останавливаем таймер загрузки, если он еще не завершился.
+	// Останавливаем таймер загрузки, если он еще работал.
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
-// Показывает экран настроек (предполагаем полноэкранный режим).
+/**
+ * @brief Показывает экран настроек (полноэкранный режим).
+ */
 void UMyGameInstance::ShowSettingsScreen()
 {
-	// Проверяем класс.
+	// Проверка класса.
 	if (!SettingsScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowSettingsScreen: SettingsScreenClass is not set!")); return; }
-	// Показываем как полноэкранный.
+	// Показ виджета.
 	ShowWidget<UUserWidget>(SettingsScreenClass, true);
-	// Останавливаем таймер.
+	// Остановка таймера.
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
-// Показывает экран профиля (предполагаем полноэкранный режим).
+/**
+ * @brief Показывает экран профиля пользователя (полноэкранный режим).
+ */
 void UMyGameInstance::ShowProfileScreen()
 {
-	// Проверяем класс.
+	// Проверка класса.
 	if (!ProfileScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowProfileScreen: ProfileScreenClass is not set!")); return; }
-	// Показываем как полноэкранный.
+	// Показ виджета.
 	ShowWidget<UUserWidget>(ProfileScreenClass, true);
-	// Останавливаем таймер.
+	// Остановка таймера.
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 
 // =============================================================================
-// Управление Состоянием Игры
+// Управление Глобальным Состоянием Игры (Логин, Оффлайн Режим)
 // =============================================================================
 
-// Устанавливает статус логина пользователя.
+/**
+ * @brief Обновляет статус логина пользователя и связанные данные (ID, имя).
+ * @param bNewIsLoggedIn Новый статус логина (true - залогинен, false - нет).
+ * @param NewUserId ID пользователя (если залогинен), иначе -1.
+ * @param NewUsername Имя пользователя (если залогинен), иначе пустая строка.
+ */
 void UMyGameInstance::SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername)
 {
-	// Устанавливаем флаг логина.
+	// Устанавливаем основные переменные состояния.
 	bIsLoggedIn = bNewIsLoggedIn;
-	// Если залогинен, устанавливаем ID и имя, иначе сбрасываем в значения по умолчанию.
-	LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1;
-	LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT("");
-	// Если пользователь залогинился, он не может быть в оффлайн режиме.
+	LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1; // Используем тернарный оператор для установки ID или значения по умолчанию.
+	LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT(""); // Устанавливаем имя или пустую строку.
+	// Логическое следствие: если пользователь залогинен, он не находится в оффлайн режиме.
 	if (bIsLoggedIn) {
 		bIsInOfflineMode = false;
 	}
-	// Логируем изменение статуса.
+	// Логируем измененное состояние.
 	UE_LOG(LogTemp, Log, TEXT("Login Status Updated: LoggedIn=%s, UserID=%lld, Username=%s"), bIsLoggedIn ? TEXT("true") : TEXT("false"), LoggedInUserId, *LoggedInUsername);
 }
 
-// Устанавливает оффлайн режим.
+/**
+ * @brief Устанавливает или снимает флаг оффлайн режима.
+ * При переходе в оффлайн режим сбрасывает статус логина.
+ * @param bNewIsOffline Новый статус оффлайн режима (true - включен, false - выключен).
+ */
 void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 {
 	// Устанавливаем флаг оффлайн режима.
 	bIsInOfflineMode = bNewIsOffline;
-	// Если перешли в оффлайн режим, сбрасываем статус логина.
+	// Если пользователь выбрал оффлайн режим, он не может быть одновременно залогинен.
 	if (bIsInOfflineMode) {
+		// Вызываем SetLoginStatus, чтобы сбросить данные логина.
 		SetLoginStatus(false, -1, TEXT(""));
 	}
 	// Логируем изменение статуса.
 	UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"), bIsInOfflineMode ? TEXT("true") : TEXT("false"));
 
-	// Если включен оффлайн режим.
+	// Если перешли в оффлайн режим.
 	if (bIsInOfflineMode)
 	{
-		// Обычно после выбора оффлайн режима показываем главное меню (или специальное оффлайн лобби).
-		// ShowMainMenu() уже настроен на показ в полноэкранном режиме.
+		// Показываем главное меню (из которого потом можно будет выбрать оффлайн игру).
 		ShowMainMenu();
 	}
 }
 
 
 // =============================================================================
-// Логика HTTP Запросов
+// Отправка HTTP Запросов на Сервер (Аутентификация)
 // =============================================================================
 
-// Отправляет запрос на логин пользователя.
+/**
+ * @brief Инициирует асинхронный HTTP POST запрос на сервер для аутентификации пользователя.
+ * @param Username Введенное пользователем имя.
+ * @param Password Введенный пользователем пароль.
+ */
 void UMyGameInstance::RequestLogin(const FString& Username, const FString& Password)
 {
+	// Логируем начало операции.
 	UE_LOG(LogTemp, Log, TEXT("RequestLogin: Attempting login for user: %s"), *Username);
 
-	// 1. Создаем JSON объект для тела запроса. TSharedPtr - умный указатель для управления памятью.
+	// --- Шаг 1: Подготовка JSON тела запроса ---
+	// Создаем умный указатель на объект JSON. MakeShareable удобен для этого.
 	TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
-	// Добавляем поля в JSON.
+	// Заполняем JSON объект полями "username" и "password".
 	RequestJson->SetStringField(TEXT("username"), Username);
 	RequestJson->SetStringField(TEXT("password"), Password);
 
-	// 2. Сериализуем JSON объект в строку FString.
-	FString RequestBody;
-	// Создаем JsonWriter, который будет писать в строку RequestBody. TSharedRef - умная ссылка.
+	// --- Шаг 2: Сериализация JSON в строку ---
+	FString RequestBody; // Строка для хранения результата сериализации.
+	// Создаем JsonWriter, который будет писать в строку RequestBody.
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
-	// Выполняем сериализацию.
+	// Выполняем сериализацию. Проверяем результат.
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
 	{
-		// Логируем ошибку, если сериализация не удалась.
+		// Ошибка сериализации - прерываем операцию.
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to serialize JSON body."));
-		// Показываем ошибку пользователю.
+		// Сообщаем об ошибке пользователю через UI.
 		DisplayLoginError(TEXT("Client error: Could not create request."));
-		return; // Прерываем выполнение.
+		return;
 	}
 
-	// 3. Получаем доступ к HTTP модулю.
+	// --- Шаг 3: Создание и настройка HTTP запроса ---
+	// Получаем ссылку на синглтон HTTP модуля.
 	FHttpModule& HttpModule = FHttpModule::Get();
-	// Создаем объект HTTP запроса. ESPMode::ThreadSafe важен для асинхронных операций.
+	// Создаем объект запроса. Указание ESPMode::ThreadSafe важно для асинхронных операций.
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
-	// 4. Настраиваем запрос.
-	HttpRequest->SetVerb(TEXT("POST")); // Метод запроса.
-	HttpRequest->SetURL(ApiBaseUrl + TEXT("/login")); // Полный URL эндпоинта.
-	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json")); // Указываем тип контента.
-	HttpRequest->SetContentAsString(RequestBody); // Устанавливаем тело запроса (сериализованный JSON).
+	// Настраиваем параметры запроса:
+	HttpRequest->SetVerb(TEXT("POST"));                            // HTTP метод.
+	HttpRequest->SetURL(ApiBaseUrl + TEXT("/login"));             // URL эндпоинта логина.
+	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json")); // Тип передаваемого контента.
+	HttpRequest->SetContentAsString(RequestBody);                   // Тело запроса (наш JSON).
 
-	// 5. Привязываем функцию обратного вызова (callback), которая будет вызвана по завершении запроса.
-	// BindUObject привязывает метод OnLoginResponseReceived текущего объекта (*this).
+	// --- Шаг 4: Привязка обработчика ответа ---
+	// Устанавливаем функцию, которая будет вызвана, когда сервер ответит (или произойдет ошибка сети).
+	// BindUObject(this, ...) привязывает метод OnLoginResponseReceived текущего объекта UMyGameInstance.
 	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UMyGameInstance::OnLoginResponseReceived);
 
-	// 6. Отправляем запрос в сеть.
+	// --- Шаг 5: Отправка запроса ---
+	// Инициируем отправку запроса. Это асинхронная операция.
 	if (!HttpRequest->ProcessRequest())
 	{
-		// Логируем ошибку, если не удалось даже начать отправку запроса.
+		// Если запрос даже не удалось начать отправлять (например, проблемы с HttpModule).
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to start HTTP request (ProcessRequest failed)."));
 		DisplayLoginError(TEXT("Network error: Could not start request."));
 	}
 	else {
-		// Логируем успешную отправку.
+		// Запрос успешно отправлен (но ответ еще не получен).
 		UE_LOG(LogTemp, Log, TEXT("RequestLogin: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/login")));
-		// Здесь можно добавить логику показа индикатора загрузки в UI.
+		// В этом месте можно было бы показать пользователю индикатор загрузки.
 	}
 }
 
-// Отправляет запрос на регистрацию пользователя.
+/**
+ * @brief Инициирует асинхронный HTTP POST запрос на сервер для регистрации нового пользователя.
+ * @param Username Желаемое имя пользователя.
+ * @param Password Желаемый пароль.
+ * @param Email Адрес электронной почты пользователя.
+ */
 void UMyGameInstance::RequestRegister(const FString& Username, const FString& Password, const FString& Email)
 {
+	// Логируем начало операции.
 	UE_LOG(LogTemp, Log, TEXT("RequestRegister: Attempting registration for user: %s, email: %s"), *Username, *Email);
 
-	// 1. Создаем JSON объект.
+	// --- Шаг 1: Подготовка JSON тела запроса ---
 	TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
 	RequestJson->SetStringField(TEXT("username"), Username);
 	RequestJson->SetStringField(TEXT("password"), Password);
-	RequestJson->SetStringField(TEXT("email"), Email); // Добавляем поле email.
+	RequestJson->SetStringField(TEXT("email"), Email); // Добавляем email в запрос.
 
-	// 2. Сериализуем JSON в строку.
+	// --- Шаг 2: Сериализация JSON в строку ---
 	FString RequestBody;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
@@ -534,20 +642,20 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 		return;
 	}
 
-	// 3. Получаем HTTP модуль и создаем запрос.
+	// --- Шаг 3: Создание и настройка HTTP запроса ---
 	FHttpModule& HttpModule = FHttpModule::Get();
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
-	// 4. Настраиваем запрос.
 	HttpRequest->SetVerb(TEXT("POST"));
 	HttpRequest->SetURL(ApiBaseUrl + TEXT("/register")); // URL эндпоинта регистрации.
 	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	HttpRequest->SetContentAsString(RequestBody);
 
-	// 5. Привязываем callback для ответа на регистрацию.
+	// --- Шаг 4: Привязка обработчика ответа ---
+	// Привязываем другой метод-колбэк, специфичный для ответа на регистрацию.
 	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UMyGameInstance::OnRegisterResponseReceived);
 
-	// 6. Отправляем запрос.
+	// --- Шаг 5: Отправка запроса ---
 	if (!HttpRequest->ProcessRequest())
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestRegister: Failed to start HTTP request (ProcessRequest failed)."));
@@ -560,92 +668,111 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 
 
 // =============================================================================
-// Обработка Ответов HTTP
+// Обработка Ответов от Сервера (Колбэки HTTP Запросов)
 // =============================================================================
 
-// Функция обратного вызова, вызываемая по завершении HTTP запроса на логин.
+/**
+ * @brief Метод обратного вызова (callback), который выполняется по завершении HTTP запроса на логин.
+ * Анализирует ответ сервера и обновляет состояние игры или показывает ошибку.
+ * @param Request Указатель на исходный запрос (можно получить доп. инфо, если нужно).
+ * @param Response Указатель на ответ сервера.
+ * @param bWasSuccessful Флаг, указывающий на успех выполнения запроса на сетевом уровне (НЕ означает успешный логин!).
+ */
 void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// Проверяем базовый успех запроса на сетевом уровне и валидность ответа.
+	// --- Шаг 1: Проверка базовой успешности запроса ---
+	// Если запрос не удался на уровне сети ИЛИ объект ответа невалиден.
 	if (!bWasSuccessful || !Response.IsValid())
 	{
+		// Вероятно, проблема с соединением или сервер недоступен.
 		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed or response invalid. Connection error?"));
 		DisplayLoginError(TEXT("Network error or server unavailable."));
-		return; // Выходим, если связи нет.
+		// Здесь можно было бы скрыть индикатор загрузки, если он показывался.
+		return; // Выходим.
 	}
 
-	// Получаем код ответа HTTP (например, 200, 401, 500).
+	// --- Шаг 2: Анализ ответа сервера ---
+	// Получаем HTTP код ответа (e.g., 200, 401).
 	int32 ResponseCode = Response->GetResponseCode();
-	// Получаем тело ответа как строку (может содержать JSON или текст ошибки).
+	// Получаем тело ответа как строку.
 	FString ResponseBody = Response->GetContentAsString();
-	// Логируем код и тело ответа.
+	// Логируем полученные данные.
 	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// Обрабатываем успешный ответ (200 OK).
+	// --- Шаг 3: Обработка в зависимости от кода ответа ---
+	// Успешный логин (200 OK).
 	if (ResponseCode == 200)
 	{
-		// Пытаемся десериализовать тело ответа как JSON объект.
+		// Пытаемся распарсить тело ответа как JSON.
 		TSharedPtr<FJsonObject> ResponseJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ResponseJson) && ResponseJson.IsValid())
 		{
-			// Если JSON успешно распарсен, пытаемся извлечь поля userId и username.
+			// JSON успешно распарсен. Пытаемся извлечь необходимые данные (userId, username).
 			int64 ReceivedUserId = -1;
 			FString ReceivedUsername;
-			// TryGet... методы безопаснее, чем Get... так как не вызовут крэш, если поля нет.
+			// Используем TryGet... для безопасного извлечения.
 			if (ResponseJson->TryGetNumberField(TEXT("userId"), ReceivedUserId) &&
 				ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername))
 			{
-				// Если оба поля успешно извлечены.
+				// Данные успешно извлечены!
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
-				// Обновляем статус логина в GameInstance.
+				// Обновляем глобальное состояние GameInstance.
 				SetLoginStatus(true, ReceivedUserId, ReceivedUsername);
-				// Показываем экран загрузки (который затем покажет главное меню).
-				ShowLoadingScreen(); // Используем длительность по умолчанию.
+				// Инициируем переход к следующему экрану (через загрузку).
+				ShowLoadingScreen();
 			}
 			else {
-				// Ошибка: не удалось найти нужные поля в JSON.
+				// Ошибка: JSON корректный, но не содержит нужных полей.
 				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to parse 'userId' or 'username' from JSON response."));
 				DisplayLoginError(TEXT("Server error: Invalid response format."));
 			}
 		}
 		else {
-			// Ошибка: не удалось распарсить JSON из тела ответа.
+			// Ошибка: не удалось распарсить тело ответа как JSON.
 			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to deserialize JSON response. Body: %s"), *ResponseBody);
 			DisplayLoginError(TEXT("Server error: Could not parse response."));
 		}
 	}
-	// Обрабатываем ошибку "Не авторизован" (неверный логин/пароль).
+	// Ошибка аутентификации (401 Unauthorized).
 	else if (ResponseCode == 401)
 	{
+		// Неверный логин или пароль.
 		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401)."));
-		// Показываем пользователю сообщение о неверных данных.
+		// Сообщаем пользователю.
 		DisplayLoginError(TEXT("Login failed: Incorrect username or password."));
 	}
-	// Обрабатываем все остальные коды ошибок.
+	// Другие ошибки сервера (e.g., 500 Internal Server Error).
 	else {
 		// Формируем сообщение об ошибке по умолчанию.
 		FString ErrorMessage = FString::Printf(TEXT("Login failed: Server error (Code: %d)"), ResponseCode);
-		// Пытаемся извлечь более детальное сообщение из тела ответа (если сервер шлет JSON с полем "message").
+		// Пытаемся получить более конкретное сообщение из тела ответа (если сервер шлет JSON с ошибкой).
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
 			FString ServerErrorMsg;
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				// Используем сообщение от сервера, если оно есть.
+				// Используем сообщение от сервера.
 				ErrorMessage = FString::Printf(TEXT("Login failed: %s"), *ServerErrorMsg);
 			}
 		}
-		// Логируем и показываем ошибку пользователю.
+		// Логируем и отображаем ошибку.
 		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: %s"), *ErrorMessage);
 		DisplayLoginError(ErrorMessage);
 	}
+	// Здесь можно было бы скрыть индикатор загрузки.
 }
 
-// Функция обратного вызова, вызываемая по завершении HTTP запроса на регистрацию.
+/**
+ * @brief Метод обратного вызова (callback), который выполняется по завершении HTTP запроса на регистрацию.
+ * Анализирует ответ сервера и либо переводит на экран логина, либо показывает ошибку.
+ * @param Request Указатель на исходный запрос.
+ * @param Response Указатель на ответ сервера.
+ * @param bWasSuccessful Флаг успеха выполнения запроса на сетевом уровне.
+ */
 void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// Проверяем базовый успех запроса.
+	// --- Шаг 1: Проверка базовой успешности запроса ---
 	if (!bWasSuccessful || !Response.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: Request failed or response invalid. Connection error?"));
@@ -653,36 +780,38 @@ void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpR
 		return;
 	}
 
-	// Получаем код и тело ответа.
+	// --- Шаг 2: Анализ ответа сервера ---
 	int32 ResponseCode = Response->GetResponseCode();
 	FString ResponseBody = Response->GetContentAsString();
 	UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// Обрабатываем успешный ответ (201 Created).
+	// --- Шаг 3: Обработка в зависимости от кода ответа ---
+	// Успешная регистрация (201 Created).
 	if (ResponseCode == 201)
 	{
 		UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Registration successful!"));
-		// Переходим на экран логина, чтобы пользователь мог войти с новыми данными.
+		// Перенаправляем пользователя на экран логина.
 		ShowLoginScreen();
-		// Используем таймер с небольшой задержкой, чтобы сообщение об успехе появилось уже ПОСЛЕ
-		// того, как экран логина будет показан.
-		FTimerHandle TempTimerHandle;
-		// Проверяем, валиден ли World перед использованием TimerManager.
+		// --- Показ сообщения об успехе на экране логина с небольшой задержкой ---
+		FTimerHandle TempTimerHandle; // Временный хэндл для таймера.
+		// Проверяем валидность World перед использованием таймера.
 		if (GetWorld())
 		{
-			// Запускаем таймер, который через 0.1 секунды вызовет лямбда-функцию.
+			// Запускаем таймер, который выполнит лямбда-функцию через 0.1 секунды.
 			GetWorld()->GetTimerManager().SetTimer(TempTimerHandle, [this]() {
-				// Лямбда-функция вызывает DisplayLoginSuccessMessage. [this] захватывает текущий объект.
+				// Лямбда-функция вызывает показ сообщения об успехе.
+				// [this] захватывает указатель на текущий объект UMyGameInstance.
 				DisplayLoginSuccessMessage(TEXT("Registration successful! Please log in."));
-				}, 0.1f, false); // 0.1f - задержка, false - не повторять.
+				}, 0.1f, false); // false - таймер не повторяющийся.
 		}
+		// --- Конец показа сообщения ---
 	}
-	// Обрабатываем ошибку "Конфликт" (пользователь/email уже существует).
+	// Ошибка: Конфликт (имя пользователя или email уже заняты) (409 Conflict).
 	else if (ResponseCode == 409)
 	{
 		// Сообщение по умолчанию.
 		FString ErrorMessage = TEXT("Registration failed: Username or Email already exists.");
-		// Пытаемся получить более детальное сообщение от сервера.
+		// Пытаемся извлечь более детальное сообщение из ответа сервера.
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
@@ -695,12 +824,12 @@ void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpR
 		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (409)"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
-	// Обрабатываем ошибку "Неверный запрос" (ошибка валидации на сервере).
+	// Ошибка: Неверный запрос (ошибка валидации данных на сервере) (400 Bad Request).
 	else if (ResponseCode == 400)
 	{
 		// Сообщение по умолчанию.
 		FString ErrorMessage = TEXT("Registration failed: Invalid data provided.");
-		// Пытаемся получить более детальное сообщение от сервера.
+		// Пытаемся извлечь более детальное сообщение.
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
@@ -708,147 +837,156 @@ void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpR
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
 				ErrorMessage = FString::Printf(TEXT("Registration failed: %s"), *ServerErrorMsg);
 			}
-			// Можно добавить парсинг массива 'errors', если сервер его шлет для ошибок по полям.
+			// Здесь можно было бы добавить парсинг специфичных ошибок валидации по полям, если сервер их предоставляет.
 		}
 		// Логируем и показываем ошибку.
 		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (400)"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
-	// Обрабатываем все остальные коды ошибок.
+	// Другие ошибки сервера.
 	else {
 		FString ErrorMessage = FString::Printf(TEXT("Registration failed: Server error (Code: %d)"), ResponseCode);
 		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: %s"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
+	// Здесь можно было бы скрыть индикатор загрузки.
 }
 
 
+
 // =============================================================================
-// Поиск Виджета Внутри Контейнера
+// Вспомогательные Функции для Взаимодействия с Виджетами в Контейнере
 // =============================================================================
 
-// Вспомогательная функция для поиска виджета заданного класса внутри контейнера.
-UUserWidget* UMyGameInstance::FindWidgetInContainer(TSubclassOf<UUserWidget> WidgetClassToFind) const // const - функция не меняет объект
+/**
+ * @brief Находит активный виджет указанного класса внутри виджета-контейнера.
+ * Использует рефлексию для доступа к дочернему виджету, хранящемуся в слоте 'ContentSlotBorder'.
+ * @param WidgetClassToFind Класс виджета, который мы ищем.
+ * @return UUserWidget* Указатель на найденный виджет или nullptr, если не найден или произошла ошибка.
+ * @note Функция помечена `const`, так как она не изменяет состояние GameInstance.
+ */
+UUserWidget* UMyGameInstance::FindWidgetInContainer(TSubclassOf<UUserWidget> WidgetClassToFind) const
 {
-	// Проверяем, что контейнер и искомый класс валидны.
+	// Проверяем наличие активного контейнера и искомого класса.
 	if (!CurrentContainerInstance || !WidgetClassToFind)
 	{
-		return nullptr; // Нечего искать или негде искать.
+		return nullptr; // Нечего искать или негде.
 	}
 
-	// Имя переменной UBorder в WBP_WindowContainer, где лежит контент.
+	// Имя переменной (UPROPERTY) в классе WBP_WindowContainer, которая ссылается на UBorder, служащий слотом.
 	FName BorderVariableName = FName(TEXT("ContentSlotBorder"));
-	// Используем рефлексию UE для поиска свойства (переменной) по имени в классе контейнера.
-	// FindFProperty ищет FProperty (базовый класс для всех свойств). Нам нужен FObjectProperty.
+	// Используем систему рефлексии UE для поиска свойства (переменной) типа FObjectProperty по имени.
 	FObjectProperty* BorderProp = FindFProperty<FObjectProperty>(CurrentContainerInstance->GetClass(), BorderVariableName);
 
-	// Если свойство найдено.
+	// Если свойство (переменная UBorder) найдено в классе контейнера.
 	if (BorderProp)
 	{
-		// Получаем значение этого свойства (указатель на UObject) из экземпляра контейнера.
+		// Получаем значение этого свойства (указатель на UObject) из КОНКРЕТНОГО ЭКЗЕМПЛЯРА контейнера.
 		UObject* BorderObject = BorderProp->GetObjectPropertyValue_InContainer(CurrentContainerInstance);
-		// Пытаемся привести (cast) полученный UObject к UPanelWidget.
-		// UBorder наследуется от UPanelWidget, что позволяет получить дочерние элементы.
+		// Пытаемся привести (cast) этот UObject к UPanelWidget (базовый класс для виджетов, имеющих дочерние элементы, включая UBorder).
 		UPanelWidget* ContentPanel = Cast<UPanelWidget>(BorderObject);
 
 		// Если приведение успешно и у панели есть дочерние элементы.
 		if (ContentPanel && ContentPanel->GetChildrenCount() > 0)
 		{
-			// Получаем первый (и предполагаем, что единственный) дочерний элемент.
+			// Получаем первый (и предполагаем, что единственный) дочерний виджет внутри UBorder.
 			UWidget* ChildWidget = ContentPanel->GetChildAt(0);
-			// Проверяем, что дочерний элемент существует и его класс совпадает с искомым классом.
+			// Проверяем, что дочерний виджет существует и его класс является или наследуется от WidgetClassToFind.
 			if (ChildWidget && ChildWidget->IsA(WidgetClassToFind))
 			{
-				// Если все совпало, приводим к UUserWidget и возвращаем.
+				// Если всё совпадает, приводим указатель к UUserWidget и возвращаем его.
 				return Cast<UUserWidget>(ChildWidget);
 			}
-			// Логируем предупреждение, если дочерний виджет не того класса.
+			// Логируем предупреждение, если дочерний виджет есть, но он не того класса, который мы искали.
 			else if (ChildWidget) {
 				UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: Child widget %s is not of expected class %s"),
 					*ChildWidget->GetName(), *WidgetClassToFind->GetName());
 			}
 		}
-		// Логируем, если у панели нет дочерних элементов.
+		// Логируем предупреждение, если у панели (Border) нет дочерних виджетов.
 		else if (ContentPanel) {
 			UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: ContentSlotBorder has no children."));
 		}
-		// Логируем, если не удалось привести к UPanelWidget.
+		// Логируем предупреждение, если объект, на который указывает ContentSlotBorder, не является UPanelWidget (маловероятно, но возможно).
 		else {
 			UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: Failed to cast ContentSlotBorder object to UPanelWidget."));
 		}
 	}
-	// Логируем ошибку, если не удалось найти свойство 'ContentSlotBorder'.
-	// Убедитесь, что переменная UBorder в WBP_WindowContainer называется 'ContentSlotBorder' и помечена UPROPERTY() (например, через 'Is Variable').
+	// Логируем ошибку, если переменная с именем 'ContentSlotBorder' не найдена в классе контейнера.
+	// Убедитесь, что в WBP_WindowContainer есть UBorder, он назван 'ContentSlotBorder', и у него включен флаг 'Is Variable'.
 	else {
 		UE_LOG(LogTemp, Error, TEXT("FindWidgetInContainer: Could not find FObjectProperty 'ContentSlotBorder' in %s. Make sure the variable exists and is public/UPROPERTY()."),
 			*CurrentContainerInstance->GetClass()->GetName());
 	}
 
-	// Возвращаем nullptr, если виджет не найден.
+	// Возвращаем nullptr во всех случаях, когда виджет не был успешно найден.
 	return nullptr;
 }
 
 
-// =============================================================================
-// Вызов Функций Отображения Сообщений в Конкретных Виджетах Контента
-// =============================================================================
-
-// Показывает сообщение об ошибке логина.
+/**
+ * @brief Находит активный виджет логина и вызывает на нем Blueprint-функцию DisplayErrorMessage.
+ * @param Message Сообщение об ошибке для отображения.
+ */
 void UMyGameInstance::DisplayLoginError(const FString& Message)
 {
+	// Логируем сообщение об ошибке.
 	UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
 
-	// Ищем активный экземпляр WBP_LoginScreen внутри контейнера.
+	// Ищем активный экземпляр WBP_LoginScreen внутри нашего виджета-контейнера.
 	UUserWidget* LoginWidget = FindWidgetInContainer(LoginScreenClass);
 
-	// Если виджет найден.
+	// Если виджет логина найден (т.е., он сейчас активен внутри контейнера).
 	if (LoginWidget)
 	{
-		// Имя Blueprint-функции, которую нужно вызвать в WBP_LoginScreen.
+		// Имя Blueprint-функции, отвечающей за отображение ошибки в WBP_LoginScreen.
 		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		// Ищем эту функцию в классе найденного виджета.
+		// Ищем эту функцию по имени в классе виджета логина.
 		UFunction* Function = LoginWidget->GetClass()->FindFunctionByName(FunctionName);
 		// Если функция найдена.
 		if (Function)
 		{
-			// Готовим параметры.
-			struct FDisplayParams { FString Message; };
+			// Подготавливаем параметры для вызова функции (ожидается один параметр типа FString).
+			struct FDisplayParams { FString Message; }; // Структура должна соответствовать сигнатуре функции в BP.
 			FDisplayParams Params;
-			Params.Message = Message;
-			// Вызываем Blueprint-функцию на найденном виджете логина.
+			Params.Message = Message; // Передаем сообщение.
+			// Вызываем Blueprint-функцию на конкретном экземпляре виджета логина.
 			LoginWidget->ProcessEvent(Function, &Params);
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginError: Called DisplayErrorMessage on WBP_LoginScreen."));
 		}
 		else {
-			// Логируем ошибку, если функция не найдена в WBP_LoginScreen.
+			// Ошибка: в WBP_LoginScreen нет функции с таким именем.
 			UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: Function 'DisplayErrorMessage' not found in WBP_LoginScreen!"));
 		}
 	}
 	else {
-		// Логируем предупреждение, если не удалось найти активный WBP_LoginScreen.
+		// Предупреждение: не удалось найти активный виджет логина для отображения ошибки
+		// (возможно, пользователь уже перешел на другой экран).
 		UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: Could not find active WBP_LoginScreen inside container to display message."));
 	}
 }
 
-// Показывает сообщение об ошибке регистрации.
+/**
+ * @brief Находит активный виджет регистрации и вызывает на нем Blueprint-функцию DisplayErrorMessage.
+ * @param Message Сообщение об ошибке для отображения.
+ */
 void UMyGameInstance::DisplayRegisterError(const FString& Message)
 {
+	// Логируем ошибку.
 	UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: %s"), *Message);
 
-	// Ищем активный экземпляр WBP_RegisterScreen внутри контейнера.
+	// Ищем активный виджет регистрации внутри контейнера.
 	UUserWidget* RegisterWidget = FindWidgetInContainer(RegisterScreenClass);
 
 	// Если виджет найден.
 	if (RegisterWidget)
 	{
-		// Имя функции ошибки.
+		// Ищем функцию DisplayErrorMessage в WBP_RegisterScreen.
 		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		// Ищем функцию.
 		UFunction* Function = RegisterWidget->GetClass()->FindFunctionByName(FunctionName);
-		// Если найдена.
 		if (Function)
 		{
-			// Готовим параметры и вызываем.
+			// Готовим параметры и вызываем функцию.
 			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
 			Params.Message = Message;
@@ -856,43 +994,47 @@ void UMyGameInstance::DisplayRegisterError(const FString& Message)
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayRegisterError: Called DisplayErrorMessage on WBP_RegisterScreen."));
 		}
 		else {
-			// Логируем ошибку.
+			// Ошибка: функция не найдена.
 			UE_LOG(LogTemp, Error, TEXT("DisplayRegisterError: Function 'DisplayErrorMessage' not found in WBP_RegisterScreen!"));
 		}
 	}
 	else {
-		// Логируем предупреждение.
+		// Предупреждение: виджет не найден.
 		UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: Could not find active WBP_RegisterScreen inside container to display message."));
 	}
 }
 
-// Показывает сообщение об успехе регистрации (обычно на экране логина).
+/**
+ * @brief Находит активный виджет логина и вызывает на нем Blueprint-функцию DisplaySuccessMessage (или DisplayErrorMessage как запасной вариант).
+ * Используется для показа сообщения об успешной регистрации на экране логина.
+ * @param Message Сообщение об успехе для отображения.
+ */
 void UMyGameInstance::DisplayLoginSuccessMessage(const FString& Message)
 {
+	// Логируем сообщение об успехе.
 	UE_LOG(LogTemp, Log, TEXT("DisplayLoginSuccessMessage: %s"), *Message);
 
-	// Ищем активный экземпляр WBP_LoginScreen (т.к. мы перешли на него после успешной регистрации).
+	// Ищем активный виджет логина (т.к. показываем сообщение именно там).
 	UUserWidget* LoginWidget = FindWidgetInContainer(LoginScreenClass);
 
 	// Если виджет найден.
 	if (LoginWidget)
 	{
-		// Имена функций: предпочтительная для успеха и запасная (функция ошибки).
+		// Имена функций: предпочтительная для успеха и запасная (обычная функция ошибки).
 		FName SuccessFuncName = FName(TEXT("DisplaySuccessMessage"));
 		FName ErrorFuncName = FName(TEXT("DisplayErrorMessage"));
 
-		// Пытаемся найти функцию для успеха.
+		// Пытаемся найти специальную функцию для сообщений об успехе.
 		UFunction* FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(SuccessFuncName);
-		// Если функция успеха не найдена.
+		// Если она не найдена...
 		if (!FunctionToCall)
 		{
-			// Логируем, что используем запасной вариант.
+			// ...логируем это и пытаемся найти стандартную функцию для сообщений об ошибках.
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Function '%s' not found, falling back to '%s'."), *SuccessFuncName.ToString(), *ErrorFuncName.ToString());
-			// Пытаемся найти функцию ошибки.
 			FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(ErrorFuncName);
 		}
 
-		// Если удалось найти хотя бы одну из функций.
+		// Если удалось найти хотя бы одну из функций (успеха или ошибки).
 		if (FunctionToCall)
 		{
 			// Готовим параметры и вызываем найденную функцию.
@@ -904,12 +1046,12 @@ void UMyGameInstance::DisplayLoginSuccessMessage(const FString& Message)
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Called %s on WBP_LoginScreen."), *FunctionToCall->GetName());
 		}
 		else {
-			// Логируем ошибку, если не найдена ни функция успеха, ни функция ошибки.
+			// Ошибка: в WBP_LoginScreen нет ни функции успеха, ни функции ошибки. Не можем показать сообщение.
 			UE_LOG(LogTemp, Error, TEXT("DisplayLoginSuccessMessage: Neither '%s' nor '%s' found in WBP_LoginScreen!"), *SuccessFuncName.ToString(), *ErrorFuncName.ToString());
 		}
 	}
 	else {
-		// Логируем предупреждение, если не найден активный WBP_LoginScreen.
+		// Предупреждение: не найден активный виджет логина.
 		UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: Could not find active WBP_LoginScreen inside container to display message."));
 	}
 }
