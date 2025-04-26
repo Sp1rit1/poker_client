@@ -11,7 +11,6 @@
 #include "OfflineGameManager.h"  // управляющий класс в оффлайн режиме
 #include "MyGameInstance.generated.h" // // Сгенерированный заголовочный файл, содержащий код, сгенерированный Unreal Header Tool для поддержки системы рефлексии. Должен быть последним включением
 
-
 class UUserWidget; 
 
 UCLASS() // макрос, помечающий этот класс для системы рефлексии Unreal Engine.
@@ -158,5 +157,8 @@ protected:
 	// Шаблонная вспомогательная функция для создания, показа виджета и управления состоянием.
 	template <typename T = UUserWidget> 
 	T* ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget);
+
+	FTimerHandle ResizeTimerHandle; 
+	void DelayedInitialResize();
 
 };

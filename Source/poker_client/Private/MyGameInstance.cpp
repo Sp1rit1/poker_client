@@ -37,63 +37,141 @@
 
 
 // =============================================================================
-// Инициализация и Завершение Работы GameInstance
+// Реализация Методов UMyGameInstance
 // =============================================================================
 
-
-/*@brief <краткое описание>
-Назначение: Предоставляет краткое, однострочное описание сущности(класса, функции, переменной, enum и т.д.), к которой относится комментарий.
-@param <имя_параметра> <описание>
-Назначение: Описывает входной параметр функции или метода.
-@return <описание>
-Назначение: Описывает значение, возвращаемое функцией или методом.
-@warning <описание предупреждения>
-Назначение: Выделяет важное предупреждение или информацию о потенциальных проблемах, побочных эффектах или особых условиях использования.
-@note <описание заметки>
-Назначение: Добавляет дополнительную заметку или примечание, которое не является ни основным описанием, ни предупреждением, но может быть полезно для понимания.
-*/
-
-
 /**
- * @brief Вызывается один раз при создании экземпляра GameInstance (в начале игры).
- * Идеальное место для инициализации глобальных менеджеров и систем,
- * которые должны существовать на протяжении всей сессии игры.
+ * @brief Метод инициализации GameInstance.
+ * Запускает таймер для отложенной установки настроек окна.
+ * Также здесь можно инициализировать другие глобальные менеджеры.
  */
 void UMyGameInstance::Init()
 {
-	// Обязательно вызываем Init() базового класса UGameInstance.
+	// 1. Вызов реализации базового класса - ОБЯЗАТЕЛЬНО первым делом.
 	Super::Init();
+	UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Started."));
 
-	// --- Создание Менеджера Оффлайн Игры ---
-	// Создаем экземпляр UOfflineGameManager. 'this' (текущий UMyGameInstance)
-	// передается как Outer (владелец), связывая жизненные циклы.
+	// 2. Логирование начального состояния окна (для отладки)
+	// Это покажет, какое разрешение и режим установлены *до* срабатывания нашего таймера.
+	UGameUserSettings* InitialSettings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	if (InitialSettings) {
+		UE_LOG(LogTemp, Warning, TEXT("Init Start Check: CurrentRes=%dx%d | CurrentMode=%d"),
+			InitialSettings->GetScreenResolution().X, InitialSettings->GetScreenResolution().Y, (int32)InitialSettings->GetFullscreenMode());
+	}
+	else { UE_LOG(LogTemp, Warning, TEXT("Init Start Check: Settings=NULL")); }
+
+	// 3. Запуск таймера для вызова функции DelayedInitialResize
+	// Используем GetTimerManager() - глобальный менеджер таймеров, доступный из UObject/UGameInstance.
+	// Timer будет вызван один раз (false в последнем параметре) через 0.5 секунды.
+	// Задержка нужна, чтобы дать движку время завершить свою стандартную инициализацию окна и загрузку .ini.
+	const float ResizeDelay = 0.2f; // Задержка в секундах (можно настроить, 0.2-0.5 обычно достаточно)
+	GetTimerManager().SetTimer(ResizeTimerHandle, this, &UMyGameInstance::DelayedInitialResize, ResizeDelay, false);
+	UE_LOG(LogTemp, Log, TEXT("Init: Timer scheduled for DelayedInitialResize in %.2f seconds."), ResizeDelay);
+
+	// 4. Инициализация других ваших глобальных систем (пример)
 	OfflineGameManager = NewObject<UOfflineGameManager>(this);
-	// Проверяем, успешно ли был создан объект.
-	if (OfflineGameManager)
-	{
-		// Логируем успех.
-		UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully."));
-	}
-	else {
-		// Логируем критическую ошибку, если создать не удалось.
-		UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!"));
-	}
+	if (OfflineGameManager) { UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully.")); }
+	else { UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!")); }
 
-	// Логируем завершение основной инициализации GameInstance.
-	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Initialized."));
+	UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Finished."));
 }
 
 /**
- * @brief Вызывается при уничтожении экземпляра GameInstance (при закрытии игры).
- * Место для освобождения ресурсов, сохранения прогресса и т.п.
+ * @brief Метод завершения работы GameInstance.
  */
 void UMyGameInstance::Shutdown()
 {
-	// Логируем начало процесса завершения работы.
-	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown."));
-	// Обязательно вызываем Shutdown() базового класса.
+	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
+	// Можно добавить здесь код для очистки, если нужно.
+
+	// Обязательно вызываем Shutdown базового класса.
 	Super::Shutdown();
 }
+
+/**
+ * @brief Функция, вызываемая таймером для установки и сохранения настроек окна.
+ * Выполняется после небольшой задержки, чтобы обойти проблемы ранней инициализации.
+ */
+void UMyGameInstance::DelayedInitialResize()
+{
+	// Логируем начало выполнения отложенной функции (используем Error уровень для легкого поиска в логах при отладке).
+	UE_LOG(LogTemp, Warning, TEXT("--- DelayedInitialResize() Called ---"));
+
+	// 1. Получаем указатель на объект настроек пользователя.
+	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	// Проверяем, удалось ли его получить.
+	if (Settings)
+	{
+		// 2. Логируем состояние окна ПЕРЕД нашими изменениями.
+		UE_LOG(LogTemp, Warning, TEXT("DelayedResize Start: CurrentRes=%dx%d | CurrentMode=%d"),
+			Settings->GetScreenResolution().X, Settings->GetScreenResolution().Y, (int32)Settings->GetFullscreenMode());
+
+		// 3. Получаем информацию о дисплее.
+		FDisplayMetrics DisplayMetrics;
+		// Проверяем, инициализирована ли система Slate, прежде чем получать метрики.
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().GetCachedDisplayMetrics(DisplayMetrics);
+
+			// 4. Задаем желаемые пропорции окна в долях от размера экрана.
+			const float DesiredWidthFraction = 0.15f;  // 15% ширины
+			const float DesiredHeightFraction = 0.3f; // 30% высоты
+
+			// 5. Рассчитываем целевое разрешение в пикселях.
+			int32 CalculatedWidth = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayWidth * DesiredWidthFraction);
+			int32 CalculatedHeight = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayHeight * DesiredHeightFraction);
+
+			// 6. Устанавливаем минимальные размеры окна, чтобы избежать слишком маленького окна.
+			const int32 MinWidth = 288;  // Минимальная ширина
+			const int32 MinHeight = 324; // Минимальная высота
+			CalculatedWidth = FMath::Max(CalculatedWidth, MinWidth);
+			CalculatedHeight = FMath::Max(CalculatedHeight, MinHeight);
+
+			// 7. Формируем целевые параметры: разрешение и оконный режим.
+			FIntPoint TargetResolution(CalculatedWidth, CalculatedHeight);
+			EWindowMode::Type TargetMode = EWindowMode::Windowed; // Обязательно Windowed
+
+			// 8. Принудительно устанавливаем и сохраняем настройки.
+			// Мы не делаем проверку if(Current != Target), чтобы гарантированно применить и сохранить
+			// нужные значения, даже если они случайно совпали с промежуточными.
+			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Forcing resolution to %dx%d and mode to Windowed."), TargetResolution.X, TargetResolution.Y);
+
+			// Устанавливаем значения в объекте настроек.
+			Settings->SetScreenResolution(TargetResolution);
+			Settings->SetFullscreenMode(TargetMode);
+
+			// Применяем настройки к реальному окну игры. false - не ждать подтверждения.
+			Settings->ApplySettings(false);
+
+			// Сохраняем примененные настройки в файл GameUserSettings.ini пользователя.
+			// Это КЛЮЧЕВОЙ шаг, чтобы настройки сохранились и использовались при следующих запусках.
+			Settings->SaveSettings();
+
+			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Settings applied and saved."));
+
+			// 9. (Опционально, для отладки) Проверяем настройки СРАЗУ ПОСЛЕ сохранения.
+			FPlatformProcess::Sleep(0.1f); // Даем системе небольшую паузу на всякий случай.
+			FIntPoint SettingsAfterApply = Settings->GetScreenResolution();
+			EWindowMode::Type ModeAfterApply = Settings->GetFullscreenMode();
+			UE_LOG(LogTemp, Warning, TEXT("DelayedResize End Check: CurrentRes=%dx%d | CurrentMode=%d"),
+				SettingsAfterApply.X, SettingsAfterApply.Y, (int32)ModeAfterApply);
+			// Убедитесь, что здесь выводятся ваши целевые 1792x1008 и Mode=2 (или какие рассчитались).
+
+		}
+		else {
+			// Ошибка: Не удалось получить метрики дисплея.
+			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: FSlateApplication not initialized yet, cannot get display metrics. Skipping resize."));
+		}
+	}
+	else {
+		// Ошибка: Не удалось получить GameUserSettings.
+		UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get GameUserSettings!"));
+	}
+	// Логируем завершение функции.
+	UE_LOG(LogTemp, Warning, TEXT("--- DelayedInitialResize() Finished ---"));
+}
+
+
 
 
 // =============================================================================
