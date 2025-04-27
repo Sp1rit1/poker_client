@@ -64,7 +64,7 @@ void UMyGameInstance::Init()
 	// Используем GetTimerManager() - глобальный менеджер таймеров, доступный из UObject/UGameInstance.
 	// Timer будет вызван один раз (false в последнем параметре) через 0.5 секунды.
 	// Задержка нужна, чтобы дать движку время завершить свою стандартную инициализацию окна и загрузку .ini.
-	const float ResizeDelay = 0.2f; // Задержка в секундах (можно настроить, 0.2-0.5 обычно достаточно)
+	const float ResizeDelay = 0.1f; // Задержка в секундах (можно настроить, 0.2-0.5 обычно достаточно)
 	GetTimerManager().SetTimer(ResizeTimerHandle, this, &UMyGameInstance::DelayedInitialResize, ResizeDelay, false);
 	UE_LOG(LogTemp, Log, TEXT("Init: Timer scheduled for DelayedInitialResize in %.2f seconds."), ResizeDelay);
 
@@ -74,18 +74,6 @@ void UMyGameInstance::Init()
 	else { UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!")); }
 
 	UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Finished."));
-}
-
-/**
- * @brief Метод завершения работы GameInstance.
- */
-void UMyGameInstance::Shutdown()
-{
-	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
-	// Можно добавить здесь код для очистки, если нужно.
-
-	// Обязательно вызываем Shutdown базового класса.
-	Super::Shutdown();
 }
 
 /**
@@ -155,7 +143,6 @@ void UMyGameInstance::DelayedInitialResize()
 			EWindowMode::Type ModeAfterApply = Settings->GetFullscreenMode();
 			UE_LOG(LogTemp, Warning, TEXT("DelayedResize End Check: CurrentRes=%dx%d | CurrentMode=%d"),
 				SettingsAfterApply.X, SettingsAfterApply.Y, (int32)ModeAfterApply);
-			// Убедитесь, что здесь выводятся ваши целевые 1792x1008 и Mode=2 (или какие рассчитались).
 
 		}
 		else {
@@ -172,6 +159,17 @@ void UMyGameInstance::DelayedInitialResize()
 }
 
 
+/**
+ * @brief Метод завершения работы GameInstance.
+ */
+void UMyGameInstance::Shutdown()
+{
+	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
+	// Можно добавить здесь код для очистки, если нужно.
+
+	// Обязательно вызываем Shutdown базового класса.
+	Super::Shutdown();
+}
 
 
 // =============================================================================
@@ -301,61 +299,42 @@ void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
 }
 
 /**
- * @brief Шаблонная функция для унифицированного создания, показа и управления виджетами верхнего уровня.
- * Удаляет предыдущий виджет верхнего уровня перед показом нового.
- * Настраивает режим окна и ввода в зависимости от флага bIsFullscreenWidget.
- * @tparam T Тип виджета, который нужно создать (по умолчанию UUserWidget). Позволяет вернуть корректный тип указателя.
- * @param WidgetClassToShow Класс виджета (TSubclassOf<UUserWidget>), экземпляр которого нужно создать.
- * @param bIsFullscreenWidget Если true, виджет считается полноэкранным (применяется полноэкранный режим окна, ввод GameAndUI, мышь скрыта).
- *                            Если false, виджет считается "оконным" (применяется оконный режим, ввод UIOnly, мышь показана).
- * @return T* Указатель на созданный экземпляр виджета типа T, или nullptr в случае ошибки.
+ * @brief Шаблонная функция для показа виджетов (ИЗМЕНЕННАЯ)
+ * Удаляет предыдущий виджет и показывает новый.
+ * @param WidgetClassToShow Класс виджета для показа.
+ * @param bIsFullscreenWidget Флаг полноэкранного режима (влияет на окно и ввод).
+ * @return Указатель на созданный виджет или nullptr.
  */
 template <typename T>
 T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget)
 {
-	// Получаем PlayerController.
 	APlayerController* PC = GetFirstLocalPlayerController();
-	// Проверяем PlayerController и переданный класс виджета.
 	if (!PC) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: PlayerController is null.")); return nullptr; }
 	if (!WidgetClassToShow) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: WidgetClassToShow is null.")); return nullptr; }
 
-	// --- Шаг 1: Настройка режима окна и ввода ---
-	ApplyWindowMode(bIsFullscreenWidget);                 // Устанавливаем оконный/полноэкранный режим.
-	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Устанавливаем режим ввода и видимость мыши (инвертировано от bIsFullscreenWidget).
-
-	// --- Шаг 2: Удаление предыдущего виджета верхнего уровня ---
-	// Если есть указатель на предыдущий виджет.
+	// --- Шаг 1: Удаляем старый виджет ---
 	if (CurrentTopLevelWidget)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ShowWidget: Removing previous top level widget: %s"), *CurrentTopLevelWidget->GetName());
-		// Удаляем виджет из вьюпорта и памяти.
+		UE_LOG(LogTemp, Verbose, TEXT("ShowWidget: Removing previous widget: %s"), *CurrentTopLevelWidget->GetName());
 		CurrentTopLevelWidget->RemoveFromParent();
 	}
-	// Обнуляем указатели на старые виджеты.
 	CurrentTopLevelWidget = nullptr;
-	CurrentContainerInstance = nullptr; // Также сбрасываем указатель на контейнер, если он был активен.
+	// CurrentContainerInstance = nullptr; // Строка удалена, т.к. переменной больше нет
 
-	// --- Шаг 3: Создание и показ нового виджета ---
-	// Создаем экземпляр виджета нужного класса. CreateWidget возвращает тип UUserWidget*, но так как функция шаблонная, мы можем привести к T*.
+	// --- Шаг 2: Меняем режим окна и ввода ---
+	ApplyWindowMode(bIsFullscreenWidget);
+	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Ввод UI для оконного, Game+UI для полноэкранного
+
+	// --- Шаг 3: Создаем и показываем новый виджет ---
 	T* NewWidget = CreateWidget<T>(PC, WidgetClassToShow);
-	// Проверяем, успешно ли создан виджет.
 	if (NewWidget)
 	{
-		// Добавляем виджет в основной вьюпорт игры.
 		NewWidget->AddToViewport();
-		// Сохраняем указатель на новый виджет как текущий виджет верхнего уровня.
-		CurrentTopLevelWidget = NewWidget;
+		CurrentTopLevelWidget = NewWidget; // Сохраняем указатель на новый виджет
 		UE_LOG(LogTemp, Log, TEXT("ShowWidget: Added new widget: %s"), *WidgetClassToShow->GetName());
-		// Возвращаем указатель на созданный виджет.
 		return NewWidget;
 	}
-	else
-	{
-		// Логируем ошибку создания виджета.
-		UE_LOG(LogTemp, Error, TEXT("ShowWidget: Failed to create widget: %s"), *WidgetClassToShow->GetName());
-		// Возвращаем nullptr.
-		return nullptr;
-	}
+	else { UE_LOG(LogTemp, Error, TEXT("ShowWidget: Failed to create widget: %s"), *WidgetClassToShow->GetName()); return nullptr; }
 }
 
 
@@ -363,138 +342,93 @@ T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool 
 // Функции Навигации Между Экранами
 // =============================================================================
 
+// =============================================================================
+// Функции Навигации Между Экранами (ИЗМЕНЕННЫЕ)
+// =============================================================================
+
 /**
- * @brief Показывает стартовый экран приложения (например, с кнопками "Войти", "Оффлайн", "Выход").
- * Использует виджет-контейнер для имитации оконного режима.
+ * @brief Показывает стартовый экран приложения напрямую.
  */
 void UMyGameInstance::ShowStartScreen()
 {
-	// Проверяем, что классы виджетов контейнера и стартового экрана заданы в настройках GameInstance (в Blueprint).
-	if (!WindowContainerClass || !StartScreenClass) {
-		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: WindowContainerClass or StartScreenClass is not set!"));
-		return; // Прерываем, если классы не заданы.
+	// Проверяем, что класс стартового экрана задан в настройках GameInstance (в Blueprint).
+	if (!StartScreenClass) {
+		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: StartScreenClass is not set!"));
+		return; // Прерываем, если класс не задан.
 	}
 
-	// Вызываем ShowWidget для отображения виджета-контейнера в оконном режиме (false).
-	UUserWidget* Container = ShowWidget<UUserWidget>(WindowContainerClass, false);
+	// Вызываем ShowWidget для отображения стартового экрана напрямую в оконном режиме (false).
+	// ShowWidget сама удалит предыдущий CurrentTopLevelWidget.
+	UUserWidget* StartWidget = ShowWidget<UUserWidget>(StartScreenClass, false);
 
-	// Если контейнер был успешно создан и показан.
-	if (Container)
+	// Проверяем, успешно ли создан и показан виджет.
+	if (!StartWidget)
 	{
-		// Сохраняем указатель на текущий экземпляр контейнера.
-		CurrentContainerInstance = Container;
-
-		// --- Вызов Blueprint-функции внутри контейнера для установки контента ---
-		FName FunctionName = FName(TEXT("SetContentWidget")); // Имя функции в Blueprint (WBP_WindowContainer).
-		// Ищем функцию по имени в классе виджета-контейнера.
-		UFunction* Function = CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName);
-		// Если функция найдена.
-		if (Function)
-		{
-			// Подготавливаем структуру для передачи параметров в Blueprint-функцию.
-			// Структура должна совпадать с параметрами функции в BP.
-			struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
-			FSetContentParams Params;
-			Params.WidgetClassToSet = StartScreenClass; // Указываем класс стартового экрана как параметр.
-			// Вызываем Blueprint-функцию через систему рефлексии ProcessEvent.
-			CurrentContainerInstance->ProcessEvent(Function, &Params);
-			UE_LOG(LogTemp, Log, TEXT("ShowStartScreen: Set content to StartScreenClass."));
-		}
-		else {
-			// Ошибка, если обязательная функция не найдена в виджете контейнера.
-			UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: Function 'SetContentWidget' not found in %s!"), *WindowContainerClass->GetName());
-		}
+		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: Failed to create/show StartScreen!"));
 	}
-	// Останавливаем таймер экрана загрузки, если он был активен (например, при возврате из игры).
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("ShowStartScreen: StartScreen displayed successfully."));
+	}
+
+	// Останавливаем таймер экрана загрузки, если он был активен.
+	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран входа пользователя (логин/пароль).
- * Использует виджет-контейнер.
+ * @brief Показывает экран входа пользователя напрямую.
  */
 void UMyGameInstance::ShowLoginScreen()
 {
-	// Проверка наличия классов контейнера и экрана логина.
-	if (!WindowContainerClass || !LoginScreenClass) {
-		UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: WindowContainerClass or LoginScreenClass is not set!"));
+	// Проверка наличия класса экрана логина.
+	if (!LoginScreenClass) {
+		UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: LoginScreenClass is not set!"));
 		return;
 	}
 
-	// --- Логика переиспользования/создания контейнера ---
-	// Пытаемся получить текущий экземпляр контейнера.
-	UUserWidget* Container = CurrentContainerInstance;
-	// Если контейнера нет ИЛИ текущий виджет верхнего уровня - это НЕ наш контейнер
-	// (значит, был показан какой-то другой виджет, например, полноэкранный).
-	if (!Container || CurrentTopLevelWidget != CurrentContainerInstance)
+	// Показываем экран логина напрямую в оконном режиме (false).
+	UUserWidget* LoginWidget = ShowWidget<UUserWidget>(LoginScreenClass, false);
+
+	if (!LoginWidget)
 	{
-		// Нужно создать и показать контейнер заново.
-		Container = ShowWidget<UUserWidget>(WindowContainerClass, false);
-		// Если успешно создан, сохраняем указатель.
-		if (Container) CurrentContainerInstance = Container;
-		else return; // Если не удалось создать контейнер, выходим.
+		UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: Failed to create/show LoginScreen!"));
 	}
-	else {
-		// Контейнер уже активен, просто убедимся, что режим ввода и мышь настроены для UI.
-		SetupInputMode(true, true);
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("ShowLoginScreen: LoginScreen displayed successfully."));
 	}
 
-	// --- Установка контента внутри контейнера ---
-	FName FunctionName = FName(TEXT("SetContentWidget")); // Имя функции в BP.
-	// Ищем функцию в классе ТЕКУЩЕГО контейнера.
-	UFunction* Function = CurrentContainerInstance ? CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName) : nullptr;
-	if (Function)
-	{
-		// Готовим параметры и вызываем функцию, передавая LoginScreenClass.
-		struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
-		FSetContentParams Params;
-		Params.WidgetClassToSet = LoginScreenClass;
-		CurrentContainerInstance->ProcessEvent(Function, &Params);
-		UE_LOG(LogTemp, Log, TEXT("ShowLoginScreen: Set content to LoginScreenClass."));
-	}
-	else { UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: Could not find SetContentWidget in container.")); }
 	// Останавливаем таймер загрузки.
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран регистрации нового пользователя.
- * Использует виджет-контейнер.
+ * @brief Показывает экран регистрации нового пользователя напрямую.
  */
 void UMyGameInstance::ShowRegisterScreen()
 {
-	// Проверка наличия классов.
-	if (!WindowContainerClass || !RegisterScreenClass) {
-		UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: WindowContainerClass or RegisterScreenClass is not set!"));
+	// Проверка наличия класса.
+	if (!RegisterScreenClass) {
+		UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: RegisterScreenClass is not set!"));
 		return;
 	}
-	// Логика получения/создания контейнера аналогична ShowLoginScreen.
-	UUserWidget* Container = CurrentContainerInstance;
-	if (!Container || CurrentTopLevelWidget != CurrentContainerInstance)
+
+	// Показываем экран регистрации напрямую в оконном режиме (false).
+	UUserWidget* RegisterWidget = ShowWidget<UUserWidget>(RegisterScreenClass, false);
+
+	if (!RegisterWidget)
 	{
-		Container = ShowWidget<UUserWidget>(WindowContainerClass, false);
-		if (Container) CurrentContainerInstance = Container;
-		else return;
+		UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: Failed to create/show RegisterScreen!"));
 	}
-	else {
-		SetupInputMode(true, true);
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("ShowRegisterScreen: RegisterScreen displayed successfully."));
 	}
 
-	// Установка RegisterScreenClass как контента контейнера.
-	FName FunctionName = FName(TEXT("SetContentWidget"));
-	UFunction* Function = CurrentContainerInstance ? CurrentContainerInstance->GetClass()->FindFunctionByName(FunctionName) : nullptr;
-	if (Function)
-	{
-		struct FSetContentParams { TSubclassOf<UUserWidget> WidgetClassToSet; };
-		FSetContentParams Params;
-		Params.WidgetClassToSet = RegisterScreenClass;
-		CurrentContainerInstance->ProcessEvent(Function, &Params);
-		UE_LOG(LogTemp, Log, TEXT("ShowRegisterScreen: Set content to RegisterScreenClass."));
-	}
-	else { UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: Could not find SetContentWidget in container.")); }
 	// Останавливаем таймер загрузки.
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
+
 
 /**
  * @brief Показывает полноэкранный виджет "загрузки" на заданное время.
@@ -933,203 +867,149 @@ void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpR
 
 
 // =============================================================================
-// Вспомогательные Функции для Взаимодействия с Виджетами в Контейнере
+// Вспомогательные Функции для Взаимодействия с Виджетами 
 // =============================================================================
 
-/**
- * @brief Находит активный виджет указанного класса внутри виджета-контейнера.
- * Использует рефлексию для доступа к дочернему виджету, хранящемуся в слоте 'ContentSlotBorder'.
- * @param WidgetClassToFind Класс виджета, который мы ищем.
- * @return UUserWidget* Указатель на найденный виджет или nullptr, если не найден или произошла ошибка.
- * @note Функция помечена `const`, так как она не изменяет состояние GameInstance.
- */
-UUserWidget* UMyGameInstance::FindWidgetInContainer(TSubclassOf<UUserWidget> WidgetClassToFind) const
-{
-	// Проверяем наличие активного контейнера и искомого класса.
-	if (!CurrentContainerInstance || !WidgetClassToFind)
-	{
-		return nullptr; // Нечего искать или негде.
-	}
-
-	// Имя переменной (UPROPERTY) в классе WBP_WindowContainer, которая ссылается на UBorder, служащий слотом.
-	FName BorderVariableName = FName(TEXT("ContentSlotBorder"));
-	// Используем систему рефлексии UE для поиска свойства (переменной) типа FObjectProperty по имени.
-	FObjectProperty* BorderProp = FindFProperty<FObjectProperty>(CurrentContainerInstance->GetClass(), BorderVariableName);
-
-	// Если свойство (переменная UBorder) найдено в классе контейнера.
-	if (BorderProp)
-	{
-		// Получаем значение этого свойства (указатель на UObject) из КОНКРЕТНОГО ЭКЗЕМПЛЯРА контейнера.
-		UObject* BorderObject = BorderProp->GetObjectPropertyValue_InContainer(CurrentContainerInstance);
-		// Пытаемся привести (cast) этот UObject к UPanelWidget (базовый класс для виджетов, имеющих дочерние элементы, включая UBorder).
-		UPanelWidget* ContentPanel = Cast<UPanelWidget>(BorderObject);
-
-		// Если приведение успешно и у панели есть дочерние элементы.
-		if (ContentPanel && ContentPanel->GetChildrenCount() > 0)
-		{
-			// Получаем первый (и предполагаем, что единственный) дочерний виджет внутри UBorder.
-			UWidget* ChildWidget = ContentPanel->GetChildAt(0);
-			// Проверяем, что дочерний виджет существует и его класс является или наследуется от WidgetClassToFind.
-			if (ChildWidget && ChildWidget->IsA(WidgetClassToFind))
-			{
-				// Если всё совпадает, приводим указатель к UUserWidget и возвращаем его.
-				return Cast<UUserWidget>(ChildWidget);
-			}
-			// Логируем предупреждение, если дочерний виджет есть, но он не того класса, который мы искали.
-			else if (ChildWidget) {
-				UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: Child widget %s is not of expected class %s"),
-					*ChildWidget->GetName(), *WidgetClassToFind->GetName());
-			}
-		}
-		// Логируем предупреждение, если у панели (Border) нет дочерних виджетов.
-		else if (ContentPanel) {
-			UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: ContentSlotBorder has no children."));
-		}
-		// Логируем предупреждение, если объект, на который указывает ContentSlotBorder, не является UPanelWidget (маловероятно, но возможно).
-		else {
-			UE_LOG(LogTemp, Warning, TEXT("FindWidgetInContainer: Failed to cast ContentSlotBorder object to UPanelWidget."));
-		}
-	}
-	// Логируем ошибку, если переменная с именем 'ContentSlotBorder' не найдена в классе контейнера.
-	// Убедитесь, что в WBP_WindowContainer есть UBorder, он назван 'ContentSlotBorder', и у него включен флаг 'Is Variable'.
-	else {
-		UE_LOG(LogTemp, Error, TEXT("FindWidgetInContainer: Could not find FObjectProperty 'ContentSlotBorder' in %s. Make sure the variable exists and is public/UPROPERTY()."),
-			*CurrentContainerInstance->GetClass()->GetName());
-	}
-
-	// Возвращаем nullptr во всех случаях, когда виджет не был успешно найден.
-	return nullptr;
-}
-
 
 /**
- * @brief Находит активный виджет логина и вызывает на нем Blueprint-функцию DisplayErrorMessage.
+ * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
+ * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
  * @param Message Сообщение об ошибке для отображения.
  */
 void UMyGameInstance::DisplayLoginError(const FString& Message)
 {
-	// Логируем сообщение об ошибке.
 	UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
 
-	// Ищем активный экземпляр WBP_LoginScreen внутри нашего виджета-контейнера.
-	UUserWidget* LoginWidget = FindWidgetInContainer(LoginScreenClass);
-
-	// Если виджет логина найден (т.е., он сейчас активен внутри контейнера).
-	if (LoginWidget)
+	// Проверяем, что текущий виджет верхнего уровня существует,
+	// и что он имеет правильный класс (LoginScreenClass).
+	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
 	{
-		// Имя Blueprint-функции, отвечающей за отображение ошибки в WBP_LoginScreen.
+		// Указатель на текущий виджет (уже проверен).
+		UUserWidget* LoginWidget = CurrentTopLevelWidget;
+
+		// Имя Blueprint-функции для вызова.
 		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		// Ищем эту функцию по имени в классе виджета логина.
+		// Ищем функцию в классе виджета.
 		UFunction* Function = LoginWidget->GetClass()->FindFunctionByName(FunctionName);
-		// Если функция найдена.
 		if (Function)
 		{
-			// Подготавливаем параметры для вызова функции (ожидается один параметр типа FString).
-			struct FDisplayParams { FString Message; }; // Структура должна соответствовать сигнатуре функции в BP.
+			// Готовим параметры и вызываем функцию через ProcessEvent.
+			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
-			Params.Message = Message; // Передаем сообщение.
-			// Вызываем Blueprint-функцию на конкретном экземпляре виджета логина.
+			Params.Message = Message;
 			LoginWidget->ProcessEvent(Function, &Params);
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginError: Called DisplayErrorMessage on WBP_LoginScreen."));
+			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginError: Called DisplayErrorMessage on %s."), *LoginWidget->GetName());
 		}
 		else {
-			// Ошибка: в WBP_LoginScreen нет функции с таким именем.
-			UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: Function 'DisplayErrorMessage' not found in WBP_LoginScreen!"));
+			// Ошибка: функция не найдена в Blueprint виджета.
+			UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: Function 'DisplayErrorMessage' not found in %s!"), *LoginScreenClass->GetName());
 		}
 	}
 	else {
-		// Предупреждение: не удалось найти активный виджет логина для отображения ошибки
-		// (возможно, пользователь уже перешел на другой экран).
-		UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: Could not find active WBP_LoginScreen inside container to display message."));
+		// Логируем причину, по которой не удалось показать ошибку.
+		if (!CurrentTopLevelWidget) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget is null when trying to display error."));
+		}
+		else if (!LoginScreenClass) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: LoginScreenClass is null variable in GameInstance."));
+		}
+		else {
+			// Текущий виджет не является виджетом логина.
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget (%s) is not the expected LoginScreenClass (%s). Cannot display error."),
+				*CurrentTopLevelWidget->GetName(), *LoginScreenClass->GetName());
+		}
 	}
 }
 
 /**
- * @brief Находит активный виджет регистрации и вызывает на нем Blueprint-функцию DisplayErrorMessage.
+ * @brief Находит активный виджет регистрации (проверяя CurrentTopLevelWidget)
+ * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
  * @param Message Сообщение об ошибке для отображения.
  */
 void UMyGameInstance::DisplayRegisterError(const FString& Message)
 {
-	// Логируем ошибку.
 	UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: %s"), *Message);
 
-	// Ищем активный виджет регистрации внутри контейнера.
-	UUserWidget* RegisterWidget = FindWidgetInContainer(RegisterScreenClass);
-
-	// Если виджет найден.
-	if (RegisterWidget)
+	// Проверяем текущий виджет верхнего уровня на тип RegisterScreenClass.
+	if (CurrentTopLevelWidget && RegisterScreenClass && CurrentTopLevelWidget->IsA(RegisterScreenClass))
 	{
-		// Ищем функцию DisplayErrorMessage в WBP_RegisterScreen.
+		UUserWidget* RegisterWidget = CurrentTopLevelWidget;
+
 		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
 		UFunction* Function = RegisterWidget->GetClass()->FindFunctionByName(FunctionName);
 		if (Function)
 		{
-			// Готовим параметры и вызываем функцию.
 			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
 			Params.Message = Message;
 			RegisterWidget->ProcessEvent(Function, &Params);
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayRegisterError: Called DisplayErrorMessage on WBP_RegisterScreen."));
+			UE_LOG(LogTemp, Verbose, TEXT("DisplayRegisterError: Called DisplayErrorMessage on %s."), *RegisterWidget->GetName());
 		}
 		else {
-			// Ошибка: функция не найдена.
-			UE_LOG(LogTemp, Error, TEXT("DisplayRegisterError: Function 'DisplayErrorMessage' not found in WBP_RegisterScreen!"));
+			UE_LOG(LogTemp, Error, TEXT("DisplayRegisterError: Function 'DisplayErrorMessage' not found in %s!"), *RegisterScreenClass->GetName());
 		}
 	}
 	else {
-		// Предупреждение: виджет не найден.
-		UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: Could not find active WBP_RegisterScreen inside container to display message."));
+		if (!CurrentTopLevelWidget) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: CurrentTopLevelWidget is null when trying to display error."));
+		}
+		else if (!RegisterScreenClass) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: RegisterScreenClass is null variable in GameInstance."));
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: CurrentTopLevelWidget (%s) is not the expected RegisterScreenClass (%s). Cannot display error."),
+				*CurrentTopLevelWidget->GetName(), *RegisterScreenClass->GetName());
+		}
 	}
 }
 
 /**
- * @brief Находит активный виджет логина и вызывает на нем Blueprint-функцию DisplaySuccessMessage (или DisplayErrorMessage как запасной вариант).
- * Используется для показа сообщения об успешной регистрации на экране логина.
+ * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
+ * и вызывает на нем Blueprint-функцию DisplaySuccessMessage (или DisplayErrorMessage).
  * @param Message Сообщение об успехе для отображения.
  */
 void UMyGameInstance::DisplayLoginSuccessMessage(const FString& Message)
 {
-	// Логируем сообщение об успехе.
 	UE_LOG(LogTemp, Log, TEXT("DisplayLoginSuccessMessage: %s"), *Message);
 
-	// Ищем активный виджет логина (т.к. показываем сообщение именно там).
-	UUserWidget* LoginWidget = FindWidgetInContainer(LoginScreenClass);
-
-	// Если виджет найден.
-	if (LoginWidget)
+	// Проверяем текущий виджет верхнего уровня на тип LoginScreenClass.
+	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
 	{
-		// Имена функций: предпочтительная для успеха и запасная (обычная функция ошибки).
+		UUserWidget* LoginWidget = CurrentTopLevelWidget;
+
 		FName SuccessFuncName = FName(TEXT("DisplaySuccessMessage"));
 		FName ErrorFuncName = FName(TEXT("DisplayErrorMessage"));
 
-		// Пытаемся найти специальную функцию для сообщений об успехе.
 		UFunction* FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(SuccessFuncName);
-		// Если она не найдена...
 		if (!FunctionToCall)
 		{
-			// ...логируем это и пытаемся найти стандартную функцию для сообщений об ошибках.
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Function '%s' not found, falling back to '%s'."), *SuccessFuncName.ToString(), *ErrorFuncName.ToString());
 			FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(ErrorFuncName);
 		}
 
-		// Если удалось найти хотя бы одну из функций (успеха или ошибки).
 		if (FunctionToCall)
 		{
-			// Готовим параметры и вызываем найденную функцию.
 			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
 			Params.Message = Message;
 			LoginWidget->ProcessEvent(FunctionToCall, &Params);
-			// Логируем, какая именно функция была вызвана.
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Called %s on WBP_LoginScreen."), *FunctionToCall->GetName());
+			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Called %s on %s."), *FunctionToCall->GetName(), *LoginWidget->GetName());
 		}
 		else {
-			// Ошибка: в WBP_LoginScreen нет ни функции успеха, ни функции ошибки. Не можем показать сообщение.
-			UE_LOG(LogTemp, Error, TEXT("DisplayLoginSuccessMessage: Neither '%s' nor '%s' found in WBP_LoginScreen!"), *SuccessFuncName.ToString(), *ErrorFuncName.ToString());
+			UE_LOG(LogTemp, Error, TEXT("DisplayLoginSuccessMessage: Neither '%s' nor '%s' found in %s!"), *SuccessFuncName.ToString(), *ErrorFuncName.ToString(), *LoginScreenClass->GetName());
 		}
 	}
 	else {
-		// Предупреждение: не найден активный виджет логина.
-		UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: Could not find active WBP_LoginScreen inside container to display message."));
+		if (!CurrentTopLevelWidget) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: CurrentTopLevelWidget is null when trying to display message."));
+		}
+		else if (!LoginScreenClass) {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: LoginScreenClass is null variable in GameInstance."));
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: CurrentTopLevelWidget (%s) is not the expected LoginScreenClass (%s). Cannot display message."),
+				*CurrentTopLevelWidget->GetName(), *LoginScreenClass->GetName());
+		}
 	}
 }
+

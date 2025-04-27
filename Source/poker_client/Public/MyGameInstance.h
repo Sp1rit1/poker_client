@@ -42,11 +42,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State")
 	bool bIsInOfflineMode = false; 
 
-	// EditDefaultsOnly: Переменную можно редактировать только в редакторе Class Defaults (для Blueprint-наследника), но не на отдельных экземплярах в уровне
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
-	// TSubclassOf<UUserWidget>: тип данных, хранящий ссылку на класс виджета (Blueprint), а не на его экземпляр. WindowContainerClass - класс-контейнер для других виджетов 
-	TSubclassOf<UUserWidget> WindowContainerClass;  
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> StartScreenClass;
 
@@ -123,9 +118,6 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> CurrentTopLevelWidget = nullptr;  // указатель на текущий виджет верхнего уровня (контейнер или полноэкранный)
 
-	UPROPERTY(Transient)
-	TObjectPtr<UUserWidget> CurrentContainerInstance = nullptr; // указатель на текущий экземпляр виджета-контейнера
-
 	FTimerHandle LoadingScreenTimerHandle; // стурктура для хранения идентификатора таймера и управления им
 	void OnLoadingScreenTimerComplete();  // функция обратного вызова (callback), которая будет вызвана по завершении таймера LoadingScreenTimerHandle.
 
@@ -137,9 +129,6 @@ protected:
 	void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
 
-	// --- функции для Вызова Blueprint из C++ (Отображение Сообщений) ---
-	// вспомогательная функция для поиска конкретного виджета внутри контейнера по классу. const после определения метода означает, что данный метод не изменяет состояние(поля) объекта
-	UUserWidget* FindWidgetInContainer(TSubclassOf<UUserWidget> WidgetClassToFind) const; 
 	void DisplayLoginError(const FString& Message); 
 	void DisplayRegisterError(const FString& Message);
 	void DisplayLoginSuccessMessage(const FString& Message); 
