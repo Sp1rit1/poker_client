@@ -102,16 +102,16 @@ void UMyGameInstance::DelayedInitialResize()
 			FSlateApplication::Get().GetCachedDisplayMetrics(DisplayMetrics);
 
 			// 4. Задаем желаемые пропорции окна в долях от размера экрана.
-			const float DesiredWidthFraction = 0.15f;  // 15% ширины
-			const float DesiredHeightFraction = 0.3f; // 30% высоты
+			const float DesiredWidthFraction = 0.22f;  // 15% ширины
+			const float DesiredHeightFraction = 0.45f; // 30% высоты
 
 			// 5. Рассчитываем целевое разрешение в пикселях.
 			int32 CalculatedWidth = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayWidth * DesiredWidthFraction);
 			int32 CalculatedHeight = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayHeight * DesiredHeightFraction);
 
 			// 6. Устанавливаем минимальные размеры окна, чтобы избежать слишком маленького окна.
-			const int32 MinWidth = 288;  // Минимальная ширина
-			const int32 MinHeight = 324; // Минимальная высота
+			const int32 MinWidth = 422;  // Минимальная ширина
+			const int32 MinHeight = 486; // Минимальная высота
 			CalculatedWidth = FMath::Max(CalculatedWidth, MinWidth);
 			CalculatedHeight = FMath::Max(CalculatedHeight, MinHeight);
 
