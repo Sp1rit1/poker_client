@@ -36,6 +36,17 @@
 #include "Serialization/JsonSerializer.h"
 
 
+// --- Для работы с окнами
+#include "SlateBasics.h" // Для FSlateApplication и SWindow
+#include "GenericPlatform/GenericApplication.h" // Для IGenericApplication и GetOSWindowHandle
+
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsHWrapper.h" // Нужен для HWND и WinAPI функций
+#include "Windows/AllowWindowsPlatformTypes.h" // Разрешает использовать типы Windows
+#endif
+
+
+
 // =============================================================================
 // Реализация Методов UMyGameInstance
 // =============================================================================
@@ -102,7 +113,7 @@ void UMyGameInstance::DelayedInitialResize()
 			FSlateApplication::Get().GetCachedDisplayMetrics(DisplayMetrics);
 
 			// 4. Задаем желаемые пропорции окна в долях от размера экрана.
-			const float DesiredWidthFraction = 0.22f;  // 15% ширины
+			const float DesiredWidthFraction = 0.16875f;  // 15% ширины
 			const float DesiredHeightFraction = 0.45f; // 30% высоты
 
 			// 5. Рассчитываем целевое разрешение в пикселях.
@@ -110,7 +121,7 @@ void UMyGameInstance::DelayedInitialResize()
 			int32 CalculatedHeight = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayHeight * DesiredHeightFraction);
 
 			// 6. Устанавливаем минимальные размеры окна, чтобы избежать слишком маленького окна.
-			const int32 MinWidth = 422;  // Минимальная ширина
+			const int32 MinWidth = 324;  // Минимальная ширина
 			const int32 MinHeight = 486; // Минимальная высота
 			CalculatedWidth = FMath::Max(CalculatedWidth, MinWidth);
 			CalculatedHeight = FMath::Max(CalculatedHeight, MinHeight);
@@ -136,6 +147,59 @@ void UMyGameInstance::DelayedInitialResize()
 			Settings->SaveSettings();
 
 			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Settings applied and saved."));
+
+
+
+			FPlatformProcess::Sleep(0.1f);
+
+			// Пытаемся получить главное окно приложения через GEngine->GameViewport
+			TSharedPtr<SWindow> GameWindow = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWindow() : nullptr;
+			// Проверяем, что окно получено
+			if (GameWindow.IsValid())
+			{
+				// Получаем нативный хэндл окна ОС (для Windows это HWND)
+				void* NativeWindowHandle = GameWindow->GetNativeWindow() ? GameWindow->GetNativeWindow()->GetOSWindowHandle() : nullptr;
+				// Проверяем, что хэндл получен
+				if (NativeWindowHandle != nullptr)
+				{
+					UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Attempting to modify window style to prevent resizing..."));
+
+#if PLATFORM_WINDOWS // Код выполнится только при компиляции под Windows
+
+					HWND Hwnd = static_cast<HWND>(NativeWindowHandle); // Приводим тип к HWND
+
+					// Получаем текущий стиль окна
+					LONG_PTR CurrentStyle = GetWindowLongPtr(Hwnd, GWL_STYLE);
+
+					// Создаем новый стиль, убирая флаги WS_SIZEBOX (рамка изменения размера)
+					// и WS_MAXIMIZEBOX (кнопка "Развернуть") с помощью битовой операции И НЕ (& ~)
+					LONG_PTR NewStyle = CurrentStyle & ~WS_SIZEBOX & ~WS_MAXIMIZEBOX;
+
+					// Проверяем, отличается ли новый стиль от старого (чтобы не вызывать WinAPI без надобности)
+					if (NewStyle != CurrentStyle)
+					{
+						// Устанавливаем новый стиль для окна
+						SetWindowLongPtr(Hwnd, GWL_STYLE, NewStyle);
+
+						// Говорим Windows перерисовать рамку окна с учетом нового стиля
+						// Флаги говорят: обновить рамку, не менять позицию, не менять размер, не менять Z-порядок
+						SetWindowPos(Hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+						UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Window style modified successfully. Resizing disabled."));
+					}
+					else
+					{
+						UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Window style already prevents resizing or GetWindowLongPtr failed? Style: %p"), (void*)CurrentStyle);
+					}
+
+#else // Для других платформ просто выводим сообщение
+					UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Window style modification not implemented for this platform."));
+#endif
+				}
+				else { UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get native window handle.")); }
+			}
+			else { UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get game SWindow.")); }
+
+
 
 			// 9. (Опционально, для отладки) Проверяем настройки СРАЗУ ПОСЛЕ сохранения.
 			FPlatformProcess::Sleep(0.1f); // Даем системе небольшую паузу на всякий случай.

@@ -9,6 +9,21 @@
 #include "Interfaces/IHttpResponse.h" // интерфейс для обработки HTTP-ответов      
 #include "TimerManager.h" // управление таймерами
 #include "OfflineGameManager.h"  // управляющий класс в оффлайн режиме
+
+#include "SlateBasics.h"                   // Для доступа к SWindow и FSlateApplication
+#include "GenericPlatform/GenericApplication.h" // Для IGenericApplication и GetOSWindowHandle
+
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsHWrapper.h" // Нужен для HWND и WinAPI функций
+// AllowWindowsPlatformTypes/HideWindowsPlatformTypes используются для предотвращения конфликтов имен
+// между типами Windows (как INT, FLOAT) и типами UE. Их нужно "обернуть" вокруг включения Windows.h,
+// но так как WindowsHWrapper делает это внутри себя, явное добавление может не понадобиться:
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <windows.h> // Или более специфичные заголовки, если нужны
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
+
+
 #include "MyGameInstance.generated.h" // // Сгенерированный заголовочный файл, содержащий код, сгенерированный Unreal Header Tool для поддержки системы рефлексии. Должен быть последним включением
 
 class UUserWidget; 
