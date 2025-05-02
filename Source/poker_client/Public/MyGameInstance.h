@@ -1,49 +1,49 @@
-#pragma once // гаранитирует единичное включение файла при компиляции, предотвращая ошибки повторного определения
+п»ї#pragma once // РіР°СЂР°РЅРёС‚РёСЂСѓРµС‚ РµРґРёРЅРёС‡РЅРѕРµ РІРєР»СЋС‡РµРЅРёРµ С„Р°Р№Р»Р° РїСЂРё РєРѕРјРїРёР»СЏС†РёРё, РїСЂРµРґРѕС‚РІСЂР°С‰Р°СЏ РѕС€РёР±РєРё РїРѕРІС‚РѕСЂРЅРѕРіРѕ РѕРїСЂРµРґРµР»РµРЅРёСЏ
 
-#include "CoreMinimal.h" // основной заголовочный файл UE, включающий базовые типы и макросы
-#include "Engine/GameInstance.h" // определение базового класса GameInstance, от которого мы наследуемся
-#include "Blueprint/UserWidget.h" // для работы с виджетами UMG
-#include "GameFramework/GameUserSettings.h" // для управления окнами и разрешением
-#include "Engine/Engine.h"  //  определение глобального объекта GameEngine               
-#include "Interfaces/IHttpRequest.h" // интерфейс для создания и управления HTTP-запросов        
-#include "Interfaces/IHttpResponse.h" // интерфейс для обработки HTTP-ответов      
-#include "TimerManager.h" // управление таймерами
-#include "OfflineGameManager.h"  // управляющий класс в оффлайн режиме
+#include "CoreMinimal.h" // РѕСЃРЅРѕРІРЅРѕР№ Р·Р°РіРѕР»РѕРІРѕС‡РЅС‹Р№ С„Р°Р№Р» UE, РІРєР»СЋС‡Р°СЋС‰РёР№ Р±Р°Р·РѕРІС‹Рµ С‚РёРїС‹ Рё РјР°РєСЂРѕСЃС‹
+#include "Engine/GameInstance.h" // РѕРїСЂРµРґРµР»РµРЅРёРµ Р±Р°Р·РѕРІРѕРіРѕ РєР»Р°СЃСЃР° GameInstance, РѕС‚ РєРѕС‚РѕСЂРѕРіРѕ РјС‹ РЅР°СЃР»РµРґСѓРµРјСЃСЏ
+#include "Blueprint/UserWidget.h" // РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ РІРёРґР¶РµС‚Р°РјРё UMG
+#include "GameFramework/GameUserSettings.h" // РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РѕРєРЅР°РјРё Рё СЂР°Р·СЂРµС€РµРЅРёРµРј
+#include "Engine/Engine.h"  //  РѕРїСЂРµРґРµР»РµРЅРёРµ РіР»РѕР±Р°Р»СЊРЅРѕРіРѕ РѕР±СЉРµРєС‚Р° GameEngine               
+#include "Interfaces/IHttpRequest.h" // РёРЅС‚РµСЂС„РµР№СЃ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ Рё СѓРїСЂР°РІР»РµРЅРёСЏ HTTP-Р·Р°РїСЂРѕСЃРѕРІ        
+#include "Interfaces/IHttpResponse.h" // РёРЅС‚РµСЂС„РµР№СЃ РґР»СЏ РѕР±СЂР°Р±РѕС‚РєРё HTTP-РѕС‚РІРµС‚РѕРІ      
+#include "TimerManager.h" // СѓРїСЂР°РІР»РµРЅРёРµ С‚Р°Р№РјРµСЂР°РјРё
+#include "OfflineGameManager.h"  // СѓРїСЂР°РІР»СЏСЋС‰РёР№ РєР»Р°СЃСЃ РІ РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРјРµ
 
-#include "SlateBasics.h"                   // Для доступа к SWindow и FSlateApplication
-#include "GenericPlatform/GenericApplication.h" // Для IGenericApplication и GetOSWindowHandle
+#include "SlateBasics.h"                   // Р”Р»СЏ РґРѕСЃС‚СѓРїР° Рє SWindow Рё FSlateApplication
+#include "GenericPlatform/GenericApplication.h" // Р”Р»СЏ IGenericApplication Рё GetOSWindowHandle
 
 #if PLATFORM_WINDOWS
-#include "Windows/WindowsHWrapper.h" // Нужен для HWND и WinAPI функций
-// AllowWindowsPlatformTypes/HideWindowsPlatformTypes используются для предотвращения конфликтов имен
-// между типами Windows (как INT, FLOAT) и типами UE. Их нужно "обернуть" вокруг включения Windows.h,
-// но так как WindowsHWrapper делает это внутри себя, явное добавление может не понадобиться:
+#include "Windows/WindowsHWrapper.h" // РќСѓР¶РµРЅ РґР»СЏ HWND Рё WinAPI С„СѓРЅРєС†РёР№
+// AllowWindowsPlatformTypes/HideWindowsPlatformTypes РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР»СЏ РїСЂРµРґРѕС‚РІСЂР°С‰РµРЅРёСЏ РєРѕРЅС„Р»РёРєС‚РѕРІ РёРјРµРЅ
+// РјРµР¶РґСѓ С‚РёРїР°РјРё Windows (РєР°Рє INT, FLOAT) Рё С‚РёРїР°РјРё UE. РС… РЅСѓР¶РЅРѕ "РѕР±РµСЂРЅСѓС‚СЊ" РІРѕРєСЂСѓРі РІРєР»СЋС‡РµРЅРёСЏ Windows.h,
+// РЅРѕ С‚Р°Рє РєР°Рє WindowsHWrapper РґРµР»Р°РµС‚ СЌС‚Рѕ РІРЅСѓС‚СЂРё СЃРµР±СЏ, СЏРІРЅРѕРµ РґРѕР±Р°РІР»РµРЅРёРµ РјРѕР¶РµС‚ РЅРµ РїРѕРЅР°РґРѕР±РёС‚СЊСЃСЏ:
 #include "Windows/AllowWindowsPlatformTypes.h"
-#include <windows.h> // Или более специфичные заголовки, если нужны
+#include <windows.h> // РР»Рё Р±РѕР»РµРµ СЃРїРµС†РёС„РёС‡РЅС‹Рµ Р·Р°РіРѕР»РѕРІРєРё, РµСЃР»Рё РЅСѓР¶РЅС‹
 #include "Windows/HideWindowsPlatformTypes.h"
 #endif
 
 
-#include "MyGameInstance.generated.h" // // Сгенерированный заголовочный файл, содержащий код, сгенерированный Unreal Header Tool для поддержки системы рефлексии. Должен быть последним включением
+#include "MyGameInstance.generated.h" // // РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Р№ Р·Р°РіРѕР»РѕРІРѕС‡РЅС‹Р№ С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ РєРѕРґ, СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Р№ Unreal Header Tool РґР»СЏ РїРѕРґРґРµСЂР¶РєРё СЃРёСЃС‚РµРјС‹ СЂРµС„Р»РµРєСЃРёРё. Р”РѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕСЃР»РµРґРЅРёРј РІРєР»СЋС‡РµРЅРёРµРј
 
 class UUserWidget; 
 
-UCLASS() // макрос, помечающий этот класс для системы рефлексии Unreal Engine.
+UCLASS() // РјР°РєСЂРѕСЃ, РїРѕРјРµС‡Р°СЋС‰РёР№ СЌС‚РѕС‚ РєР»Р°СЃСЃ РґР»СЏ СЃРёСЃС‚РµРјС‹ СЂРµС„Р»РµРєСЃРёРё Unreal Engine.
 
-// POKER_CLIENT_API - макрос для экспорта класса, чтобы он стал доступен для других модулей. Сам класс является основным и служит для управления глобальным состоянием и данными
+// POKER_CLIENT_API - РјР°РєСЂРѕСЃ РґР»СЏ СЌРєСЃРїРѕСЂС‚Р° РєР»Р°СЃСЃР°, С‡С‚РѕР±С‹ РѕРЅ СЃС‚Р°Р» РґРѕСЃС‚СѓРїРµРЅ РґР»СЏ РґСЂСѓРіРёС… РјРѕРґСѓР»РµР№. РЎР°Рј РєР»Р°СЃСЃ СЏРІР»СЏРµС‚СЃСЏ РѕСЃРЅРѕРІРЅС‹Рј Рё СЃР»СѓР¶РёС‚ РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РіР»РѕР±Р°Р»СЊРЅС‹Рј СЃРѕСЃС‚РѕСЏРЅРёРµРј Рё РґР°РЅРЅС‹РјРё
 class POKER_CLIENT_API UMyGameInstance : public UGameInstance 
 {
-	GENERATED_BODY() // макрос, обязателен для классов, помеченных UCLASS(), вставляет код, сгенерированный UHT. Должен быть первой строкой в теле класса.
+	GENERATED_BODY() // РјР°РєСЂРѕСЃ, РѕР±СЏР·Р°С‚РµР»РµРЅ РґР»СЏ РєР»Р°СЃСЃРѕРІ, РїРѕРјРµС‡РµРЅРЅС‹С… UCLASS(), РІСЃС‚Р°РІР»СЏРµС‚ РєРѕРґ, СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Р№ UHT. Р”РѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРµСЂРІРѕР№ СЃС‚СЂРѕРєРѕР№ РІ С‚РµР»Рµ РєР»Р°СЃСЃР°.
 
 public: 
 
-	// --- Переменные Состояния Игры ---
+	// --- РџРµСЂРµРјРµРЅРЅС‹Рµ РЎРѕСЃС‚РѕСЏРЅРёСЏ РРіСЂС‹ ---
 
 
-// UPROPERTY: макрос, делающий переменную видимой для системы рефлексии UE.
-// VisibleAnywhere: Переменную можно видеть в редакторе на панели Details для любого экземпляра этого объекта (но нельзя редактировать).
-// BlueprintReadOnly: Переменную можно читать из Blueprint, но нельзя изменять.
-// Category = "name": Группирует эту переменную в категорию "name" в редакторе.
+// UPROPERTY: РјР°РєСЂРѕСЃ, РґРµР»Р°СЋС‰РёР№ РїРµСЂРµРјРµРЅРЅСѓСЋ РІРёРґРёРјРѕР№ РґР»СЏ СЃРёСЃС‚РµРјС‹ СЂРµС„Р»РµРєСЃРёРё UE.
+// VisibleAnywhere: РџРµСЂРµРјРµРЅРЅСѓСЋ РјРѕР¶РЅРѕ РІРёРґРµС‚СЊ РІ СЂРµРґР°РєС‚РѕСЂРµ РЅР° РїР°РЅРµР»Рё Details РґР»СЏ Р»СЋР±РѕРіРѕ СЌРєР·РµРјРїР»СЏСЂР° СЌС‚РѕРіРѕ РѕР±СЉРµРєС‚Р° (РЅРѕ РЅРµР»СЊР·СЏ СЂРµРґР°РєС‚РёСЂРѕРІР°С‚СЊ).
+// BlueprintReadOnly: РџРµСЂРµРјРµРЅРЅСѓСЋ РјРѕР¶РЅРѕ С‡РёС‚Р°С‚СЊ РёР· Blueprint, РЅРѕ РЅРµР»СЊР·СЏ РёР·РјРµРЅСЏС‚СЊ.
+// Category = "name": Р“СЂСѓРїРїРёСЂСѓРµС‚ СЌС‚Сѓ РїРµСЂРµРјРµРЅРЅСѓСЋ РІ РєР°С‚РµРіРѕСЂРёСЋ "name" РІ СЂРµРґР°РєС‚РѕСЂРµ.
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State")
 	bool bIsLoggedIn = false; 
@@ -82,9 +82,9 @@ public:
 	UOfflineGameManager* OfflineGameManager; 
 
 
-	// --- Функции Навигации (Вызываются из Blueprint или C++) ---
+	// --- Р¤СѓРЅРєС†РёРё РќР°РІРёРіР°С†РёРё (Р’С‹Р·С‹РІР°СЋС‚СЃСЏ РёР· Blueprint РёР»Рё C++) ---
 	
-// UFUNCTION: Макрос, делающий функцию видимой для системы рефлексии UE.
+// UFUNCTION: РњР°РєСЂРѕСЃ, РґРµР»Р°СЋС‰РёР№ С„СѓРЅРєС†РёСЋ РІРёРґРёРјРѕР№ РґР»СЏ СЃРёСЃС‚РµРјС‹ СЂРµС„Р»РµРєСЃРёРё UE.
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowStartScreen();
@@ -119,27 +119,34 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void RequestRegister(const FString& Username, const FString& Password, const FString& Email);
 
-	FString ApiBaseUrl = TEXT("http://localhost:8080/api/auth");  // Базовый URL для API аутентификации
+	FString ApiBaseUrl = TEXT("http://localhost:8080/api/auth");  // Р‘Р°Р·РѕРІС‹Р№ URL РґР»СЏ API Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё
 
-	virtual void Init() override; // виртуальная (переопределяемая в дочерних классах), переопределённая (override) из UGameInstance функция инициализации GameInstance
-	virtual void Shutdown() override; // функция завершения работы GameInstance
+	virtual void Init() override; // РІРёСЂС‚СѓР°Р»СЊРЅР°СЏ (РїРµСЂРµРѕРїСЂРµРґРµР»СЏРµРјР°СЏ РІ РґРѕС‡РµСЂРЅРёС… РєР»Р°СЃСЃР°С…), РїРµСЂРµРѕРїСЂРµРґРµР»С‘РЅРЅР°СЏ (override) РёР· UGameInstance С„СѓРЅРєС†РёСЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё GameInstance
+	virtual void Shutdown() override; // С„СѓРЅРєС†РёСЏ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹ GameInstance
 
 protected: 
 
-	// --- Текущие Экземпляры Виджетов ---
-	// Transient: Указывает, что значение этой переменной не должно сохраняться при сериализации (преобразовании состояния объекта в формат для сохранения). Оно будет инициализировано при запуске.
-	// TObjectPtr<UUserWidget>: Современный тип умного указателя UE для объектов UObject (включая виджеты). Автоматически обнуляется, если объект удален.
+	// --- РўРµРєСѓС‰РёРµ Р­РєР·РµРјРїР»СЏСЂС‹ Р’РёРґР¶РµС‚РѕРІ ---
+	// Transient: РЈРєР°Р·С‹РІР°РµС‚, С‡С‚Рѕ Р·РЅР°С‡РµРЅРёРµ СЌС‚РѕР№ РїРµСЂРµРјРµРЅРЅРѕР№ РЅРµ РґРѕР»Р¶РЅРѕ СЃРѕС…СЂР°РЅСЏС‚СЊСЃСЏ РїСЂРё СЃРµСЂРёР°Р»РёР·Р°С†РёРё (РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРё СЃРѕСЃС‚РѕСЏРЅРёСЏ РѕР±СЉРµРєС‚Р° РІ С„РѕСЂРјР°С‚ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ). РћРЅРѕ Р±СѓРґРµС‚ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅРѕ РїСЂРё Р·Р°РїСѓСЃРєРµ.
+	// TObjectPtr<UUserWidget>: РЎРѕРІСЂРµРјРµРЅРЅС‹Р№ С‚РёРї СѓРјРЅРѕРіРѕ СѓРєР°Р·Р°С‚РµР»СЏ UE РґР»СЏ РѕР±СЉРµРєС‚РѕРІ UObject (РІРєР»СЋС‡Р°СЏ РІРёРґР¶РµС‚С‹). РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРё РѕР±РЅСѓР»СЏРµС‚СЃСЏ, РµСЃР»Рё РѕР±СЉРµРєС‚ СѓРґР°Р»РµРЅ.
 
 	UPROPERTY(Transient)
-	TObjectPtr<UUserWidget> CurrentTopLevelWidget = nullptr;  // указатель на текущий виджет верхнего уровня (контейнер или полноэкранный)
+	TObjectPtr<UUserWidget> CurrentTopLevelWidget = nullptr;  // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰РёР№ РІРёРґР¶РµС‚ РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ (РєРѕРЅС‚РµР№РЅРµСЂ РёР»Рё РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№)
 
-	FTimerHandle LoadingScreenTimerHandle; // стурктура для хранения идентификатора таймера и управления им
-	void OnLoadingScreenTimerComplete();  // функция обратного вызова (callback), которая будет вызвана по завершении таймера LoadingScreenTimerHandle.
+	FTimerHandle LoadingScreenTimerHandle; // СЃС‚СѓСЂРєС‚СѓСЂР° РґР»СЏ С…СЂР°РЅРµРЅРёСЏ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂР° С‚Р°Р№РјРµСЂР° Рё СѓРїСЂР°РІР»РµРЅРёСЏ РёРј
+	void OnLoadingScreenTimerComplete();  // С„СѓРЅРєС†РёСЏ РѕР±СЂР°С‚РЅРѕРіРѕ РІС‹Р·РѕРІР° (callback), РєРѕС‚РѕСЂР°СЏ Р±СѓРґРµС‚ РІС‹Р·РІР°РЅР° РїРѕ Р·Р°РІРµСЂС€РµРЅРёРё С‚Р°Р№РјРµСЂР° LoadingScreenTimerHandle.
 
+	bool bIsInitialWindowSetupComplete = false;
 
-	// --- Обработчики Ответов HTTP ---
-	// FHttpRequestPtr, FHttpResponsePtr: Типы умных указателей для объектов HTTP запроса и ответа
-	// Объявление функций обратного вызова для обработки ответа на запрос логина и регистрации.
+	/** Р Р°СЃСЃС‡РёС‚Р°РЅРЅРѕРµ Рё Р¶РµР»Р°РµРјРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ РґР»СЏ РѕРєРѕРЅРЅРѕРіРѕ СЂРµР¶РёРјР° */
+	FIntPoint DesiredWindowedResolution = FIntPoint(0, 0);
+
+	/** Р¤Р»Р°Рі, СѓРєР°Р·С‹РІР°СЋС‰РёР№, С‡С‚Рѕ DesiredWindowedResolution Р±С‹Р»Рѕ СѓСЃРїРµС€РЅРѕ СЂР°СЃСЃС‡РёС‚Р°РЅРѕ */
+	bool bDesiredResolutionCalculated = false;
+
+	// --- РћР±СЂР°Р±РѕС‚С‡РёРєРё РћС‚РІРµС‚РѕРІ HTTP ---
+	// FHttpRequestPtr, FHttpResponsePtr: РўРёРїС‹ СѓРјРЅС‹С… СѓРєР°Р·Р°С‚РµР»РµР№ РґР»СЏ РѕР±СЉРµРєС‚РѕРІ HTTP Р·Р°РїСЂРѕСЃР° Рё РѕС‚РІРµС‚Р°
+	// РћР±СЉСЏРІР»РµРЅРёРµ С„СѓРЅРєС†РёР№ РѕР±СЂР°С‚РЅРѕРіРѕ РІС‹Р·РѕРІР° РґР»СЏ РѕР±СЂР°Р±РѕС‚РєРё РѕС‚РІРµС‚Р° РЅР° Р·Р°РїСЂРѕСЃ Р»РѕРіРёРЅР° Рё СЂРµРіРёСЃС‚СЂР°С†РёРё.
 	void OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 	void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
@@ -148,17 +155,17 @@ protected:
 	void DisplayRegisterError(const FString& Message);
 	void DisplayLoginSuccessMessage(const FString& Message); 
 
-	// --- Вспомогательные Функции для Управления Окном и Вводом ---
+	// --- Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ Р¤СѓРЅРєС†РёРё РґР»СЏ РЈРїСЂР°РІР»РµРЅРёСЏ РћРєРЅРѕРј Рё Р’РІРѕРґРѕРј ---
 
-	//Устанавливает режим ввода и видимость курсора мыши.
-	// bIsUIOnly True для режима UI Only (оконные виджеты), False для Game And UI (полноэкранные).
-	// bShowMouse True чтобы показать курсор, False чтобы скрыть.
+	//РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ СЂРµР¶РёРј РІРІРѕРґР° Рё РІРёРґРёРјРѕСЃС‚СЊ РєСѓСЂСЃРѕСЂР° РјС‹С€Рё.
+	// bIsUIOnly True РґР»СЏ СЂРµР¶РёРјР° UI Only (РѕРєРѕРЅРЅС‹Рµ РІРёРґР¶РµС‚С‹), False РґР»СЏ Game And UI (РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Рµ).
+	// bShowMouse True С‡С‚РѕР±С‹ РїРѕРєР°Р·Р°С‚СЊ РєСѓСЂСЃРѕСЂ, False С‡С‚РѕР±С‹ СЃРєСЂС‹С‚СЊ.
 
 	void SetupInputMode(bool bIsUIOnly, bool bShowMouse);
 
 	void ApplyWindowMode(bool bWantFullscreen);
 
-	// Шаблонная вспомогательная функция для создания, показа виджета и управления состоянием.
+	// РЁР°Р±Р»РѕРЅРЅР°СЏ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ, РїРѕРєР°Р·Р° РІРёРґР¶РµС‚Р° Рё СѓРїСЂР°РІР»РµРЅРёСЏ СЃРѕСЃС‚РѕСЏРЅРёРµРј.
 	template <typename T = UUserWidget> 
 	T* ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget);
 

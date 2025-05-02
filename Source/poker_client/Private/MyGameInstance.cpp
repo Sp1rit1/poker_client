@@ -130,6 +130,10 @@ void UMyGameInstance::DelayedInitialResize()
 			FIntPoint TargetResolution(CalculatedWidth, CalculatedHeight);
 			EWindowMode::Type TargetMode = EWindowMode::Windowed; // Обязательно Windowed
 
+			DesiredWindowedResolution = TargetResolution; // Запоминаем рассчитанное разрешение
+			bDesiredResolutionCalculated = true;       // Ставим флаг, что расчет успешен
+			UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Stored desired windowed resolution %dx%d"), DesiredWindowedResolution.X, DesiredWindowedResolution.Y);
+
 			// 8. Принудительно устанавливаем и сохраняем настройки.
 			// Мы не делаем проверку if(Current != Target), чтобы гарантированно применить и сохранить
 			// нужные значения, даже если они случайно совпали с промежуточными.
@@ -148,9 +152,6 @@ void UMyGameInstance::DelayedInitialResize()
 
 			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Settings applied and saved."));
 
-
-
-			FPlatformProcess::Sleep(0.1f);
 
 			// Пытаемся получить главное окно приложения через GEngine->GameViewport
 			TSharedPtr<SWindow> GameWindow = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWindow() : nullptr;
@@ -200,13 +201,10 @@ void UMyGameInstance::DelayedInitialResize()
 			else { UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get game SWindow.")); }
 
 
+			bIsInitialWindowSetupComplete = true;
+			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Initial setup complete flag set. Calling ShowStartScreen..."));
 
-			// 9. (Опционально, для отладки) Проверяем настройки СРАЗУ ПОСЛЕ сохранения.
-			FPlatformProcess::Sleep(0.1f); // Даем системе небольшую паузу на всякий случай.
-			FIntPoint SettingsAfterApply = Settings->GetScreenResolution();
-			EWindowMode::Type ModeAfterApply = Settings->GetFullscreenMode();
-			UE_LOG(LogTemp, Warning, TEXT("DelayedResize End Check: CurrentRes=%dx%d | CurrentMode=%d"),
-				SettingsAfterApply.X, SettingsAfterApply.Y, (int32)ModeAfterApply);
+			ShowStartScreen();
 
 		}
 		else {
@@ -229,9 +227,40 @@ void UMyGameInstance::DelayedInitialResize()
 void UMyGameInstance::Shutdown()
 {
 	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
-	// Можно добавить здесь код для очистки, если нужно.
+	
+	if (bDesiredResolutionCalculated) // Проверяем, успели ли мы рассчитать разрешение
+	{
+		UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+		if (Settings)
+		{
+			FIntPoint CurrentSavedResolution = Settings->GetScreenResolution();
+			EWindowMode::Type CurrentSavedMode = Settings->GetFullscreenMode();
 
-	// Обязательно вызываем Shutdown базового класса.
+			// Проверяем, отличаются ли сохраненные настройки от наших желаемых оконных
+			if (CurrentSavedResolution != DesiredWindowedResolution || CurrentSavedMode != EWindowMode::Windowed)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Shutdown: Settings differ from desired windowed state. Forcing save of %dx%d Windowed."),
+					DesiredWindowedResolution.X, DesiredWindowedResolution.Y);
+
+				// Устанавливаем НАШИ оконные настройки
+				Settings->SetScreenResolution(DesiredWindowedResolution);
+				Settings->SetFullscreenMode(EWindowMode::Windowed);
+				// Применять (ApplySettings) перед сохранением необязательно, SaveSettings обычно делает это
+				Settings->SaveSettings(); // СОХРАНЯЕМ ИМЕННО ИХ!
+				UE_LOG(LogTemp, Warning, TEXT("Shutdown: Desired windowed settings saved."));
+			}
+			else {
+				UE_LOG(LogTemp, Log, TEXT("Shutdown: Saved settings already match desired windowed state."));
+			}
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("Shutdown: Could not get GameUserSettings to save final state."));
+		}
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Desired windowed resolution was never calculated. Cannot force save."));
+	}
+
 	Super::Shutdown();
 }
 
@@ -386,7 +415,15 @@ T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool 
 	// CurrentContainerInstance = nullptr; // Строка удалена, т.к. переменной больше нет
 
 	// --- Шаг 2: Меняем режим окна и ввода ---
-	ApplyWindowMode(bIsFullscreenWidget);
+	if (!bIsInitialWindowSetupComplete || bIsFullscreenWidget)
+	{
+		ApplyWindowMode(bIsFullscreenWidget);
+		UE_LOG(LogTemp, Log, TEXT("ShowWidget: Applied window mode (Fullscreen: %s OR Initial setup not complete)"), bIsFullscreenWidget ? TEXT("True") : TEXT("False"));
+	}
+	else {
+		// Пропускаем ApplyWindowMode для первого оконного виджета после завершения настройки
+		UE_LOG(LogTemp, Log, TEXT("ShowWidget: Skipping ApplyWindowMode for initial windowed widget because initial setup is complete."));
+	}
 	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Ввод UI для оконного, Game+UI для полноэкранного
 
 	// --- Шаг 3: Создаем и показываем новый виджет ---
