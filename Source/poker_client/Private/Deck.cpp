@@ -1,13 +1,13 @@
-#include "Deck.h" // Включаем .h файл
-#include "Algo/RandomShuffle.h" // Для перемешивания
-#include "Containers/EnumAsByte.h" // Для итерации по Enum
+п»ї#include "Deck.h" // Р’РєР»СЋС‡Р°РµРј .h С„Р°Р№Р»
+#include "Algo/RandomShuffle.h" // Р”Р»СЏ РїРµСЂРµРјРµС€РёРІР°РЅРёСЏ
+#include "Containers/EnumAsByte.h" // Р”Р»СЏ РёС‚РµСЂР°С†РёРё РїРѕ Enum
 
 void UDeck::Initialize()
 {
-	Cards.Empty(); // Очищаем на всякий случай
-	Cards.Reserve(52); // Резервируем память
+	Cards.Empty(); // РћС‡РёС‰Р°РµРј РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№
+	Cards.Reserve(52); // Р РµР·РµСЂРІРёСЂСѓРµРј РїР°РјСЏС‚СЊ
 
-	// Получаем доступ к перечислениям
+	// РџРѕР»СѓС‡Р°РµРј РґРѕСЃС‚СѓРї Рє РїРµСЂРµС‡РёСЃР»РµРЅРёСЏРј
 	const UEnum* SuitEnum = StaticEnum<ECardSuit>();
 	const UEnum* RankEnum = StaticEnum<ECardRank>();
 
@@ -17,17 +17,17 @@ void UDeck::Initialize()
 		return;
 	}
 
-	// Проходим по всем мастям
-	for (int32 s = 0; s < SuitEnum->NumEnums() - 1; ++s) // -1 чтобы пропустить UMETA(Hidden) или MAX
+	// РџСЂРѕС…РѕРґРёРј РїРѕ РІСЃРµРј РјР°СЃС‚СЏРј
+	for (int32 s = 0; s < SuitEnum->NumEnums() - 1; ++s) // -1 С‡С‚РѕР±С‹ РїСЂРѕРїСѓСЃС‚РёС‚СЊ UMETA(Hidden) РёР»Рё MAX
 	{
 		ECardSuit CurrentSuit = static_cast<ECardSuit>(SuitEnum->GetValueByIndex(s));
 
-		// Проходим по всем рангам
+		// РџСЂРѕС…РѕРґРёРј РїРѕ РІСЃРµРј СЂР°РЅРіР°Рј
 		for (int32 r = 0; r < RankEnum->NumEnums() - 1; ++r)
 		{
 			ECardRank CurrentRank = static_cast<ECardRank>(RankEnum->GetValueByIndex(r));
 
-			// Создаем и добавляем карту
+			// РЎРѕР·РґР°РµРј Рё РґРѕР±Р°РІР»СЏРµРј РєР°СЂС‚Сѓ
 			Cards.Add(FCard(CurrentSuit, CurrentRank));
 		}
 	}
@@ -51,14 +51,14 @@ FCard UDeck::DealCard()
 {
 	if (!IsEmpty())
 	{
-		// Раздаем последнюю карту из массива (эффективнее, чем первую)
-		return Cards.Pop(); // Pop удаляет и возвращает элемент
+		// Р Р°Р·РґР°РµРј РїРѕСЃР»РµРґРЅСЋСЋ РєР°СЂС‚Сѓ РёР· РјР°СЃСЃРёРІР° (СЌС„С„РµРєС‚РёРІРЅРµРµ, С‡РµРј РїРµСЂРІСѓСЋ)
+		return Cards.Pop(); // Pop СѓРґР°Р»СЏРµС‚ Рё РІРѕР·РІСЂР°С‰Р°РµС‚ СЌР»РµРјРµРЅС‚
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UDeck::DealCard - Deck is empty!"));
-		// Возвращаем "невалидную" карту или можно было бы сделать FCard* и вернуть nullptr
-		return FCard(); // Возвращаем карту по умолчанию (2 Clubs)
+		// Р’РѕР·РІСЂР°С‰Р°РµРј "РЅРµРІР°Р»РёРґРЅСѓСЋ" РєР°СЂС‚Сѓ РёР»Рё РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р±С‹ СЃРґРµР»Р°С‚СЊ FCard* Рё РІРµСЂРЅСѓС‚СЊ nullptr
+		return FCard(); // Р’РѕР·РІСЂР°С‰Р°РµРј РєР°СЂС‚Сѓ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ (2 Clubs)
 	}
 }
 

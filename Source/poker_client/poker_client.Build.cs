@@ -22,7 +22,11 @@ public class poker_client : ModuleRules
             "SlateCore"      // Базовые элементы Slate
         });
 
-        PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+        PrivateDependencyModuleNames.AddRange(new string[] { 
+            "Slate", 
+            "SlateCore",
+            "MoviePlayer",
+        });
 
 		
 		// Uncomment if you are using online features

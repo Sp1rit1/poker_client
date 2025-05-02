@@ -1,69 +1,69 @@
-// Включаем заголовочный файл нашего кастомного GameInstance.
+п»ї// Р’РєР»СЋС‡Р°РµРј Р·Р°РіРѕР»РѕРІРѕС‡РЅС‹Р№ С„Р°Р№Р» РЅР°С€РµРіРѕ РєР°СЃС‚РѕРјРЅРѕРіРѕ GameInstance.
 #include "MyGameInstance.h"
 
-// --- Основные инклуды Unreal Engine ---
-// Класс для управления локальным игроком: ввод, отображение мыши, создание виджетов.
+// --- РћСЃРЅРѕРІРЅС‹Рµ РёРЅРєР»СѓРґС‹ Unreal Engine ---
+// РљР»Р°СЃСЃ РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Р»РѕРєР°Р»СЊРЅС‹Рј РёРіСЂРѕРєРѕРј: РІРІРѕРґ, РѕС‚РѕР±СЂР°Р¶РµРЅРёРµ РјС‹С€Рё, СЃРѕР·РґР°РЅРёРµ РІРёРґР¶РµС‚РѕРІ.
 #include "GameFramework/PlayerController.h"
-// Класс для доступа и изменения настроек игры пользователя (разрешение, режим окна).
+// РљР»Р°СЃСЃ РґР»СЏ РґРѕСЃС‚СѓРїР° Рё РёР·РјРµРЅРµРЅРёСЏ РЅР°СЃС‚СЂРѕРµРє РёРіСЂС‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (СЂР°Р·СЂРµС€РµРЅРёРµ, СЂРµР¶РёРј РѕРєРЅР°).
 #include "GameFramework/GameUserSettings.h"
-// Глобальный объект движка, через который можно получить доступ ко многим подсистемам, включая GameUserSettings.
+// Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ РѕР±СЉРµРєС‚ РґРІРёР¶РєР°, С‡РµСЂРµР· РєРѕС‚РѕСЂС‹Р№ РјРѕР¶РЅРѕ РїРѕР»СѓС‡РёС‚СЊ РґРѕСЃС‚СѓРї РєРѕ РјРЅРѕРіРёРј РїРѕРґСЃРёСЃС‚РµРјР°Рј, РІРєР»СЋС‡Р°СЏ GameUserSettings.
 #include "Engine/Engine.h"
-// Набор статических утилитарных функций для общих игровых задач (получение контроллера, управление уровнями и т.д.).
+// РќР°Р±РѕСЂ СЃС‚Р°С‚РёС‡РµСЃРєРёС… СѓС‚РёР»РёС‚Р°СЂРЅС‹С… С„СѓРЅРєС†РёР№ РґР»СЏ РѕР±С‰РёС… РёРіСЂРѕРІС‹С… Р·Р°РґР°С‡ (РїРѕР»СѓС‡РµРЅРёРµ РєРѕРЅС‚СЂРѕР»Р»РµСЂР°, СѓРїСЂР°РІР»РµРЅРёРµ СѓСЂРѕРІРЅСЏРјРё Рё С‚.Рґ.).
 #include "Kismet/GameplayStatics.h"
-// Система для управления таймерами (одноразовыми или повторяющимися).
+// РЎРёСЃС‚РµРјР° РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ С‚Р°Р№РјРµСЂР°РјРё (РѕРґРЅРѕСЂР°Р·РѕРІС‹РјРё РёР»Рё РїРѕРІС‚РѕСЂСЏСЋС‰РёРјРёСЃСЏ).
 #include "TimerManager.h"
-// Базовый класс для всех виджетов, создаваемых в UMG (Unreal Motion Graphics).
+// Р‘Р°Р·РѕРІС‹Р№ РєР»Р°СЃСЃ РґР»СЏ РІСЃРµС… РІРёРґР¶РµС‚РѕРІ, СЃРѕР·РґР°РІР°РµРјС‹С… РІ UMG (Unreal Motion Graphics).
 #include "Blueprint/UserWidget.h"
-// Базовый класс для виджетов-контейнеров (как Border, VerticalBox и т.д.), позволяет работать с дочерними элементами.
+// Р‘Р°Р·РѕРІС‹Р№ РєР»Р°СЃСЃ РґР»СЏ РІРёРґР¶РµС‚РѕРІ-РєРѕРЅС‚РµР№РЅРµСЂРѕРІ (РєР°Рє Border, VerticalBox Рё С‚.Рґ.), РїРѕР·РІРѕР»СЏРµС‚ СЂР°Р±РѕС‚Р°С‚СЊ СЃ РґРѕС‡РµСЂРЅРёРјРё СЌР»РµРјРµРЅС‚Р°РјРё.
 #include "Components/PanelWidget.h"
-// Необходим для работы с системой рефлексии Unreal (интроспекция типов), используется для поиска свойств по имени.
+// РќРµРѕР±С…РѕРґРёРј РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ СЃРёСЃС‚РµРјРѕР№ СЂРµС„Р»РµРєСЃРёРё Unreal (РёРЅС‚СЂРѕСЃРїРµРєС†РёСЏ С‚РёРїРѕРІ), РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РґР»СЏ РїРѕРёСЃРєР° СЃРІРѕР№СЃС‚РІ РїРѕ РёРјРµРЅРё.
 #include "UObject/UnrealType.h"
-// Включаем наш класс для управления логикой оффлайн игры.
+// Р’РєР»СЋС‡Р°РµРј РЅР°С€ РєР»Р°СЃСЃ РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Р»РѕРіРёРєРѕР№ РѕС„С„Р»Р°Р№РЅ РёРіСЂС‹.
 #include "OfflineGameManager.h"
 
-// --- Инклуды для работы с HTTP и JSON ---
-// Модуль Unreal Engine, предоставляющий функциональность для HTTP запросов.
+// --- РРЅРєР»СѓРґС‹ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ HTTP Рё JSON ---
+// РњРѕРґСѓР»СЊ Unreal Engine, РїСЂРµРґРѕСЃС‚Р°РІР»СЏСЋС‰РёР№ С„СѓРЅРєС†РёРѕРЅР°Р»СЊРЅРѕСЃС‚СЊ РґР»СЏ HTTP Р·Р°РїСЂРѕСЃРѕРІ.
 #include "HttpModule.h"
-// Интерфейс для создания, настройки и отправки HTTP запроса.
+// РРЅС‚РµСЂС„РµР№СЃ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ, РЅР°СЃС‚СЂРѕР№РєРё Рё РѕС‚РїСЂР°РІРєРё HTTP Р·Р°РїСЂРѕСЃР°.
 #include "Interfaces/IHttpRequest.h"
-// Интерфейс для получения и анализа ответа на HTTP запрос.
+// РРЅС‚РµСЂС„РµР№СЃ РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ Рё Р°РЅР°Р»РёР·Р° РѕС‚РІРµС‚Р° РЅР° HTTP Р·Р°РїСЂРѕСЃ.
 #include "Interfaces/IHttpResponse.h"
-// Базовые классы для представления JSON данных (FJsonObject, FJsonValue).
+// Р‘Р°Р·РѕРІС‹Рµ РєР»Р°СЃСЃС‹ РґР»СЏ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёСЏ JSON РґР°РЅРЅС‹С… (FJsonObject, FJsonValue).
 #include "Json.h"
-// Вспомогательные утилиты для работы с JSON (не используются напрямую в этом коде, но могут быть полезны).
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ СѓС‚РёР»РёС‚С‹ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ JSON (РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РЅР°РїСЂСЏРјСѓСЋ РІ СЌС‚РѕРј РєРѕРґРµ, РЅРѕ РјРѕРіСѓС‚ Р±С‹С‚СЊ РїРѕР»РµР·РЅС‹).
 #include "JsonUtilities.h"
-// Класс для преобразования между структурами данных C++ (через FJsonObject) и строковым представлением JSON.
+// РљР»Р°СЃСЃ РґР»СЏ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёСЏ РјРµР¶РґСѓ СЃС‚СЂСѓРєС‚СѓСЂР°РјРё РґР°РЅРЅС‹С… C++ (С‡РµСЂРµР· FJsonObject) Рё СЃС‚СЂРѕРєРѕРІС‹Рј РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµРј JSON.
 #include "Serialization/JsonSerializer.h"
 
 
-// --- Для работы с окнами
-#include "SlateBasics.h" // Для FSlateApplication и SWindow
-#include "GenericPlatform/GenericApplication.h" // Для IGenericApplication и GetOSWindowHandle
+// --- Р”Р»СЏ СЂР°Р±РѕС‚С‹ СЃ РѕРєРЅР°РјРё
+#include "SlateBasics.h" // Р”Р»СЏ FSlateApplication Рё SWindow
+#include "GenericPlatform/GenericApplication.h" // Р”Р»СЏ IGenericApplication Рё GetOSWindowHandle
 
 #if PLATFORM_WINDOWS
-#include "Windows/WindowsHWrapper.h" // Нужен для HWND и WinAPI функций
-#include "Windows/AllowWindowsPlatformTypes.h" // Разрешает использовать типы Windows
+#include "Windows/WindowsHWrapper.h" // РќСѓР¶РµРЅ РґР»СЏ HWND Рё WinAPI С„СѓРЅРєС†РёР№
+#include "Windows/AllowWindowsPlatformTypes.h" // Р Р°Р·СЂРµС€Р°РµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ С‚РёРїС‹ Windows
 #endif
 
 
 
 // =============================================================================
-// Реализация Методов UMyGameInstance
+// Р РµР°Р»РёР·Р°С†РёСЏ РњРµС‚РѕРґРѕРІ UMyGameInstance
 // =============================================================================
 
 /**
- * @brief Метод инициализации GameInstance.
- * Запускает таймер для отложенной установки настроек окна.
- * Также здесь можно инициализировать другие глобальные менеджеры.
+ * @brief РњРµС‚РѕРґ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё GameInstance.
+ * Р—Р°РїСѓСЃРєР°РµС‚ С‚Р°Р№РјРµСЂ РґР»СЏ РѕС‚Р»РѕР¶РµРЅРЅРѕР№ СѓСЃС‚Р°РЅРѕРІРєРё РЅР°СЃС‚СЂРѕРµРє РѕРєРЅР°.
+ * РўР°РєР¶Рµ Р·РґРµСЃСЊ РјРѕР¶РЅРѕ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ РґСЂСѓРіРёРµ РіР»РѕР±Р°Р»СЊРЅС‹Рµ РјРµРЅРµРґР¶РµСЂС‹.
  */
 void UMyGameInstance::Init()
 {
-	// 1. Вызов реализации базового класса - ОБЯЗАТЕЛЬНО первым делом.
+	// 1. Р’С‹Р·РѕРІ СЂРµР°Р»РёР·Р°С†РёРё Р±Р°Р·РѕРІРѕРіРѕ РєР»Р°СЃСЃР° - РћР‘РЇР—РђРўР•Р›Р¬РќРћ РїРµСЂРІС‹Рј РґРµР»РѕРј.
 	Super::Init();
 	UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Started."));
 
-	// 2. Логирование начального состояния окна (для отладки)
-	// Это покажет, какое разрешение и режим установлены *до* срабатывания нашего таймера.
+	// 2. Р›РѕРіРёСЂРѕРІР°РЅРёРµ РЅР°С‡Р°Р»СЊРЅРѕРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ РѕРєРЅР° (РґР»СЏ РѕС‚Р»Р°РґРєРё)
+	// Р­С‚Рѕ РїРѕРєР°Р¶РµС‚, РєР°РєРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ Рё СЂРµР¶РёРј СѓСЃС‚Р°РЅРѕРІР»РµРЅС‹ *РґРѕ* СЃСЂР°Р±Р°С‚С‹РІР°РЅРёСЏ РЅР°С€РµРіРѕ С‚Р°Р№РјРµСЂР°.
 	UGameUserSettings* InitialSettings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
 	if (InitialSettings) {
 		UE_LOG(LogTemp, Warning, TEXT("Init Start Check: CurrentRes=%dx%d | CurrentMode=%d"),
@@ -71,15 +71,15 @@ void UMyGameInstance::Init()
 	}
 	else { UE_LOG(LogTemp, Warning, TEXT("Init Start Check: Settings=NULL")); }
 
-	// 3. Запуск таймера для вызова функции DelayedInitialResize
-	// Используем GetTimerManager() - глобальный менеджер таймеров, доступный из UObject/UGameInstance.
-	// Timer будет вызван один раз (false в последнем параметре) через 0.5 секунды.
-	// Задержка нужна, чтобы дать движку время завершить свою стандартную инициализацию окна и загрузку .ini.
-	const float ResizeDelay = 0.1f; // Задержка в секундах (можно настроить, 0.2-0.5 обычно достаточно)
+	// 3. Р—Р°РїСѓСЃРє С‚Р°Р№РјРµСЂР° РґР»СЏ РІС‹Р·РѕРІР° С„СѓРЅРєС†РёРё DelayedInitialResize
+	// РСЃРїРѕР»СЊР·СѓРµРј GetTimerManager() - РіР»РѕР±Р°Р»СЊРЅС‹Р№ РјРµРЅРµРґР¶РµСЂ С‚Р°Р№РјРµСЂРѕРІ, РґРѕСЃС‚СѓРїРЅС‹Р№ РёР· UObject/UGameInstance.
+	// Timer Р±СѓРґРµС‚ РІС‹Р·РІР°РЅ РѕРґРёРЅ СЂР°Р· (false РІ РїРѕСЃР»РµРґРЅРµРј РїР°СЂР°РјРµС‚СЂРµ) С‡РµСЂРµР· 0.5 СЃРµРєСѓРЅРґС‹.
+	// Р—Р°РґРµСЂР¶РєР° РЅСѓР¶РЅР°, С‡С‚РѕР±С‹ РґР°С‚СЊ РґРІРёР¶РєСѓ РІСЂРµРјСЏ Р·Р°РІРµСЂС€РёС‚СЊ СЃРІРѕСЋ СЃС‚Р°РЅРґР°СЂС‚РЅСѓСЋ РёРЅРёС†РёР°Р»РёР·Р°С†РёСЋ РѕРєРЅР° Рё Р·Р°РіСЂСѓР·РєСѓ .ini.
+	const float ResizeDelay = 0.1f; // Р—Р°РґРµСЂР¶РєР° РІ СЃРµРєСѓРЅРґР°С… (РјРѕР¶РЅРѕ РЅР°СЃС‚СЂРѕРёС‚СЊ, 0.2-0.5 РѕР±С‹С‡РЅРѕ РґРѕСЃС‚Р°С‚РѕС‡РЅРѕ)
 	GetTimerManager().SetTimer(ResizeTimerHandle, this, &UMyGameInstance::DelayedInitialResize, ResizeDelay, false);
 	UE_LOG(LogTemp, Log, TEXT("Init: Timer scheduled for DelayedInitialResize in %.2f seconds."), ResizeDelay);
 
-	// 4. Инициализация других ваших глобальных систем (пример)
+	// 4. РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РґСЂСѓРіРёС… РІР°С€РёС… РіР»РѕР±Р°Р»СЊРЅС‹С… СЃРёСЃС‚РµРј (РїСЂРёРјРµСЂ)
 	OfflineGameManager = NewObject<UOfflineGameManager>(this);
 	if (OfflineGameManager) { UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully.")); }
 	else { UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!")); }
@@ -88,62 +88,62 @@ void UMyGameInstance::Init()
 }
 
 /**
- * @brief Функция, вызываемая таймером для установки и сохранения настроек окна.
- * Выполняется после небольшой задержки, чтобы обойти проблемы ранней инициализации.
+ * @brief Р¤СѓРЅРєС†РёСЏ, РІС‹Р·С‹РІР°РµРјР°СЏ С‚Р°Р№РјРµСЂРѕРј РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё Рё СЃРѕС…СЂР°РЅРµРЅРёСЏ РЅР°СЃС‚СЂРѕРµРє РѕРєРЅР°.
+ * Р’С‹РїРѕР»РЅСЏРµС‚СЃСЏ РїРѕСЃР»Рµ РЅРµР±РѕР»СЊС€РѕР№ Р·Р°РґРµСЂР¶РєРё, С‡С‚РѕР±С‹ РѕР±РѕР№С‚Рё РїСЂРѕР±Р»РµРјС‹ СЂР°РЅРЅРµР№ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё.
  */
 void UMyGameInstance::DelayedInitialResize()
 {
-	// Логируем начало выполнения отложенной функции (используем Error уровень для легкого поиска в логах при отладке).
+	// Р›РѕРіРёСЂСѓРµРј РЅР°С‡Р°Р»Рѕ РІС‹РїРѕР»РЅРµРЅРёСЏ РѕС‚Р»РѕР¶РµРЅРЅРѕР№ С„СѓРЅРєС†РёРё (РёСЃРїРѕР»СЊР·СѓРµРј Error СѓСЂРѕРІРµРЅСЊ РґР»СЏ Р»РµРіРєРѕРіРѕ РїРѕРёСЃРєР° РІ Р»РѕРіР°С… РїСЂРё РѕС‚Р»Р°РґРєРµ).
 	UE_LOG(LogTemp, Warning, TEXT("--- DelayedInitialResize() Called ---"));
 
-	// 1. Получаем указатель на объект настроек пользователя.
+	// 1. РџРѕР»СѓС‡Р°РµРј СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РѕР±СЉРµРєС‚ РЅР°СЃС‚СЂРѕРµРє РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
 	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
-	// Проверяем, удалось ли его получить.
+	// РџСЂРѕРІРµСЂСЏРµРј, СѓРґР°Р»РѕСЃСЊ Р»Рё РµРіРѕ РїРѕР»СѓС‡РёС‚СЊ.
 	if (Settings)
 	{
-		// 2. Логируем состояние окна ПЕРЕД нашими изменениями.
+		// 2. Р›РѕРіРёСЂСѓРµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РѕРєРЅР° РџР•Р Р•Р” РЅР°С€РёРјРё РёР·РјРµРЅРµРЅРёСЏРјРё.
 		UE_LOG(LogTemp, Warning, TEXT("DelayedResize Start: CurrentRes=%dx%d | CurrentMode=%d"),
 			Settings->GetScreenResolution().X, Settings->GetScreenResolution().Y, (int32)Settings->GetFullscreenMode());
 
-		// 3. Получаем информацию о дисплее.
+		// 3. РџРѕР»СѓС‡Р°РµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РґРёСЃРїР»РµРµ.
 		FDisplayMetrics DisplayMetrics;
-		// Проверяем, инициализирована ли система Slate, прежде чем получать метрики.
+		// РџСЂРѕРІРµСЂСЏРµРј, РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅР° Р»Рё СЃРёСЃС‚РµРјР° Slate, РїСЂРµР¶РґРµ С‡РµРј РїРѕР»СѓС‡Р°С‚СЊ РјРµС‚СЂРёРєРё.
 		if (FSlateApplication::IsInitialized())
 		{
 			FSlateApplication::Get().GetCachedDisplayMetrics(DisplayMetrics);
 
-			// 4. Задаем желаемые пропорции окна в долях от размера экрана.
-			const float DesiredWidthFraction = 0.16875f;  // 15% ширины
-			const float DesiredHeightFraction = 0.45f; // 30% высоты
+			// 4. Р—Р°РґР°РµРј Р¶РµР»Р°РµРјС‹Рµ РїСЂРѕРїРѕСЂС†РёРё РѕРєРЅР° РІ РґРѕР»СЏС… РѕС‚ СЂР°Р·РјРµСЂР° СЌРєСЂР°РЅР°.
+			const float DesiredWidthFraction = 0.16875f;  // 15% С€РёСЂРёРЅС‹
+			const float DesiredHeightFraction = 0.45f; // 30% РІС‹СЃРѕС‚С‹
 
-			// 5. Рассчитываем целевое разрешение в пикселях.
+			// 5. Р Р°СЃСЃС‡РёС‚С‹РІР°РµРј С†РµР»РµРІРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ РІ РїРёРєСЃРµР»СЏС….
 			int32 CalculatedWidth = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayWidth * DesiredWidthFraction);
 			int32 CalculatedHeight = FMath::RoundToInt(DisplayMetrics.PrimaryDisplayHeight * DesiredHeightFraction);
 
-			// 6. Устанавливаем минимальные размеры окна, чтобы избежать слишком маленького окна.
-			const int32 MinWidth = 324;  // Минимальная ширина
-			const int32 MinHeight = 486; // Минимальная высота
+			// 6. РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РјРёРЅРёРјР°Р»СЊРЅС‹Рµ СЂР°Р·РјРµСЂС‹ РѕРєРЅР°, С‡С‚РѕР±С‹ РёР·Р±РµР¶Р°С‚СЊ СЃР»РёС€РєРѕРј РјР°Р»РµРЅСЊРєРѕРіРѕ РѕРєРЅР°.
+			const int32 MinWidth = 324;  // РњРёРЅРёРјР°Р»СЊРЅР°СЏ С€РёСЂРёРЅР°
+			const int32 MinHeight = 486; // РњРёРЅРёРјР°Р»СЊРЅР°СЏ РІС‹СЃРѕС‚Р°
 			CalculatedWidth = FMath::Max(CalculatedWidth, MinWidth);
 			CalculatedHeight = FMath::Max(CalculatedHeight, MinHeight);
 
-			// 7. Формируем целевые параметры: разрешение и оконный режим.
+			// 7. Р¤РѕСЂРјРёСЂСѓРµРј С†РµР»РµРІС‹Рµ РїР°СЂР°РјРµС‚СЂС‹: СЂР°Р·СЂРµС€РµРЅРёРµ Рё РѕРєРѕРЅРЅС‹Р№ СЂРµР¶РёРј.
 			FIntPoint TargetResolution(CalculatedWidth, CalculatedHeight);
-			EWindowMode::Type TargetMode = EWindowMode::Windowed; // Обязательно Windowed
+			EWindowMode::Type TargetMode = EWindowMode::Windowed; // РћР±СЏР·Р°С‚РµР»СЊРЅРѕ Windowed
 
-			// 8. Принудительно устанавливаем и сохраняем настройки.
-			// Мы не делаем проверку if(Current != Target), чтобы гарантированно применить и сохранить
-			// нужные значения, даже если они случайно совпали с промежуточными.
+			// 8. РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ СѓСЃС‚Р°РЅР°РІР»РёРІР°РµРј Рё СЃРѕС…СЂР°РЅСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё.
+			// РњС‹ РЅРµ РґРµР»Р°РµРј РїСЂРѕРІРµСЂРєСѓ if(Current != Target), С‡С‚РѕР±С‹ РіР°СЂР°РЅС‚РёСЂРѕРІР°РЅРЅРѕ РїСЂРёРјРµРЅРёС‚СЊ Рё СЃРѕС…СЂР°РЅРёС‚СЊ
+			// РЅСѓР¶РЅС‹Рµ Р·РЅР°С‡РµРЅРёСЏ, РґР°Р¶Рµ РµСЃР»Рё РѕРЅРё СЃР»СѓС‡Р°Р№РЅРѕ СЃРѕРІРїР°Р»Рё СЃ РїСЂРѕРјРµР¶СѓС‚РѕС‡РЅС‹РјРё.
 			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Forcing resolution to %dx%d and mode to Windowed."), TargetResolution.X, TargetResolution.Y);
 
-			// Устанавливаем значения в объекте настроек.
+			// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј Р·РЅР°С‡РµРЅРёСЏ РІ РѕР±СЉРµРєС‚Рµ РЅР°СЃС‚СЂРѕРµРє.
 			Settings->SetScreenResolution(TargetResolution);
 			Settings->SetFullscreenMode(TargetMode);
 
-			// Применяем настройки к реальному окну игры. false - не ждать подтверждения.
+			// РџСЂРёРјРµРЅСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё Рє СЂРµР°Р»СЊРЅРѕРјСѓ РѕРєРЅСѓ РёРіСЂС‹. false - РЅРµ Р¶РґР°С‚СЊ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ.
 			Settings->ApplySettings(false);
 
-			// Сохраняем примененные настройки в файл GameUserSettings.ini пользователя.
-			// Это КЛЮЧЕВОЙ шаг, чтобы настройки сохранились и использовались при следующих запусках.
+			// РЎРѕС…СЂР°РЅСЏРµРј РїСЂРёРјРµРЅРµРЅРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё РІ С„Р°Р№Р» GameUserSettings.ini РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
+			// Р­С‚Рѕ РљР›Р®Р§Р•Р’РћР™ С€Р°Рі, С‡С‚РѕР±С‹ РЅР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРёР»РёСЃСЊ Рё РёСЃРїРѕР»СЊР·РѕРІР°Р»РёСЃСЊ РїСЂРё СЃР»РµРґСѓСЋС‰РёС… Р·Р°РїСѓСЃРєР°С….
 			Settings->SaveSettings();
 
 			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Settings applied and saved."));
@@ -152,37 +152,37 @@ void UMyGameInstance::DelayedInitialResize()
 
 			FPlatformProcess::Sleep(0.1f);
 
-			// Пытаемся получить главное окно приложения через GEngine->GameViewport
+			// РџС‹С‚Р°РµРјСЃСЏ РїРѕР»СѓС‡РёС‚СЊ РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ РїСЂРёР»РѕР¶РµРЅРёСЏ С‡РµСЂРµР· GEngine->GameViewport
 			TSharedPtr<SWindow> GameWindow = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWindow() : nullptr;
-			// Проверяем, что окно получено
+			// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РѕРєРЅРѕ РїРѕР»СѓС‡РµРЅРѕ
 			if (GameWindow.IsValid())
 			{
-				// Получаем нативный хэндл окна ОС (для Windows это HWND)
+				// РџРѕР»СѓС‡Р°РµРј РЅР°С‚РёРІРЅС‹Р№ С…СЌРЅРґР» РѕРєРЅР° РћРЎ (РґР»СЏ Windows СЌС‚Рѕ HWND)
 				void* NativeWindowHandle = GameWindow->GetNativeWindow() ? GameWindow->GetNativeWindow()->GetOSWindowHandle() : nullptr;
-				// Проверяем, что хэндл получен
+				// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ С…СЌРЅРґР» РїРѕР»СѓС‡РµРЅ
 				if (NativeWindowHandle != nullptr)
 				{
 					UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Attempting to modify window style to prevent resizing..."));
 
-#if PLATFORM_WINDOWS // Код выполнится только при компиляции под Windows
+#if PLATFORM_WINDOWS // РљРѕРґ РІС‹РїРѕР»РЅРёС‚СЃСЏ С‚РѕР»СЊРєРѕ РїСЂРё РєРѕРјРїРёР»СЏС†РёРё РїРѕРґ Windows
 
-					HWND Hwnd = static_cast<HWND>(NativeWindowHandle); // Приводим тип к HWND
+					HWND Hwnd = static_cast<HWND>(NativeWindowHandle); // РџСЂРёРІРѕРґРёРј С‚РёРї Рє HWND
 
-					// Получаем текущий стиль окна
+					// РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РёР№ СЃС‚РёР»СЊ РѕРєРЅР°
 					LONG_PTR CurrentStyle = GetWindowLongPtr(Hwnd, GWL_STYLE);
 
-					// Создаем новый стиль, убирая флаги WS_SIZEBOX (рамка изменения размера)
-					// и WS_MAXIMIZEBOX (кнопка "Развернуть") с помощью битовой операции И НЕ (& ~)
+					// РЎРѕР·РґР°РµРј РЅРѕРІС‹Р№ СЃС‚РёР»СЊ, СѓР±РёСЂР°СЏ С„Р»Р°РіРё WS_SIZEBOX (СЂР°РјРєР° РёР·РјРµРЅРµРЅРёСЏ СЂР°Р·РјРµСЂР°)
+					// Рё WS_MAXIMIZEBOX (РєРЅРѕРїРєР° "Р Р°Р·РІРµСЂРЅСѓС‚СЊ") СЃ РїРѕРјРѕС‰СЊСЋ Р±РёС‚РѕРІРѕР№ РѕРїРµСЂР°С†РёРё Р РќР• (& ~)
 					LONG_PTR NewStyle = CurrentStyle & ~WS_SIZEBOX & ~WS_MAXIMIZEBOX;
 
-					// Проверяем, отличается ли новый стиль от старого (чтобы не вызывать WinAPI без надобности)
+					// РџСЂРѕРІРµСЂСЏРµРј, РѕС‚Р»РёС‡Р°РµС‚СЃСЏ Р»Рё РЅРѕРІС‹Р№ СЃС‚РёР»СЊ РѕС‚ СЃС‚Р°СЂРѕРіРѕ (С‡С‚РѕР±С‹ РЅРµ РІС‹Р·С‹РІР°С‚СЊ WinAPI Р±РµР· РЅР°РґРѕР±РЅРѕСЃС‚Рё)
 					if (NewStyle != CurrentStyle)
 					{
-						// Устанавливаем новый стиль для окна
+						// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅРѕРІС‹Р№ СЃС‚РёР»СЊ РґР»СЏ РѕРєРЅР°
 						SetWindowLongPtr(Hwnd, GWL_STYLE, NewStyle);
 
-						// Говорим Windows перерисовать рамку окна с учетом нового стиля
-						// Флаги говорят: обновить рамку, не менять позицию, не менять размер, не менять Z-порядок
+						// Р“РѕРІРѕСЂРёРј Windows РїРµСЂРµСЂРёСЃРѕРІР°С‚СЊ СЂР°РјРєСѓ РѕРєРЅР° СЃ СѓС‡РµС‚РѕРј РЅРѕРІРѕРіРѕ СЃС‚РёР»СЏ
+						// Р¤Р»Р°РіРё РіРѕРІРѕСЂСЏС‚: РѕР±РЅРѕРІРёС‚СЊ СЂР°РјРєСѓ, РЅРµ РјРµРЅСЏС‚СЊ РїРѕР·РёС†РёСЋ, РЅРµ РјРµРЅСЏС‚СЊ СЂР°Р·РјРµСЂ, РЅРµ РјРµРЅСЏС‚СЊ Z-РїРѕСЂСЏРґРѕРє
 						SetWindowPos(Hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
 						UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Window style modified successfully. Resizing disabled."));
 					}
@@ -191,7 +191,7 @@ void UMyGameInstance::DelayedInitialResize()
 						UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Window style already prevents resizing or GetWindowLongPtr failed? Style: %p"), (void*)CurrentStyle);
 					}
 
-#else // Для других платформ просто выводим сообщение
+#else // Р”Р»СЏ РґСЂСѓРіРёС… РїР»Р°С‚С„РѕСЂРј РїСЂРѕСЃС‚Рѕ РІС‹РІРѕРґРёРј СЃРѕРѕР±С‰РµРЅРёРµ
 					UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Window style modification not implemented for this platform."));
 #endif
 				}
@@ -201,8 +201,8 @@ void UMyGameInstance::DelayedInitialResize()
 
 
 
-			// 9. (Опционально, для отладки) Проверяем настройки СРАЗУ ПОСЛЕ сохранения.
-			FPlatformProcess::Sleep(0.1f); // Даем системе небольшую паузу на всякий случай.
+			// 9. (РћРїС†РёРѕРЅР°Р»СЊРЅРѕ, РґР»СЏ РѕС‚Р»Р°РґРєРё) РџСЂРѕРІРµСЂСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё РЎР РђР—РЈ РџРћРЎР›Р• СЃРѕС…СЂР°РЅРµРЅРёСЏ.
+			FPlatformProcess::Sleep(0.1f); // Р”Р°РµРј СЃРёСЃС‚РµРјРµ РЅРµР±РѕР»СЊС€СѓСЋ РїР°СѓР·Сѓ РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№.
 			FIntPoint SettingsAfterApply = Settings->GetScreenResolution();
 			EWindowMode::Type ModeAfterApply = Settings->GetFullscreenMode();
 			UE_LOG(LogTemp, Warning, TEXT("DelayedResize End Check: CurrentRes=%dx%d | CurrentMode=%d"),
@@ -210,164 +210,164 @@ void UMyGameInstance::DelayedInitialResize()
 
 		}
 		else {
-			// Ошибка: Не удалось получить метрики дисплея.
+			// РћС€РёР±РєР°: РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РјРµС‚СЂРёРєРё РґРёСЃРїР»РµСЏ.
 			UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: FSlateApplication not initialized yet, cannot get display metrics. Skipping resize."));
 		}
 	}
 	else {
-		// Ошибка: Не удалось получить GameUserSettings.
+		// РћС€РёР±РєР°: РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ GameUserSettings.
 		UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get GameUserSettings!"));
 	}
-	// Логируем завершение функции.
+	// Р›РѕРіРёСЂСѓРµРј Р·Р°РІРµСЂС€РµРЅРёРµ С„СѓРЅРєС†РёРё.
 	UE_LOG(LogTemp, Warning, TEXT("--- DelayedInitialResize() Finished ---"));
 }
 
 
 /**
- * @brief Метод завершения работы GameInstance.
+ * @brief РњРµС‚РѕРґ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹ GameInstance.
  */
 void UMyGameInstance::Shutdown()
 {
 	UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
-	// Можно добавить здесь код для очистки, если нужно.
+	// РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ Р·РґРµСЃСЊ РєРѕРґ РґР»СЏ РѕС‡РёСЃС‚РєРё, РµСЃР»Рё РЅСѓР¶РЅРѕ.
 
-	// Обязательно вызываем Shutdown базового класса.
+	// РћР±СЏР·Р°С‚РµР»СЊРЅРѕ РІС‹Р·С‹РІР°РµРј Shutdown Р±Р°Р·РѕРІРѕРіРѕ РєР»Р°СЃСЃР°.
 	Super::Shutdown();
 }
 
 
 // =============================================================================
-// Вспомогательные Функции для Управления UI, Окном и Вводом
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ Р¤СѓРЅРєС†РёРё РґР»СЏ РЈРїСЂР°РІР»РµРЅРёСЏ UI, РћРєРЅРѕРј Рё Р’РІРѕРґРѕРј
 // =============================================================================
 
 /**
- * @brief Настраивает режим ввода для PlayerController и видимость курсора мыши.
- * @param bIsUIOnly Если true, устанавливается режим "только UI" (ввод обрабатывается только виджетами). Если false, "игра и UI".
- * @param bShowMouse Управляет видимостью системного курсора мыши.
+ * @brief РќР°СЃС‚СЂР°РёРІР°РµС‚ СЂРµР¶РёРј РІРІРѕРґР° РґР»СЏ PlayerController Рё РІРёРґРёРјРѕСЃС‚СЊ РєСѓСЂСЃРѕСЂР° РјС‹С€Рё.
+ * @param bIsUIOnly Р•СЃР»Рё true, СѓСЃС‚Р°РЅР°РІР»РёРІР°РµС‚СЃСЏ СЂРµР¶РёРј "С‚РѕР»СЊРєРѕ UI" (РІРІРѕРґ РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РІРёРґР¶РµС‚Р°РјРё). Р•СЃР»Рё false, "РёРіСЂР° Рё UI".
+ * @param bShowMouse РЈРїСЂР°РІР»СЏРµС‚ РІРёРґРёРјРѕСЃС‚СЊСЋ СЃРёСЃС‚РµРјРЅРѕРіРѕ РєСѓСЂСЃРѕСЂР° РјС‹С€Рё.
  */
 void UMyGameInstance::SetupInputMode(bool bIsUIOnly, bool bShowMouse)
 {
-	// Получаем указатель на первого локального игрока-контроллера.
+	// РџРѕР»СѓС‡Р°РµРј СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РїРµСЂРІРѕРіРѕ Р»РѕРєР°Р»СЊРЅРѕРіРѕ РёРіСЂРѕРєР°-РєРѕРЅС‚СЂРѕР»Р»РµСЂР°.
 	APlayerController* PC = GetFirstLocalPlayerController();
-	// Всегда проверяем указатели перед использованием.
+	// Р’СЃРµРіРґР° РїСЂРѕРІРµСЂСЏРµРј СѓРєР°Р·Р°С‚РµР»Рё РїРµСЂРµРґ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј.
 	if (PC)
 	{
-		// Устанавливаем видимость курсора.
+		// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІРёРґРёРјРѕСЃС‚СЊ РєСѓСЂСЃРѕСЂР°.
 		PC->SetShowMouseCursor(bShowMouse);
-		// Выбираем режим ввода.
+		// Р’С‹Р±РёСЂР°РµРј СЂРµР¶РёРј РІРІРѕРґР°.
 		if (bIsUIOnly)
 		{
-			// Режим "Только UI": ввод идет только на виджеты, игра "на паузе".
+			// Р РµР¶РёРј "РўРѕР»СЊРєРѕ UI": РІРІРѕРґ РёРґРµС‚ С‚РѕР»СЊРєРѕ РЅР° РІРёРґР¶РµС‚С‹, РёРіСЂР° "РЅР° РїР°СѓР·Рµ".
 			FInputModeUIOnly InputModeData;
-			// Не блокировать курсор в пределах окна, чтобы можно было легко кликнуть вне его.
+			// РќРµ Р±Р»РѕРєРёСЂРѕРІР°С‚СЊ РєСѓСЂСЃРѕСЂ РІ РїСЂРµРґРµР»Р°С… РѕРєРЅР°, С‡С‚РѕР±С‹ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р»РµРіРєРѕ РєР»РёРєРЅСѓС‚СЊ РІРЅРµ РµРіРѕ.
 			InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			// Применяем режим.
+			// РџСЂРёРјРµРЅСЏРµРј СЂРµР¶РёРј.
 			PC->SetInputMode(InputModeData);
-			// Логируем (Verbose - детальный лог).
+			// Р›РѕРіРёСЂСѓРµРј (Verbose - РґРµС‚Р°Р»СЊРЅС‹Р№ Р»РѕРі).
 			UE_LOG(LogTemp, Verbose, TEXT("Input Mode set to UI Only. Mouse Visible: %s"), bShowMouse ? TEXT("True") : TEXT("False"));
 		}
 		else
 		{
-			// Режим "Игра и UI": ввод идет и на виджеты, и в игру (если не перехвачен виджетами).
+			// Р РµР¶РёРј "РРіСЂР° Рё UI": РІРІРѕРґ РёРґРµС‚ Рё РЅР° РІРёРґР¶РµС‚С‹, Рё РІ РёРіСЂСѓ (РµСЃР»Рё РЅРµ РїРµСЂРµС…РІР°С‡РµРЅ РІРёРґР¶РµС‚Р°РјРё).
 			FInputModeGameAndUI InputModeData;
-			// Также не блокируем курсор.
+			// РўР°РєР¶Рµ РЅРµ Р±Р»РѕРєРёСЂСѓРµРј РєСѓСЂСЃРѕСЂ.
 			InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			// Не скрывать курсор автоматически при клике в игровом окне (мы управляем им вручную).
+			// РќРµ СЃРєСЂС‹РІР°С‚СЊ РєСѓСЂСЃРѕСЂ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїСЂРё РєР»РёРєРµ РІ РёРіСЂРѕРІРѕРј РѕРєРЅРµ (РјС‹ СѓРїСЂР°РІР»СЏРµРј РёРј РІСЂСѓС‡РЅСѓСЋ).
 			InputModeData.SetHideCursorDuringCapture(false);
-			// Применяем режим.
+			// РџСЂРёРјРµРЅСЏРµРј СЂРµР¶РёРј.
 			PC->SetInputMode(InputModeData);
-			// Логируем.
+			// Р›РѕРіРёСЂСѓРµРј.
 			UE_LOG(LogTemp, Verbose, TEXT("Input Mode set to Game And UI. Mouse Visible: %s"), bShowMouse ? TEXT("True") : TEXT("False"));
 		}
 	}
 	else {
-		// Предупреждение, если PlayerController не найден.
+		// РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ, РµСЃР»Рё PlayerController РЅРµ РЅР°Р№РґРµРЅ.
 		UE_LOG(LogTemp, Warning, TEXT("SetupInputMode: PlayerController is null."));
 	}
 }
 
 /**
- * @brief Устанавливает режим окна (оконный или полноэкранный) и соответствующее разрешение.
- * @param bWantFullscreen Если true, устанавливается полноэкранный режим (без рамок), иначе оконный.
+ * @brief РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ СЂРµР¶РёРј РѕРєРЅР° (РѕРєРѕРЅРЅС‹Р№ РёР»Рё РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№) Рё СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРµ СЂР°Р·СЂРµС€РµРЅРёРµ.
+ * @param bWantFullscreen Р•СЃР»Рё true, СѓСЃС‚Р°РЅР°РІР»РёРІР°РµС‚СЃСЏ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј (Р±РµР· СЂР°РјРѕРє), РёРЅР°С‡Рµ РѕРєРѕРЅРЅС‹Р№.
  */
 void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
 {
-	// Получаем доступ к настройкам пользователя через GEngine.
+	// РџРѕР»СѓС‡Р°РµРј РґРѕСЃС‚СѓРї Рє РЅР°СЃС‚СЂРѕР№РєР°Рј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ С‡РµСЂРµР· GEngine.
 	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
-	// Проверяем, что настройки доступны.
+	// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РЅР°СЃС‚СЂРѕР№РєРё РґРѕСЃС‚СѓРїРЅС‹.
 	if (Settings)
 	{
-		// Определяем текущий и целевой режимы окна.
+		// РћРїСЂРµРґРµР»СЏРµРј С‚РµРєСѓС‰РёР№ Рё С†РµР»РµРІРѕР№ СЂРµР¶РёРјС‹ РѕРєРЅР°.
 		EWindowMode::Type CurrentMode = Settings->GetFullscreenMode();
-		// Используем WindowedFullscreen для полноэкранного режима (обычно лучший вариант).
+		// РСЃРїРѕР»СЊР·СѓРµРј WindowedFullscreen РґР»СЏ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ СЂРµР¶РёРјР° (РѕР±С‹С‡РЅРѕ Р»СѓС‡С€РёР№ РІР°СЂРёР°РЅС‚).
 		EWindowMode::Type TargetMode = bWantFullscreen ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed;
 
-		// Флаг для отслеживания изменений.
+		// Р¤Р»Р°Рі РґР»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ РёР·РјРµРЅРµРЅРёР№.
 		bool bModeChanged = false;
-		// Если режим нужно изменить.
+		// Р•СЃР»Рё СЂРµР¶РёРј РЅСѓР¶РЅРѕ РёР·РјРµРЅРёС‚СЊ.
 		if (CurrentMode != TargetMode)
 		{
-			Settings->SetFullscreenMode(TargetMode); // Устанавливаем новый режим.
-			bModeChanged = true;                    // Помечаем, что были изменения.
-			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting FullscreenMode to %s"), *UEnum::GetValueAsString(TargetMode)); // Логируем.
+			Settings->SetFullscreenMode(TargetMode); // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅРѕРІС‹Р№ СЂРµР¶РёРј.
+			bModeChanged = true;                    // РџРѕРјРµС‡Р°РµРј, С‡С‚Рѕ Р±С‹Р»Рё РёР·РјРµРЅРµРЅРёСЏ.
+			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting FullscreenMode to %s"), *UEnum::GetValueAsString(TargetMode)); // Р›РѕРіРёСЂСѓРµРј.
 		}
 
-		// Определяем целевое разрешение.
+		// РћРїСЂРµРґРµР»СЏРµРј С†РµР»РµРІРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ.
 		FIntPoint TargetResolution;
 		if (bWantFullscreen)
 		{
-			// Для полноэкранного режима используем нативное разрешение рабочего стола.
+			// Р”Р»СЏ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ СЂРµР¶РёРјР° РёСЃРїРѕР»СЊР·СѓРµРј РЅР°С‚РёРІРЅРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ СЂР°Р±РѕС‡РµРіРѕ СЃС‚РѕР»Р°.
 			TargetResolution = Settings->GetDesktopResolution();
 		}
 		else
 		{
-			// Для оконного режима сначала пытаемся взять последнее подтвержденное разрешение.
+			// Р”Р»СЏ РѕРєРѕРЅРЅРѕРіРѕ СЂРµР¶РёРјР° СЃРЅР°С‡Р°Р»Р° РїС‹С‚Р°РµРјСЃСЏ РІР·СЏС‚СЊ РїРѕСЃР»РµРґРЅРµРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРЅРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ.
 			TargetResolution = Settings->GetLastConfirmedScreenResolution();
-			// Если оно невалидно, берем разрешение по умолчанию из настроек проекта.
+			// Р•СЃР»Рё РѕРЅРѕ РЅРµРІР°Р»РёРґРЅРѕ, Р±РµСЂРµРј СЂР°Р·СЂРµС€РµРЅРёРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РёР· РЅР°СЃС‚СЂРѕРµРє РїСЂРѕРµРєС‚Р°.
 			if (TargetResolution.X <= 0 || TargetResolution.Y <= 0)
 			{
 				TargetResolution = FIntPoint(Settings->GetDefaultResolution().X, Settings->GetDefaultResolution().Y);
 			}
-			// Если и оно невалидно, используем жестко заданное значение (наше "оконное" разрешение).
+			// Р•СЃР»Рё Рё РѕРЅРѕ РЅРµРІР°Р»РёРґРЅРѕ, РёСЃРїРѕР»СЊР·СѓРµРј Р¶РµСЃС‚РєРѕ Р·Р°РґР°РЅРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ (РЅР°С€Рµ "РѕРєРѕРЅРЅРѕРµ" СЂР°Р·СЂРµС€РµРЅРёРµ).
 			if (TargetResolution.X <= 0 || TargetResolution.Y <= 0)
 			{
-				TargetResolution = FIntPoint(720, 540); // Запасное значение.
+				TargetResolution = FIntPoint(720, 540); // Р—Р°РїР°СЃРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ.
 			}
 		}
 
-		// Если текущее разрешение отличается от целевого.
+		// Р•СЃР»Рё С‚РµРєСѓС‰РµРµ СЂР°Р·СЂРµС€РµРЅРёРµ РѕС‚Р»РёС‡Р°РµС‚СЃСЏ РѕС‚ С†РµР»РµРІРѕРіРѕ.
 		if (Settings->GetScreenResolution() != TargetResolution)
 		{
-			Settings->SetScreenResolution(TargetResolution); // Устанавливаем новое разрешение.
-			bModeChanged = true;                             // Помечаем, что были изменения.
-			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting Resolution to %dx%d"), TargetResolution.X, TargetResolution.Y); // Логируем.
+			Settings->SetScreenResolution(TargetResolution); // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅРѕРІРѕРµ СЂР°Р·СЂРµС€РµРЅРёРµ.
+			bModeChanged = true;                             // РџРѕРјРµС‡Р°РµРј, С‡С‚Рѕ Р±С‹Р»Рё РёР·РјРµРЅРµРЅРёСЏ.
+			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Setting Resolution to %dx%d"), TargetResolution.X, TargetResolution.Y); // Р›РѕРіРёСЂСѓРµРј.
 		}
 
-		// Если были какие-либо изменения (режима или разрешения).
+		// Р•СЃР»Рё Р±С‹Р»Рё РєР°РєРёРµ-Р»РёР±Рѕ РёР·РјРµРЅРµРЅРёСЏ (СЂРµР¶РёРјР° РёР»Рё СЂР°Р·СЂРµС€РµРЅРёСЏ).
 		if (bModeChanged)
 		{
-			// Применяем все измененные настройки. false - не требовать подтверждения.
+			// РџСЂРёРјРµРЅСЏРµРј РІСЃРµ РёР·РјРµРЅРµРЅРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё. false - РЅРµ С‚СЂРµР±РѕРІР°С‚СЊ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ.
 			Settings->ApplySettings(false);
 			UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Settings Applied."));
 		}
 		else {
-			// Логируем, если изменять ничего не пришлось.
+			// Р›РѕРіРёСЂСѓРµРј, РµСЃР»Рё РёР·РјРµРЅСЏС‚СЊ РЅРёС‡РµРіРѕ РЅРµ РїСЂРёС€Р»РѕСЃСЊ.
 			UE_LOG(LogTemp, Verbose, TEXT("ApplyWindowMode: Window Mode and Resolution already match target. No change needed."));
 		}
 
 	}
 	else {
-		// Предупреждение, если не удалось получить GameUserSettings.
+		// РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ, РµСЃР»Рё РЅРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ GameUserSettings.
 		UE_LOG(LogTemp, Warning, TEXT("ApplyWindowMode: Could not get GameUserSettings."));
 	}
 }
 
 /**
- * @brief Шаблонная функция для показа виджетов (ИЗМЕНЕННАЯ)
- * Удаляет предыдущий виджет и показывает новый.
- * @param WidgetClassToShow Класс виджета для показа.
- * @param bIsFullscreenWidget Флаг полноэкранного режима (влияет на окно и ввод).
- * @return Указатель на созданный виджет или nullptr.
+ * @brief РЁР°Р±Р»РѕРЅРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ РїРѕРєР°Р·Р° РІРёРґР¶РµС‚РѕРІ (РР—РњР•РќР•РќРќРђРЇ)
+ * РЈРґР°Р»СЏРµС‚ РїСЂРµРґС‹РґСѓС‰РёР№ РІРёРґР¶РµС‚ Рё РїРѕРєР°Р·С‹РІР°РµС‚ РЅРѕРІС‹Р№.
+ * @param WidgetClassToShow РљР»Р°СЃСЃ РІРёРґР¶РµС‚Р° РґР»СЏ РїРѕРєР°Р·Р°.
+ * @param bIsFullscreenWidget Р¤Р»Р°Рі РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ СЂРµР¶РёРјР° (РІР»РёСЏРµС‚ РЅР° РѕРєРЅРѕ Рё РІРІРѕРґ).
+ * @return РЈРєР°Р·Р°С‚РµР»СЊ РЅР° СЃРѕР·РґР°РЅРЅС‹Р№ РІРёРґР¶РµС‚ РёР»Рё nullptr.
  */
 template <typename T>
 T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget)
@@ -376,25 +376,25 @@ T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool 
 	if (!PC) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: PlayerController is null.")); return nullptr; }
 	if (!WidgetClassToShow) { UE_LOG(LogTemp, Error, TEXT("ShowWidget: WidgetClassToShow is null.")); return nullptr; }
 
-	// --- Шаг 1: Удаляем старый виджет ---
+	// --- РЁР°Рі 1: РЈРґР°Р»СЏРµРј СЃС‚Р°СЂС‹Р№ РІРёРґР¶РµС‚ ---
 	if (CurrentTopLevelWidget)
 	{
 		UE_LOG(LogTemp, Verbose, TEXT("ShowWidget: Removing previous widget: %s"), *CurrentTopLevelWidget->GetName());
 		CurrentTopLevelWidget->RemoveFromParent();
 	}
 	CurrentTopLevelWidget = nullptr;
-	// CurrentContainerInstance = nullptr; // Строка удалена, т.к. переменной больше нет
+	// CurrentContainerInstance = nullptr; // РЎС‚СЂРѕРєР° СѓРґР°Р»РµРЅР°, С‚.Рє. РїРµСЂРµРјРµРЅРЅРѕР№ Р±РѕР»СЊС€Рµ РЅРµС‚
 
-	// --- Шаг 2: Меняем режим окна и ввода ---
+	// --- РЁР°Рі 2: РњРµРЅСЏРµРј СЂРµР¶РёРј РѕРєРЅР° Рё РІРІРѕРґР° ---
 	ApplyWindowMode(bIsFullscreenWidget);
-	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Ввод UI для оконного, Game+UI для полноэкранного
+	SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget); // Р’РІРѕРґ UI РґР»СЏ РѕРєРѕРЅРЅРѕРіРѕ, Game+UI РґР»СЏ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРіРѕ
 
-	// --- Шаг 3: Создаем и показываем новый виджет ---
+	// --- РЁР°Рі 3: РЎРѕР·РґР°РµРј Рё РїРѕРєР°Р·С‹РІР°РµРј РЅРѕРІС‹Р№ РІРёРґР¶РµС‚ ---
 	T* NewWidget = CreateWidget<T>(PC, WidgetClassToShow);
 	if (NewWidget)
 	{
 		NewWidget->AddToViewport();
-		CurrentTopLevelWidget = NewWidget; // Сохраняем указатель на новый виджет
+		CurrentTopLevelWidget = NewWidget; // РЎРѕС…СЂР°РЅСЏРµРј СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РЅРѕРІС‹Р№ РІРёРґР¶РµС‚
 		UE_LOG(LogTemp, Log, TEXT("ShowWidget: Added new widget: %s"), *WidgetClassToShow->GetName());
 		return NewWidget;
 	}
@@ -403,29 +403,29 @@ T* UMyGameInstance::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool 
 
 
 // =============================================================================
-// Функции Навигации Между Экранами
+// Р¤СѓРЅРєС†РёРё РќР°РІРёРіР°С†РёРё РњРµР¶РґСѓ Р­РєСЂР°РЅР°РјРё
 // =============================================================================
 
 // =============================================================================
-// Функции Навигации Между Экранами (ИЗМЕНЕННЫЕ)
+// Р¤СѓРЅРєС†РёРё РќР°РІРёРіР°С†РёРё РњРµР¶РґСѓ Р­РєСЂР°РЅР°РјРё (РР—РњР•РќР•РќРќР«Р•)
 // =============================================================================
 
 /**
- * @brief Показывает стартовый экран приложения напрямую.
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ СЃС‚Р°СЂС‚РѕРІС‹Р№ СЌРєСЂР°РЅ РїСЂРёР»РѕР¶РµРЅРёСЏ РЅР°РїСЂСЏРјСѓСЋ.
  */
 void UMyGameInstance::ShowStartScreen()
 {
-	// Проверяем, что класс стартового экрана задан в настройках GameInstance (в Blueprint).
+	// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РєР»Р°СЃСЃ СЃС‚Р°СЂС‚РѕРІРѕРіРѕ СЌРєСЂР°РЅР° Р·Р°РґР°РЅ РІ РЅР°СЃС‚СЂРѕР№РєР°С… GameInstance (РІ Blueprint).
 	if (!StartScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: StartScreenClass is not set!"));
-		return; // Прерываем, если класс не задан.
+		return; // РџСЂРµСЂС‹РІР°РµРј, РµСЃР»Рё РєР»Р°СЃСЃ РЅРµ Р·Р°РґР°РЅ.
 	}
 
-	// Вызываем ShowWidget для отображения стартового экрана напрямую в оконном режиме (false).
-	// ShowWidget сама удалит предыдущий CurrentTopLevelWidget.
+	// Р’С‹Р·С‹РІР°РµРј ShowWidget РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ СЃС‚Р°СЂС‚РѕРІРѕРіРѕ СЌРєСЂР°РЅР° РЅР°РїСЂСЏРјСѓСЋ РІ РѕРєРѕРЅРЅРѕРј СЂРµР¶РёРјРµ (false).
+	// ShowWidget СЃР°РјР° СѓРґР°Р»РёС‚ РїСЂРµРґС‹РґСѓС‰РёР№ CurrentTopLevelWidget.
 	UUserWidget* StartWidget = ShowWidget<UUserWidget>(StartScreenClass, false);
 
-	// Проверяем, успешно ли создан и показан виджет.
+	// РџСЂРѕРІРµСЂСЏРµРј, СѓСЃРїРµС€РЅРѕ Р»Рё СЃРѕР·РґР°РЅ Рё РїРѕРєР°Р·Р°РЅ РІРёРґР¶РµС‚.
 	if (!StartWidget)
 	{
 		UE_LOG(LogTemp, Error, TEXT("ShowStartScreen: Failed to create/show StartScreen!"));
@@ -435,22 +435,22 @@ void UMyGameInstance::ShowStartScreen()
 		UE_LOG(LogTemp, Log, TEXT("ShowStartScreen: StartScreen displayed successfully."));
 	}
 
-	// Останавливаем таймер экрана загрузки, если он был активен.
+	// РћСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚Р°Р№РјРµСЂ СЌРєСЂР°РЅР° Р·Р°РіСЂСѓР·РєРё, РµСЃР»Рё РѕРЅ Р±С‹Р» Р°РєС‚РёРІРµРЅ.
 	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран входа пользователя напрямую.
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ СЌРєСЂР°РЅ РІС…РѕРґР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅР°РїСЂСЏРјСѓСЋ.
  */
 void UMyGameInstance::ShowLoginScreen()
 {
-	// Проверка наличия класса экрана логина.
+	// РџСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ РєР»Р°СЃСЃР° СЌРєСЂР°РЅР° Р»РѕРіРёРЅР°.
 	if (!LoginScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowLoginScreen: LoginScreenClass is not set!"));
 		return;
 	}
 
-	// Показываем экран логина напрямую в оконном режиме (false).
+	// РџРѕРєР°Р·С‹РІР°РµРј СЌРєСЂР°РЅ Р»РѕРіРёРЅР° РЅР°РїСЂСЏРјСѓСЋ РІ РѕРєРѕРЅРЅРѕРј СЂРµР¶РёРјРµ (false).
 	UUserWidget* LoginWidget = ShowWidget<UUserWidget>(LoginScreenClass, false);
 
 	if (!LoginWidget)
@@ -462,22 +462,22 @@ void UMyGameInstance::ShowLoginScreen()
 		UE_LOG(LogTemp, Log, TEXT("ShowLoginScreen: LoginScreen displayed successfully."));
 	}
 
-	// Останавливаем таймер загрузки.
+	// РћСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚Р°Р№РјРµСЂ Р·Р°РіСЂСѓР·РєРё.
 	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран регистрации нового пользователя напрямую.
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ СЌРєСЂР°РЅ СЂРµРіРёСЃС‚СЂР°С†РёРё РЅРѕРІРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅР°РїСЂСЏРјСѓСЋ.
  */
 void UMyGameInstance::ShowRegisterScreen()
 {
-	// Проверка наличия класса.
+	// РџСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ РєР»Р°СЃСЃР°.
 	if (!RegisterScreenClass) {
 		UE_LOG(LogTemp, Error, TEXT("ShowRegisterScreen: RegisterScreenClass is not set!"));
 		return;
 	}
 
-	// Показываем экран регистрации напрямую в оконном режиме (false).
+	// РџРѕРєР°Р·С‹РІР°РµРј СЌРєСЂР°РЅ СЂРµРіРёСЃС‚СЂР°С†РёРё РЅР°РїСЂСЏРјСѓСЋ РІ РѕРєРѕРЅРЅРѕРј СЂРµР¶РёРјРµ (false).
 	UUserWidget* RegisterWidget = ShowWidget<UUserWidget>(RegisterScreenClass, false);
 
 	if (!RegisterWidget)
@@ -489,253 +489,230 @@ void UMyGameInstance::ShowRegisterScreen()
 		UE_LOG(LogTemp, Log, TEXT("ShowRegisterScreen: RegisterScreen displayed successfully."));
 	}
 
-	// Останавливаем таймер загрузки.
+	// РћСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚Р°Р№РјРµСЂ Р·Р°РіСЂСѓР·РєРё.
 	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 
 /**
- * @brief Показывает полноэкранный виджет "загрузки" на заданное время.
- * По истечении времени автоматически вызывает OnLoadingScreenTimerComplete (которая покажет главное меню).
- * @param Duration Время в секундах, на которое показывается экран загрузки.
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ РІРёРґР¶РµС‚ "Р·Р°РіСЂСѓР·РєРё" РЅР° Р·Р°РґР°РЅРЅРѕРµ РІСЂРµРјСЏ.
+ * РџРѕ РёСЃС‚РµС‡РµРЅРёРё РІСЂРµРјРµРЅРё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РІС‹Р·С‹РІР°РµС‚ OnLoadingScreenTimerComplete (РєРѕС‚РѕСЂР°СЏ РїРѕРєР°Р¶РµС‚ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ).
+ * @param Duration Р’СЂРµРјСЏ РІ СЃРµРєСѓРЅРґР°С…, РЅР° РєРѕС‚РѕСЂРѕРµ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ СЌРєСЂР°РЅ Р·Р°РіСЂСѓР·РєРё.
  */
 void UMyGameInstance::ShowLoadingScreen(float Duration)
 {
-	// Проверка класса виджета загрузки.
+	// РџСЂРѕРІРµСЂРєР° РєР»Р°СЃСЃР° РІРёРґР¶РµС‚Р° Р·Р°РіСЂСѓР·РєРё.
 	if (!LoadingScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowLoadingScreen: LoadingScreenClass is not set!")); return; }
 
-	// Показываем виджет загрузки в полноэкранном режиме (true).
+	// РџРѕРєР°Р·С‹РІР°РµРј РІРёРґР¶РµС‚ Р·Р°РіСЂСѓР·РєРё РІ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРј СЂРµР¶РёРјРµ (true).
 	UUserWidget* LoadingWidget = ShowWidget<UUserWidget>(LoadingScreenClass, true);
 
-	// Если виджет успешно создан.
+	// Р•СЃР»Рё РІРёРґР¶РµС‚ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅ.
 	if (LoadingWidget)
 	{
-		// Останавливаем предыдущий таймер (если был).
+		// РћСЃС‚Р°РЅР°РІР»РёРІР°РµРј РїСЂРµРґС‹РґСѓС‰РёР№ С‚Р°Р№РјРµСЂ (РµСЃР»Рё Р±С‹Р»).
 		GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-		// Запускаем новый таймер.
+		// Р—Р°РїСѓСЃРєР°РµРј РЅРѕРІС‹Р№ С‚Р°Р№РјРµСЂ.
 		GetWorld()->GetTimerManager().SetTimer(
-			LoadingScreenTimerHandle, // Хэндл таймера для возможности его остановки.
-			this,                     // Объект, на котором будет вызван метод.
-			&UMyGameInstance::OnLoadingScreenTimerComplete, // Указатель на метод-колбэк.
-			Duration,                 // Задержка перед вызовом.
-			false);                   // false - таймер не повторяющийся.
+			LoadingScreenTimerHandle, // РҐСЌРЅРґР» С‚Р°Р№РјРµСЂР° РґР»СЏ РІРѕР·РјРѕР¶РЅРѕСЃС‚Рё РµРіРѕ РѕСЃС‚Р°РЅРѕРІРєРё.
+			this,                     // РћР±СЉРµРєС‚, РЅР° РєРѕС‚РѕСЂРѕРј Р±СѓРґРµС‚ РІС‹Р·РІР°РЅ РјРµС‚РѕРґ.
+			&UMyGameInstance::OnLoadingScreenTimerComplete, // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° РјРµС‚РѕРґ-РєРѕР»Р±СЌРє.
+			Duration,                 // Р—Р°РґРµСЂР¶РєР° РїРµСЂРµРґ РІС‹Р·РѕРІРѕРј.
+			false);                   // false - С‚Р°Р№РјРµСЂ РЅРµ РїРѕРІС‚РѕСЂСЏСЋС‰РёР№СЃСЏ.
 		UE_LOG(LogTemp, Log, TEXT("ShowLoadingScreen: Timer Started for %.2f seconds."), Duration);
 	}
 }
 
 /**
- * @brief Метод, вызываемый по завершении таймера экрана загрузки.
- * Переводит игру на главный экран.
+ * @brief РњРµС‚РѕРґ, РІС‹Р·С‹РІР°РµРјС‹Р№ РїРѕ Р·Р°РІРµСЂС€РµРЅРёРё С‚Р°Р№РјРµСЂР° СЌРєСЂР°РЅР° Р·Р°РіСЂСѓР·РєРё.
+ * РџРµСЂРµРІРѕРґРёС‚ РёРіСЂСѓ РЅР° РіР»Р°РІРЅС‹Р№ СЌРєСЂР°РЅ.
  */
 void UMyGameInstance::OnLoadingScreenTimerComplete()
 {
 	UE_LOG(LogTemp, Log, TEXT("Loading Screen Timer Complete. Showing Main Menu."));
-	// Просто вызываем функцию показа главного меню.
+	// РџСЂРѕСЃС‚Рѕ РІС‹Р·С‹РІР°РµРј С„СѓРЅРєС†РёСЋ РїРѕРєР°Р·Р° РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ.
 	ShowMainMenu();
 }
 
 /**
- * @brief Показывает главное меню игры (полноэкранный режим).
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РёРіСЂС‹ (РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј).
  */
 void UMyGameInstance::ShowMainMenu()
 {
-	// Проверка класса.
+	// РџСЂРѕРІРµСЂРєР° РєР»Р°СЃСЃР°.
 	if (!MainMenuClass) { UE_LOG(LogTemp, Error, TEXT("ShowMainMenu: MainMenuClass is not set!")); return; }
-	// Показываем виджет главного меню в полноэкранном режиме (true).
+	// РџРѕРєР°Р·С‹РІР°РµРј РІРёРґР¶РµС‚ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ РІ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅРѕРј СЂРµР¶РёРјРµ (true).
 	ShowWidget<UUserWidget>(MainMenuClass, true);
-	// Останавливаем таймер загрузки, если он еще работал.
+	// РћСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚Р°Р№РјРµСЂ Р·Р°РіСЂСѓР·РєРё, РµСЃР»Рё РѕРЅ РµС‰Рµ СЂР°Р±РѕС‚Р°Р».
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран настроек (полноэкранный режим).
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ СЌРєСЂР°РЅ РЅР°СЃС‚СЂРѕРµРє (РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј).
  */
 void UMyGameInstance::ShowSettingsScreen()
 {
-	// Проверка класса.
+	// РџСЂРѕРІРµСЂРєР° РєР»Р°СЃСЃР°.
 	if (!SettingsScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowSettingsScreen: SettingsScreenClass is not set!")); return; }
-	// Показ виджета.
+	// РџРѕРєР°Р· РІРёРґР¶РµС‚Р°.
 	ShowWidget<UUserWidget>(SettingsScreenClass, true);
-	// Остановка таймера.
+	// РћСЃС‚Р°РЅРѕРІРєР° С‚Р°Р№РјРµСЂР°.
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
- * @brief Показывает экран профиля пользователя (полноэкранный режим).
+ * @brief РџРѕРєР°Р·С‹РІР°РµС‚ СЌРєСЂР°РЅ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ СЂРµР¶РёРј).
  */
 void UMyGameInstance::ShowProfileScreen()
 {
-	// Проверка класса.
+	// РџСЂРѕРІРµСЂРєР° РєР»Р°СЃСЃР°.
 	if (!ProfileScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowProfileScreen: ProfileScreenClass is not set!")); return; }
-	// Показ виджета.
+	// РџРѕРєР°Р· РІРёРґР¶РµС‚Р°.
 	ShowWidget<UUserWidget>(ProfileScreenClass, true);
-	// Остановка таймера.
+	// РћСЃС‚Р°РЅРѕРІРєР° С‚Р°Р№РјРµСЂР°.
 	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 
 // =============================================================================
-// Управление Глобальным Состоянием Игры (Логин, Оффлайн Режим)
+// РЈРїСЂР°РІР»РµРЅРёРµ Р“Р»РѕР±Р°Р»СЊРЅС‹Рј РЎРѕСЃС‚РѕСЏРЅРёРµРј РРіСЂС‹ (Р›РѕРіРёРЅ, РћС„С„Р»Р°Р№РЅ Р РµР¶РёРј)
 // =============================================================================
 
 /**
- * @brief Обновляет статус логина пользователя и связанные данные (ID, имя).
- * @param bNewIsLoggedIn Новый статус логина (true - залогинен, false - нет).
- * @param NewUserId ID пользователя (если залогинен), иначе -1.
- * @param NewUsername Имя пользователя (если залогинен), иначе пустая строка.
+ * @brief РћР±РЅРѕРІР»СЏРµС‚ СЃС‚Р°С‚СѓСЃ Р»РѕРіРёРЅР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Рё СЃРІСЏР·Р°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ (ID, РёРјСЏ).
+ * @param bNewIsLoggedIn РќРѕРІС‹Р№ СЃС‚Р°С‚СѓСЃ Р»РѕРіРёРЅР° (true - Р·Р°Р»РѕРіРёРЅРµРЅ, false - РЅРµС‚).
+ * @param NewUserId ID РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РµСЃР»Рё Р·Р°Р»РѕРіРёРЅРµРЅ), РёРЅР°С‡Рµ -1.
+ * @param NewUsername РРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РµСЃР»Рё Р·Р°Р»РѕРіРёРЅРµРЅ), РёРЅР°С‡Рµ РїСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР°.
  */
 void UMyGameInstance::SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername)
 {
-	// Устанавливаем основные переменные состояния.
+	// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РѕСЃРЅРѕРІРЅС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ СЃРѕСЃС‚РѕСЏРЅРёСЏ.
 	bIsLoggedIn = bNewIsLoggedIn;
-	LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1; // Используем тернарный оператор для установки ID или значения по умолчанию.
-	LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT(""); // Устанавливаем имя или пустую строку.
-	// Логическое следствие: если пользователь залогинен, он не находится в оффлайн режиме.
+	LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1; // РСЃРїРѕР»СЊР·СѓРµРј С‚РµСЂРЅР°СЂРЅС‹Р№ РѕРїРµСЂР°С‚РѕСЂ РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё ID РёР»Рё Р·РЅР°С‡РµРЅРёСЏ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ.
+	LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT(""); // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РёРјСЏ РёР»Рё РїСѓСЃС‚СѓСЋ СЃС‚СЂРѕРєСѓ.
+	// Р›РѕРіРёС‡РµСЃРєРѕРµ СЃР»РµРґСЃС‚РІРёРµ: РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р·Р°Р»РѕРіРёРЅРµРЅ, РѕРЅ РЅРµ РЅР°С…РѕРґРёС‚СЃСЏ РІ РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРјРµ.
 	if (bIsLoggedIn) {
 		bIsInOfflineMode = false;
 	}
-	// Логируем измененное состояние.
+	// Р›РѕРіРёСЂСѓРµРј РёР·РјРµРЅРµРЅРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ.
 	UE_LOG(LogTemp, Log, TEXT("Login Status Updated: LoggedIn=%s, UserID=%lld, Username=%s"), bIsLoggedIn ? TEXT("true") : TEXT("false"), LoggedInUserId, *LoggedInUsername);
 }
 
 /**
- * @brief Устанавливает или снимает флаг оффлайн режима.
- * При переходе в оффлайн режим сбрасывает статус логина.
- * @param bNewIsOffline Новый статус оффлайн режима (true - включен, false - выключен).
+ * @brief РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ РёР»Рё СЃРЅРёРјР°РµС‚ С„Р»Р°Рі РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРјР°.
+ * РџСЂРё РїРµСЂРµС…РѕРґРµ РІ РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРј СЃР±СЂР°СЃС‹РІР°РµС‚ СЃС‚Р°С‚СѓСЃ Р»РѕРіРёРЅР°.
+ * @param bNewIsOffline РќРѕРІС‹Р№ СЃС‚Р°С‚СѓСЃ РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРјР° (true - РІРєР»СЋС‡РµРЅ, false - РІС‹РєР»СЋС‡РµРЅ).
  */
 void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 {
-	// Устанавливаем флаг оффлайн режима.
+	// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј С„Р»Р°Рі РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРјР°.
 	bIsInOfflineMode = bNewIsOffline;
-	// Если пользователь выбрал оффлайн режим, он не может быть одновременно залогинен.
+	// Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІС‹Р±СЂР°Р» РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРј, РѕРЅ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ Р·Р°Р»РѕРіРёРЅРµРЅ.
 	if (bIsInOfflineMode) {
-		// Вызываем SetLoginStatus, чтобы сбросить данные логина.
+		// Р’С‹Р·С‹РІР°РµРј SetLoginStatus, С‡С‚РѕР±С‹ СЃР±СЂРѕСЃРёС‚СЊ РґР°РЅРЅС‹Рµ Р»РѕРіРёРЅР°.
 		SetLoginStatus(false, -1, TEXT(""));
 	}
-	// Логируем изменение статуса.
+	// Р›РѕРіРёСЂСѓРµРј РёР·РјРµРЅРµРЅРёРµ СЃС‚Р°С‚СѓСЃР°.
 	UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"), bIsInOfflineMode ? TEXT("true") : TEXT("false"));
 
-	// Если перешли в оффлайн режим.
+	// Р•СЃР»Рё РїРµСЂРµС€Р»Рё РІ РѕС„С„Р»Р°Р№РЅ СЂРµР¶РёРј.
 	if (bIsInOfflineMode)
 	{
-		// Показываем главное меню (из которого потом можно будет выбрать оффлайн игру).
+		// РџРѕРєР°Р·С‹РІР°РµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ (РёР· РєРѕС‚РѕСЂРѕРіРѕ РїРѕС‚РѕРј РјРѕР¶РЅРѕ Р±СѓРґРµС‚ РІС‹Р±СЂР°С‚СЊ РѕС„С„Р»Р°Р№РЅ РёРіСЂСѓ).
 		ShowMainMenu();
 	}
 }
 
 
 // =============================================================================
-// Отправка HTTP Запросов на Сервер (Аутентификация)
+// РћС‚РїСЂР°РІРєР° HTTP Р—Р°РїСЂРѕСЃРѕРІ РЅР° РЎРµСЂРІРµСЂ (РђСѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ)
 // =============================================================================
 
-/**
- * @brief Инициирует асинхронный HTTP POST запрос на сервер для аутентификации пользователя.
- * @param Username Введенное пользователем имя.
- * @param Password Введенный пользователем пароль.
- */
 void UMyGameInstance::RequestLogin(const FString& Username, const FString& Password)
 {
-	// Логируем начало операции.
+	// Р›РѕРіРёСЂСѓРµРј РЅР°С‡Р°Р»Рѕ РѕРїРµСЂР°С†РёРё.
 	UE_LOG(LogTemp, Log, TEXT("RequestLogin: Attempting login for user: %s"), *Username);
 
-	// --- Шаг 1: Подготовка JSON тела запроса ---
-	// Создаем умный указатель на объект JSON. MakeShareable удобен для этого.
+	// --- РЁР°Рі 1: РџРѕРґРіРѕС‚РѕРІРєР° JSON С‚РµР»Р° Р·Р°РїСЂРѕСЃР° ---
 	TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
-	// Заполняем JSON объект полями "username" и "password".
 	RequestJson->SetStringField(TEXT("username"), Username);
 	RequestJson->SetStringField(TEXT("password"), Password);
 
-	// --- Шаг 2: Сериализация JSON в строку ---
-	FString RequestBody; // Строка для хранения результата сериализации.
-	// Создаем JsonWriter, который будет писать в строку RequestBody.
+	// --- РЁР°Рі 2: РЎРµСЂРёР°Р»РёР·Р°С†РёСЏ JSON РІ СЃС‚СЂРѕРєСѓ ---
+	FString RequestBody;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
-	// Выполняем сериализацию. Проверяем результат.
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
 	{
-		// Ошибка сериализации - прерываем операцию.
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to serialize JSON body."));
-		// Сообщаем об ошибке пользователю через UI.
-		DisplayLoginError(TEXT("Client error: Could not create request."));
+		// РЎРѕРѕР±С‰Р°РµРј РѕР± РѕС€РёР±РєРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ С‡РµСЂРµР· UI.
+		DisplayLoginError(TEXT("РћС€РёР±РєР° РєР»РёРµРЅС‚Р°: РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ Р·Р°РїСЂРѕСЃ")); 
 		return;
 	}
 
-	// --- Шаг 3: Создание и настройка HTTP запроса ---
-	// Получаем ссылку на синглтон HTTP модуля.
+	// --- РЁР°Рі 3: РЎРѕР·РґР°РЅРёРµ Рё РЅР°СЃС‚СЂРѕР№РєР° HTTP Р·Р°РїСЂРѕСЃР° ---
 	FHttpModule& HttpModule = FHttpModule::Get();
-	// Создаем объект запроса. Указание ESPMode::ThreadSafe важно для асинхронных операций.
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
-	// Настраиваем параметры запроса:
-	HttpRequest->SetVerb(TEXT("POST"));                            // HTTP метод.
-	HttpRequest->SetURL(ApiBaseUrl + TEXT("/login"));             // URL эндпоинта логина.
-	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json")); // Тип передаваемого контента.
-	HttpRequest->SetContentAsString(RequestBody);                   // Тело запроса (наш JSON).
+	HttpRequest->SetVerb(TEXT("POST"));
+	HttpRequest->SetURL(ApiBaseUrl + TEXT("/login"));
+	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	HttpRequest->SetContentAsString(RequestBody);
 
-	// --- Шаг 4: Привязка обработчика ответа ---
-	// Устанавливаем функцию, которая будет вызвана, когда сервер ответит (или произойдет ошибка сети).
-	// BindUObject(this, ...) привязывает метод OnLoginResponseReceived текущего объекта UMyGameInstance.
+	// --- РЁР°Рі 4: РџСЂРёРІСЏР·РєР° РѕР±СЂР°Р±РѕС‚С‡РёРєР° РѕС‚РІРµС‚Р° ---
 	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UMyGameInstance::OnLoginResponseReceived);
 
-	// --- Шаг 5: Отправка запроса ---
-	// Инициируем отправку запроса. Это асинхронная операция.
+	// --- РЁР°Рі 5: РћС‚РїСЂР°РІРєР° Р·Р°РїСЂРѕСЃР° ---
 	if (!HttpRequest->ProcessRequest())
 	{
-		// Если запрос даже не удалось начать отправлять (например, проблемы с HttpModule).
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to start HTTP request (ProcessRequest failed)."));
-		DisplayLoginError(TEXT("Network error: Could not start request."));
+		DisplayLoginError(TEXT("РћС€РёР±РєР° СЃРµС‚Рё: РќРµ СѓРґР°Р»РѕСЃСЊ РЅР°С‡Р°С‚СЊ Р·Р°РїСЂРѕСЃ")); 
 	}
 	else {
-		// Запрос успешно отправлен (но ответ еще не получен).
 		UE_LOG(LogTemp, Log, TEXT("RequestLogin: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/login")));
-		// В этом месте можно было бы показать пользователю индикатор загрузки.
+		// Р’ СЌС‚РѕРј РјРµСЃС‚Рµ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р±С‹ РїРѕРєР°Р·Р°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ РёРЅРґРёРєР°С‚РѕСЂ Р·Р°РіСЂСѓР·РєРё.
 	}
 }
 
-/**
- * @brief Инициирует асинхронный HTTP POST запрос на сервер для регистрации нового пользователя.
- * @param Username Желаемое имя пользователя.
- * @param Password Желаемый пароль.
- * @param Email Адрес электронной почты пользователя.
- */
+// --- Р РµРіРёСЃС‚СЂР°С†РёСЏ ---
+
 void UMyGameInstance::RequestRegister(const FString& Username, const FString& Password, const FString& Email)
 {
-	// Логируем начало операции.
+	// Р›РѕРіРёСЂСѓРµРј РЅР°С‡Р°Р»Рѕ РѕРїРµСЂР°С†РёРё.
 	UE_LOG(LogTemp, Log, TEXT("RequestRegister: Attempting registration for user: %s, email: %s"), *Username, *Email);
 
-	// --- Шаг 1: Подготовка JSON тела запроса ---
+	// --- РЁР°Рі 1: РџРѕРґРіРѕС‚РѕРІРєР° JSON С‚РµР»Р° Р·Р°РїСЂРѕСЃР° ---
 	TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
 	RequestJson->SetStringField(TEXT("username"), Username);
 	RequestJson->SetStringField(TEXT("password"), Password);
-	RequestJson->SetStringField(TEXT("email"), Email); // Добавляем email в запрос.
+	RequestJson->SetStringField(TEXT("email"), Email);
 
-	// --- Шаг 2: Сериализация JSON в строку ---
+	// --- РЁР°Рі 2: РЎРµСЂРёР°Р»РёР·Р°С†РёСЏ JSON РІ СЃС‚СЂРѕРєСѓ ---
 	FString RequestBody;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestRegister: Failed to serialize JSON body."));
-		DisplayRegisterError(TEXT("Client error: Could not create request."));
+		DisplayRegisterError(TEXT("РћС€РёР±РєР° РєР»РёРµРЅС‚Р°: РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ Р·Р°РїСЂРѕСЃ")); 
 		return;
 	}
 
-	// --- Шаг 3: Создание и настройка HTTP запроса ---
+	// --- РЁР°Рі 3: РЎРѕР·РґР°РЅРёРµ Рё РЅР°СЃС‚СЂРѕР№РєР° HTTP Р·Р°РїСЂРѕСЃР° ---
 	FHttpModule& HttpModule = FHttpModule::Get();
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
 	HttpRequest->SetVerb(TEXT("POST"));
-	HttpRequest->SetURL(ApiBaseUrl + TEXT("/register")); // URL эндпоинта регистрации.
+	HttpRequest->SetURL(ApiBaseUrl + TEXT("/register"));
 	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	HttpRequest->SetContentAsString(RequestBody);
 
-	// --- Шаг 4: Привязка обработчика ответа ---
-	// Привязываем другой метод-колбэк, специфичный для ответа на регистрацию.
+	// --- РЁР°Рі 4: РџСЂРёРІСЏР·РєР° РѕР±СЂР°Р±РѕС‚С‡РёРєР° РѕС‚РІРµС‚Р° ---
 	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UMyGameInstance::OnRegisterResponseReceived);
 
-	// --- Шаг 5: Отправка запроса ---
+	// --- РЁР°Рі 5: РћС‚РїСЂР°РІРєР° Р·Р°РїСЂРѕСЃР° ---
 	if (!HttpRequest->ProcessRequest())
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestRegister: Failed to start HTTP request (ProcessRequest failed)."));
-		DisplayRegisterError(TEXT("Network error: Could not start request."));
+		DisplayRegisterError(TEXT("РћС€РёР±РєР° СЃРµС‚Рё: РќРµ СѓРґР°Р»РѕСЃСЊ РЅР°С‡Р°С‚СЊ Р·Р°РїСЂРѕСЃ")); 
 	}
 	else {
 		UE_LOG(LogTemp, Log, TEXT("RequestRegister: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/register")));
@@ -744,220 +721,171 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 
 
 // =============================================================================
-// Обработка Ответов от Сервера (Колбэки HTTP Запросов)
+// РћР±СЂР°Р±РѕС‚РєР° РћС‚РІРµС‚РѕРІ РѕС‚ РЎРµСЂРІРµСЂР° (РљРѕР»Р±СЌРєРё HTTP Р—Р°РїСЂРѕСЃРѕРІ)
 // =============================================================================
 
-/**
- * @brief Метод обратного вызова (callback), который выполняется по завершении HTTP запроса на логин.
- * Анализирует ответ сервера и обновляет состояние игры или показывает ошибку.
- * @param Request Указатель на исходный запрос (можно получить доп. инфо, если нужно).
- * @param Response Указатель на ответ сервера.
- * @param bWasSuccessful Флаг, указывающий на успех выполнения запроса на сетевом уровне (НЕ означает успешный логин!).
- */
 void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// --- Шаг 1: Проверка базовой успешности запроса ---
-	// Если запрос не удался на уровне сети ИЛИ объект ответа невалиден.
+	// --- РЁР°Рі 1: РџСЂРѕРІРµСЂРєР° Р±Р°Р·РѕРІРѕР№ СѓСЃРїРµС€РЅРѕСЃС‚Рё Р·Р°РїСЂРѕСЃР° ---
 	if (!bWasSuccessful || !Response.IsValid())
 	{
-		// Вероятно, проблема с соединением или сервер недоступен.
 		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed or response invalid. Connection error?"));
-		DisplayLoginError(TEXT("Network error or server unavailable."));
-		// Здесь можно было бы скрыть индикатор загрузки, если он показывался.
-		return; // Выходим.
+		DisplayLoginError(TEXT("РЎРµСЂРІРµСЂ РЅРµ РґРѕСЃС‚СѓРїРµРЅ РёР»Рё РїСЂРѕР±Р»РµРјС‹ СЃ СЃРµС‚СЊСЋ")); 
+		// Р—РґРµСЃСЊ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р±С‹ СЃРєСЂС‹С‚СЊ РёРЅРґРёРєР°С‚РѕСЂ Р·Р°РіСЂСѓР·РєРё, РµСЃР»Рё РѕРЅ РїРѕРєР°Р·С‹РІР°Р»СЃСЏ.
+		return;
 	}
 
-	// --- Шаг 2: Анализ ответа сервера ---
-	// Получаем HTTP код ответа (e.g., 200, 401).
+	// --- РЁР°Рі 2: РђРЅР°Р»РёР· РѕС‚РІРµС‚Р° СЃРµСЂРІРµСЂР° ---
 	int32 ResponseCode = Response->GetResponseCode();
-	// Получаем тело ответа как строку.
 	FString ResponseBody = Response->GetContentAsString();
-	// Логируем полученные данные.
 	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// --- Шаг 3: Обработка в зависимости от кода ответа ---
-	// Успешный логин (200 OK).
-	if (ResponseCode == 200)
+	// --- РЁР°Рі 3: РћР±СЂР°Р±РѕС‚РєР° РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ РєРѕРґР° РѕС‚РІРµС‚Р° ---
+	if (ResponseCode == 200) // РЈСЃРїРµС€РЅС‹Р№ Р»РѕРіРёРЅ (200 OK).
 	{
-		// Пытаемся распарсить тело ответа как JSON.
 		TSharedPtr<FJsonObject> ResponseJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ResponseJson) && ResponseJson.IsValid())
 		{
-			// JSON успешно распарсен. Пытаемся извлечь необходимые данные (userId, username).
 			int64 ReceivedUserId = -1;
 			FString ReceivedUsername;
-			// Используем TryGet... для безопасного извлечения.
 			if (ResponseJson->TryGetNumberField(TEXT("userId"), ReceivedUserId) &&
 				ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername))
 			{
-				// Данные успешно извлечены!
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
-				// Обновляем глобальное состояние GameInstance.
 				SetLoginStatus(true, ReceivedUserId, ReceivedUsername);
-				// Инициируем переход к следующему экрану (через загрузку).
 				ShowLoadingScreen();
 			}
 			else {
-				// Ошибка: JSON корректный, но не содержит нужных полей.
 				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to parse 'userId' or 'username' from JSON response."));
-				DisplayLoginError(TEXT("Server error: Invalid response format."));
+				DisplayLoginError(TEXT("РћС€РёР±РєР° СЃРµСЂРІРµСЂР°: РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ РѕС‚РІРµС‚Р°"));
 			}
 		}
 		else {
-			// Ошибка: не удалось распарсить тело ответа как JSON.
 			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to deserialize JSON response. Body: %s"), *ResponseBody);
-			DisplayLoginError(TEXT("Server error: Could not parse response."));
+			DisplayLoginError(TEXT("РћС€РёР±РєР° СЃРµСЂРІРµСЂР°: РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±СЂР°Р±РѕС‚Р°С‚СЊ РѕС‚РІРµС‚")); 
 		}
 	}
-	// Ошибка аутентификации (401 Unauthorized).
-	else if (ResponseCode == 401)
+	else if (ResponseCode == 401) // РћС€РёР±РєР° Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё (401 Unauthorized).
 	{
-		// Неверный логин или пароль.
 		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401)."));
-		// Сообщаем пользователю.
-		DisplayLoginError(TEXT("Login failed: Incorrect username or password."));
+		DisplayLoginError(TEXT("РќРµРІРµСЂРЅРѕРµ РёРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РёР»Рё РїР°СЂРѕР»СЊ")); 
 	}
-	// Другие ошибки сервера (e.g., 500 Internal Server Error).
-	else {
-		// Формируем сообщение об ошибке по умолчанию.
-		FString ErrorMessage = FString::Printf(TEXT("Login failed: Server error (Code: %d)"), ResponseCode);
-		// Пытаемся получить более конкретное сообщение из тела ответа (если сервер шлет JSON с ошибкой).
+	else // Р”СЂСѓРіРёРµ РѕС€РёР±РєРё СЃРµСЂРІРµСЂР°
+	{
+		// Р¤РѕСЂРјРёСЂСѓРµРј СЃРѕРѕР±С‰РµРЅРёРµ РѕР± РѕС€РёР±РєРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ.
+		FString ErrorMessage = FString::Printf(TEXT("РћС€РёР±РєР° СЃРµСЂРІРµСЂР° (РљРѕРґ: %d)"), ResponseCode); 
+		// РџС‹С‚Р°РµРјСЃСЏ РїРѕР»СѓС‡РёС‚СЊ Р±РѕР»РµРµ РєРѕРЅРєСЂРµС‚РЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ РёР· С‚РµР»Р° РѕС‚РІРµС‚Р°.
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
 			FString ServerErrorMsg;
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				// Используем сообщение от сервера.
-				ErrorMessage = FString::Printf(TEXT("Login failed: %s"), *ServerErrorMsg);
+				// РСЃРїРѕР»СЊР·СѓРµРј СЃРѕРѕР±С‰РµРЅРёРµ РѕС‚ СЃРµСЂРІРµСЂР°.
+				ErrorMessage = FString::Printf(TEXT("РћС€РёР±РєР° РІС…РѕРґР°: %s"), *ServerErrorMsg); 
 			}
 		}
-		// Логируем и отображаем ошибку.
 		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: %s"), *ErrorMessage);
 		DisplayLoginError(ErrorMessage);
 	}
-	// Здесь можно было бы скрыть индикатор загрузки.
+	// Р—РґРµСЃСЊ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р±С‹ СЃРєСЂС‹С‚СЊ РёРЅРґРёРєР°С‚РѕСЂ Р·Р°РіСЂСѓР·РєРё.
 }
 
-/**
- * @brief Метод обратного вызова (callback), который выполняется по завершении HTTP запроса на регистрацию.
- * Анализирует ответ сервера и либо переводит на экран логина, либо показывает ошибку.
- * @param Request Указатель на исходный запрос.
- * @param Response Указатель на ответ сервера.
- * @param bWasSuccessful Флаг успеха выполнения запроса на сетевом уровне.
- */
+
 void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// --- Шаг 1: Проверка базовой успешности запроса ---
+	// --- РЁР°Рі 1: РџСЂРѕРІРµСЂРєР° Р±Р°Р·РѕРІРѕР№ СѓСЃРїРµС€РЅРѕСЃС‚Рё Р·Р°РїСЂРѕСЃР° ---
 	if (!bWasSuccessful || !Response.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: Request failed or response invalid. Connection error?"));
-		DisplayRegisterError(TEXT("Network error or server unavailable."));
+		DisplayRegisterError(TEXT("РЎРµСЂРІРµСЂ РЅРµ РґРѕСЃС‚СѓРїРµРЅ РёР»Рё РїСЂРѕР±Р»РµРјС‹ СЃ СЃРµС‚СЊСЋ")); 
 		return;
 	}
 
-	// --- Шаг 2: Анализ ответа сервера ---
+	// --- РЁР°Рі 2: РђРЅР°Р»РёР· РѕС‚РІРµС‚Р° СЃРµСЂРІРµСЂР° ---
 	int32 ResponseCode = Response->GetResponseCode();
 	FString ResponseBody = Response->GetContentAsString();
 	UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// --- Шаг 3: Обработка в зависимости от кода ответа ---
-	// Успешная регистрация (201 Created).
-	if (ResponseCode == 201)
+	// --- РЁР°Рі 3: РћР±СЂР°Р±РѕС‚РєР° РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ РєРѕРґР° РѕС‚РІРµС‚Р° ---
+	if (ResponseCode == 201) // РЈСЃРїРµС€РЅР°СЏ СЂРµРіРёСЃС‚СЂР°С†РёСЏ (201 Created).
 	{
 		UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Registration successful!"));
-		// Перенаправляем пользователя на экран логина.
 		ShowLoginScreen();
-		// --- Показ сообщения об успехе на экране логина с небольшой задержкой ---
-		FTimerHandle TempTimerHandle; // Временный хэндл для таймера.
-		// Проверяем валидность World перед использованием таймера.
+		// --- РџРѕРєР°Р· СЃРѕРѕР±С‰РµРЅРёСЏ РѕР± СѓСЃРїРµС…Рµ РЅР° СЌРєСЂР°РЅРµ Р»РѕРіРёРЅР° СЃ РЅРµР±РѕР»СЊС€РѕР№ Р·Р°РґРµСЂР¶РєРѕР№ ---
+		FTimerHandle TempTimerHandle;
 		if (GetWorld())
 		{
-			// Запускаем таймер, который выполнит лямбда-функцию через 0.1 секунды.
 			GetWorld()->GetTimerManager().SetTimer(TempTimerHandle, [this]() {
-				// Лямбда-функция вызывает показ сообщения об успехе.
-				// [this] захватывает указатель на текущий объект UMyGameInstance.
-				DisplayLoginSuccessMessage(TEXT("Registration successful! Please log in."));
-				}, 0.1f, false); // false - таймер не повторяющийся.
+				DisplayLoginSuccessMessage(TEXT("Р РµРіРёСЃС‚СЂР°С†РёСЏ СѓСЃРїРµС€РЅР°! РњРѕР¶РµС‚Рµ РІРѕР№С‚Рё РІ Р°РєРєР°СѓРЅС‚")); 
+				}, 0.1f, false);
 		}
-		// --- Конец показа сообщения ---
+		// --- РљРѕРЅРµС† РїРѕРєР°Р·Р° СЃРѕРѕР±С‰РµРЅРёСЏ ---
 	}
-	// Ошибка: Конфликт (имя пользователя или email уже заняты) (409 Conflict).
-	else if (ResponseCode == 409)
+	else if (ResponseCode == 409) // РћС€РёР±РєР°: РљРѕРЅС„Р»РёРєС‚ (РёРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РёР»Рё email СѓР¶Рµ Р·Р°РЅСЏС‚С‹) (409 Conflict).
 	{
-		// Сообщение по умолчанию.
-		FString ErrorMessage = TEXT("Registration failed: Username or Email already exists.");
-		// Пытаемся извлечь более детальное сообщение из ответа сервера.
+		FString ErrorMessage = TEXT("РРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РёР»Рё Email СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"); // РџРµСЂРµРІРµРґРµРЅРѕ
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
 			FString ServerErrorMsg;
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				ErrorMessage = FString::Printf(TEXT("Registration failed: %s"), *ServerErrorMsg);
+				ErrorMessage = FString::Printf(TEXT("РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё: %s"), *ServerErrorMsg); 
 			}
 		}
-		// Логируем и показываем ошибку.
 		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (409)"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
-	// Ошибка: Неверный запрос (ошибка валидации данных на сервере) (400 Bad Request).
-	else if (ResponseCode == 400)
+	else if (ResponseCode == 400) // РћС€РёР±РєР°: РќРµРІРµСЂРЅС‹Р№ Р·Р°РїСЂРѕСЃ (РѕС€РёР±РєР° РІР°Р»РёРґР°С†РёРё РґР°РЅРЅС‹С… РЅР° СЃРµСЂРІРµСЂРµ) (400 Bad Request).
 	{
-		// Сообщение по умолчанию.
-		FString ErrorMessage = TEXT("Registration failed: Invalid data provided.");
-		// Пытаемся извлечь более детальное сообщение.
+		FString ErrorMessage = TEXT("РџСЂРµРґРѕСЃС‚Р°РІР»РµРЅС‹ РЅРµРІРµСЂРЅС‹Рµ РґР°РЅРЅС‹Рµ"); 
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
 			FString ServerErrorMsg;
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				ErrorMessage = FString::Printf(TEXT("Registration failed: %s"), *ServerErrorMsg);
+				ErrorMessage = FString::Printf(TEXT("РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё: %s"), *ServerErrorMsg); 
 			}
-			// Здесь можно было бы добавить парсинг специфичных ошибок валидации по полям, если сервер их предоставляет.
 		}
-		// Логируем и показываем ошибку.
 		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (400)"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
-	// Другие ошибки сервера.
-	else {
-		FString ErrorMessage = FString::Printf(TEXT("Registration failed: Server error (Code: %d)"), ResponseCode);
+	else // Р”СЂСѓРіРёРµ РѕС€РёР±РєРё СЃРµСЂРІРµСЂР°.
+	{
+		FString ErrorMessage = FString::Printf(TEXT("РћС€РёР±РєР° СЃРµСЂРІРµСЂР° (РљРѕРґ: %d)"), ResponseCode);
 		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: %s"), *ErrorMessage);
 		DisplayRegisterError(ErrorMessage);
 	}
-	// Здесь можно было бы скрыть индикатор загрузки.
 }
 
-
-
 // =============================================================================
-// Вспомогательные Функции для Взаимодействия с Виджетами 
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ Р¤СѓРЅРєС†РёРё РґР»СЏ Р’Р·Р°РёРјРѕРґРµР№СЃС‚РІРёСЏ СЃ Р’РёРґР¶РµС‚Р°РјРё 
 // =============================================================================
 
 
 /**
- * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
- * @param Message Сообщение об ошибке для отображения.
+ * @brief РќР°С…РѕРґРёС‚ Р°РєС‚РёРІРЅС‹Р№ РІРёРґР¶РµС‚ Р»РѕРіРёРЅР° (РїСЂРѕРІРµСЂСЏСЏ CurrentTopLevelWidget)
+ * Рё РІС‹Р·С‹РІР°РµС‚ РЅР° РЅРµРј Blueprint-С„СѓРЅРєС†РёСЋ DisplayErrorMessage.
+ * @param Message РЎРѕРѕР±С‰РµРЅРёРµ РѕР± РѕС€РёР±РєРµ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ.
  */
 void UMyGameInstance::DisplayLoginError(const FString& Message)
 {
 	UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
 
-	// Проверяем, что текущий виджет верхнего уровня существует,
-	// и что он имеет правильный класс (LoginScreenClass).
+	// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ С‚РµРєСѓС‰РёР№ РІРёРґР¶РµС‚ РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ СЃСѓС‰РµСЃС‚РІСѓРµС‚,
+	// Рё С‡С‚Рѕ РѕРЅ РёРјРµРµС‚ РїСЂР°РІРёР»СЊРЅС‹Р№ РєР»Р°СЃСЃ (LoginScreenClass).
 	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
 	{
-		// Указатель на текущий виджет (уже проверен).
+		// РЈРєР°Р·Р°С‚РµР»СЊ РЅР° С‚РµРєСѓС‰РёР№ РІРёРґР¶РµС‚ (СѓР¶Рµ РїСЂРѕРІРµСЂРµРЅ).
 		UUserWidget* LoginWidget = CurrentTopLevelWidget;
 
-		// Имя Blueprint-функции для вызова.
+		// РРјСЏ Blueprint-С„СѓРЅРєС†РёРё РґР»СЏ РІС‹Р·РѕРІР°.
 		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		// Ищем функцию в классе виджета.
+		// РС‰РµРј С„СѓРЅРєС†РёСЋ РІ РєР»Р°СЃСЃРµ РІРёРґР¶РµС‚Р°.
 		UFunction* Function = LoginWidget->GetClass()->FindFunctionByName(FunctionName);
 		if (Function)
 		{
-			// Готовим параметры и вызываем функцию через ProcessEvent.
+			// Р“РѕС‚РѕРІРёРј РїР°СЂР°РјРµС‚СЂС‹ Рё РІС‹Р·С‹РІР°РµРј С„СѓРЅРєС†РёСЋ С‡РµСЂРµР· ProcessEvent.
 			struct FDisplayParams { FString Message; };
 			FDisplayParams Params;
 			Params.Message = Message;
@@ -965,12 +893,12 @@ void UMyGameInstance::DisplayLoginError(const FString& Message)
 			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginError: Called DisplayErrorMessage on %s."), *LoginWidget->GetName());
 		}
 		else {
-			// Ошибка: функция не найдена в Blueprint виджета.
+			// РћС€РёР±РєР°: С„СѓРЅРєС†РёСЏ РЅРµ РЅР°Р№РґРµРЅР° РІ Blueprint РІРёРґР¶РµС‚Р°.
 			UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: Function 'DisplayErrorMessage' not found in %s!"), *LoginScreenClass->GetName());
 		}
 	}
 	else {
-		// Логируем причину, по которой не удалось показать ошибку.
+		// Р›РѕРіРёСЂСѓРµРј РїСЂРёС‡РёРЅСѓ, РїРѕ РєРѕС‚РѕСЂРѕР№ РЅРµ СѓРґР°Р»РѕСЃСЊ РїРѕРєР°Р·Р°С‚СЊ РѕС€РёР±РєСѓ.
 		if (!CurrentTopLevelWidget) {
 			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget is null when trying to display error."));
 		}
@@ -978,7 +906,7 @@ void UMyGameInstance::DisplayLoginError(const FString& Message)
 			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: LoginScreenClass is null variable in GameInstance."));
 		}
 		else {
-			// Текущий виджет не является виджетом логина.
+			// РўРµРєСѓС‰РёР№ РІРёРґР¶РµС‚ РЅРµ СЏРІР»СЏРµС‚СЃСЏ РІРёРґР¶РµС‚РѕРј Р»РѕРіРёРЅР°.
 			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget (%s) is not the expected LoginScreenClass (%s). Cannot display error."),
 				*CurrentTopLevelWidget->GetName(), *LoginScreenClass->GetName());
 		}
@@ -986,15 +914,15 @@ void UMyGameInstance::DisplayLoginError(const FString& Message)
 }
 
 /**
- * @brief Находит активный виджет регистрации (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
- * @param Message Сообщение об ошибке для отображения.
+ * @brief РќР°С…РѕРґРёС‚ Р°РєС‚РёРІРЅС‹Р№ РІРёРґР¶РµС‚ СЂРµРіРёСЃС‚СЂР°С†РёРё (РїСЂРѕРІРµСЂСЏСЏ CurrentTopLevelWidget)
+ * Рё РІС‹Р·С‹РІР°РµС‚ РЅР° РЅРµРј Blueprint-С„СѓРЅРєС†РёСЋ DisplayErrorMessage.
+ * @param Message РЎРѕРѕР±С‰РµРЅРёРµ РѕР± РѕС€РёР±РєРµ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ.
  */
 void UMyGameInstance::DisplayRegisterError(const FString& Message)
 {
 	UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: %s"), *Message);
 
-	// Проверяем текущий виджет верхнего уровня на тип RegisterScreenClass.
+	// РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСѓС‰РёР№ РІРёРґР¶РµС‚ РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ РЅР° С‚РёРї RegisterScreenClass.
 	if (CurrentTopLevelWidget && RegisterScreenClass && CurrentTopLevelWidget->IsA(RegisterScreenClass))
 	{
 		UUserWidget* RegisterWidget = CurrentTopLevelWidget;
@@ -1028,15 +956,15 @@ void UMyGameInstance::DisplayRegisterError(const FString& Message)
 }
 
 /**
- * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplaySuccessMessage (или DisplayErrorMessage).
- * @param Message Сообщение об успехе для отображения.
+ * @brief РќР°С…РѕРґРёС‚ Р°РєС‚РёРІРЅС‹Р№ РІРёРґР¶РµС‚ Р»РѕРіРёРЅР° (РїСЂРѕРІРµСЂСЏСЏ CurrentTopLevelWidget)
+ * Рё РІС‹Р·С‹РІР°РµС‚ РЅР° РЅРµРј Blueprint-С„СѓРЅРєС†РёСЋ DisplaySuccessMessage (РёР»Рё DisplayErrorMessage).
+ * @param Message РЎРѕРѕР±С‰РµРЅРёРµ РѕР± СѓСЃРїРµС…Рµ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ.
  */
 void UMyGameInstance::DisplayLoginSuccessMessage(const FString& Message)
 {
 	UE_LOG(LogTemp, Log, TEXT("DisplayLoginSuccessMessage: %s"), *Message);
 
-	// Проверяем текущий виджет верхнего уровня на тип LoginScreenClass.
+	// РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСѓС‰РёР№ РІРёРґР¶РµС‚ РІРµСЂС…РЅРµРіРѕ СѓСЂРѕРІРЅСЏ РЅР° С‚РёРї LoginScreenClass.
 	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
 	{
 		UUserWidget* LoginWidget = CurrentTopLevelWidget;
