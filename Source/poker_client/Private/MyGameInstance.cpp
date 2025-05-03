@@ -651,13 +651,6 @@ void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 	}
 	// Логируем изменение статуса.
 	UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"), bIsInOfflineMode ? TEXT("true") : TEXT("false"));
-
-	// Если перешли в оффлайн режим.
-	if (bIsInOfflineMode)
-	{
-		// Показываем главное меню (из которого потом можно будет выбрать оффлайн игру).
-		ShowMainMenu();
-	}
 }
 
 
@@ -791,7 +784,6 @@ void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResp
 			{
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
 				SetLoginStatus(true, ReceivedUserId, ReceivedUsername);
-				ShowLoadingScreen();
 			}
 			else {
 				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to parse 'userId' or 'username' from JSON response."));
