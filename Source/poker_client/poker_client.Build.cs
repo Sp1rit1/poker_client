@@ -7,13 +7,27 @@ public class poker_client : ModuleRules
 	public poker_client(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "HTTP", "Json", "JsonUtilities" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+        PublicDependencyModuleNames.AddRange(new string[] {
+            "Core",
+            "CoreUObject",
+            "Engine",
+            "InputCore",
+            "EnhancedInput", // Если используешь Enhanced Input
+            "UMG",           // Для User Widgets
+            "HTTP",          // Для HTTP запросов
+            "Json",          // Для работы с JSON
+            "JsonUtilities", // Для JSON утилит
+            "Slate",         // Для доступа к SWindow и FSlateApplication
+            "SlateCore"      // Базовые элементы Slate
+        });
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+        PrivateDependencyModuleNames.AddRange(new string[] { 
+            "Slate", 
+            "SlateCore",
+            "MoviePlayer",
+        });
+
 		
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
