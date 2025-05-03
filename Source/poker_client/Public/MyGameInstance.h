@@ -12,6 +12,7 @@
 
 #include "SlateBasics.h"                   // Для доступа к SWindow и FSlateApplication
 #include "GenericPlatform/GenericApplication.h" // Для IGenericApplication и GetOSWindowHandle
+#include "Delegates/DelegateCombinations.h"
 
 #if PLATFORM_WINDOWS
 #include "Windows/WindowsHWrapper.h" // Нужен для HWND и WinAPI функций
@@ -28,6 +29,8 @@
 
 class UUserWidget; 
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FLoginAttemptCompletedSignature, bool, bWasSuccessful, const FString&, ErrorMessage);
+
 UCLASS() // макрос, помечающий этот класс для системы рефлексии Unreal Engine.
 
 // POKER_CLIENT_API - макрос для экспорта класса, чтобы он стал доступен для других модулей. Сам класс является основным и служит для управления глобальным состоянием и данными
@@ -36,6 +39,8 @@ class POKER_CLIENT_API UMyGameInstance : public UGameInstance
 	GENERATED_BODY() // макрос, обязателен для классов, помеченных UCLASS(), вставляет код, сгенерированный UHT. Должен быть первой строкой в теле класса.
 
 public: 
+
+
 
 	// --- Переменные Состояния Игры ---
 
@@ -56,6 +61,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State")
 	bool bIsInOfflineMode = false; 
+
+	UPROPERTY(BlueprintAssignable, Category = "Login")
+	FLoginAttemptCompletedSignature OnLoginAttemptCompleted;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> StartScreenClass;

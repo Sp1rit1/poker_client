@@ -756,12 +756,18 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 
 void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
+	// --- Инициализация переменных для результата ---
+	bool bLoginSuccess = false;
+	FString ResponseErrorMsg = TEXT(""); // Используем локальную переменную
+
 	// --- Шаг 1: Проверка базовой успешности запроса ---
 	if (!bWasSuccessful || !Response.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed or response invalid. Connection error?"));
-		DisplayLoginError(TEXT("Сервер не доступен или проблемы с сетью")); 
-		// Здесь можно было бы скрыть индикатор загрузки, если он показывался.
+		ResponseErrorMsg = TEXT("Сервер не доступен или проблемы с сетью");
+		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed. Message: %s"), *ResponseErrorMsg);
+		// DisplayLoginError(ResponseErrorMsg); // Можно оставить для логов
+		// !!! ВЫЗЫВАЕМ ДЕЛЕГАТ С НЕУДАЧЕЙ и выходим !!!
+		OnLoginAttemptCompleted.Broadcast(false, ResponseErrorMsg);
 		return;
 	}
 
@@ -783,41 +789,39 @@ void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResp
 				ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername))
 			{
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
-				SetLoginStatus(true, ReceivedUserId, ReceivedUsername);
+				SetLoginStatus(true, ReceivedUserId, ReceivedUsername); // Обновляем статус
+				bLoginSuccess = true; // Успех!
+				// --- !!! УДАЛЕН ВЫЗОВ ShowLoadingScreen() ИЛИ ДРУГОГО ПЕРЕХОДА !!! ---
 			}
 			else {
-				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to parse 'userId' or 'username' from JSON response."));
-				DisplayLoginError(TEXT("Ошибка сервера: Неверный формат ответа"));
+				ResponseErrorMsg = TEXT("Ошибка сервера: Неверный формат ответа");
+				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed parsing JSON fields. Message: %s"), *ResponseErrorMsg);
+				// DisplayLoginError(ResponseErrorMsg);
 			}
 		}
 		else {
-			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed to deserialize JSON response. Body: %s"), *ResponseBody);
-			DisplayLoginError(TEXT("Ошибка сервера: Не удалось обработать ответ")); 
+			ResponseErrorMsg = TEXT("Ошибка сервера: Не удалось обработать ответ");
+			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed deserializing JSON. Message: %s"), *ResponseErrorMsg);
+			// DisplayLoginError(ResponseErrorMsg);
 		}
 	}
 	else if (ResponseCode == 401) // Ошибка аутентификации (401 Unauthorized).
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401)."));
-		DisplayLoginError(TEXT("Неверное имя пользователя или пароль")); 
+		ResponseErrorMsg = TEXT("Неверное имя пользователя или пароль");
+		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401). Message: %s"), *ResponseErrorMsg);
+		// DisplayLoginError(ResponseErrorMsg);
 	}
 	else // Другие ошибки сервера
 	{
-		// Формируем сообщение об ошибке по умолчанию.
-		FString ErrorMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode); 
-		// Пытаемся получить более конкретное сообщение из тела ответа.
-		TSharedPtr<FJsonObject> ErrorJson;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
-		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
-			FString ServerErrorMsg;
-			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				// Используем сообщение от сервера.
-				ErrorMessage = FString::Printf(TEXT("Ошибка входа: %s"), *ServerErrorMsg); 
-			}
-		}
-		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: %s"), *ErrorMessage);
-		DisplayLoginError(ErrorMessage);
+		ResponseErrorMsg = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
+		// ... (можно добавить парсинг сообщения из JSON, как было раньше) ...
+		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Server error. Message: %s"), *ResponseErrorMsg);
+		// DisplayLoginError(ResponseErrorMsg);
 	}
-	// Здесь можно было бы скрыть индикатор загрузки.
+
+	// !!! ВЫЗЫВАЕМ ДЕЛЕГАТ С ФИНАЛЬНЫМ РЕЗУЛЬТАТОМ в конце функции !!!
+	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Broadcasting OnLoginAttemptCompleted. Success: %s, Message: %s"), bLoginSuccess ? TEXT("True") : TEXT("False"), *ResponseErrorMsg);
+	OnLoginAttemptCompleted.Broadcast(bLoginSuccess, ResponseErrorMsg);
 }
 
 
