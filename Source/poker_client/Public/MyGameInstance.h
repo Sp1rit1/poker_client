@@ -28,6 +28,9 @@
 #include "MyGameInstance.generated.h" // // Сгенерированный заголовочный файл, содержащий код, сгенерированный Unreal Header Tool для поддержки системы рефлексии. Должен быть последним включением
 
 class UUserWidget; 
+class UMediaSource;
+class UMediaPlayer;
+class UPackage; // Добавили UPackage
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FLoginAttemptCompletedSignature, bool, bWasSuccessful, const FString&, ErrorMessage);
 
@@ -62,9 +65,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State")
 	bool bIsInOfflineMode = false; 
 
-	UPROPERTY(BlueprintAssignable, Category = "Login")
-	FLoginAttemptCompletedSignature OnLoginAttemptCompleted;
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> StartScreenClass;
 
@@ -86,6 +86,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> ProfileScreenClass;
 
+	/** Ассет Media Player, используемый для экрана загрузки. Устанавливается в Defaults. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Loading Screen")
+	TObjectPtr<UMediaPlayer> LoadingMediaPlayerAsset;
+
+	//Должна быть вызвана из виджета WBP_LoadingScreen, когда его видео завершится.
+
+	UFUNCTION(BlueprintCallable, Category = "Game Flow")
+	void NotifyLoadingVideoFinished();
+
+	/** Ассет Media Source (видеофайл) для экрана загрузки. Устанавливается в Defaults. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Loading Screen")
+	TObjectPtr<UMediaSource> LoadingMediaSourceAsset;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Managers")
 	UOfflineGameManager* OfflineGameManager; 
 
@@ -104,9 +117,6 @@ public:
 	void ShowRegisterScreen();
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
-	void ShowLoadingScreen(float Duration = 7.0f); 
-
-	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowMainMenu();
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
@@ -114,6 +124,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowProfileScreen(); 
+
+	/** Запускает показ виджета загрузки с видео и асинхронную загрузку уровня */
+	UFUNCTION(BlueprintCallable, Category = "Game Flow")
+	void StartLoadLevelWithVideoWidget(FName LevelName);
 
 	UFUNCTION(BlueprintCallable, Category = "State")
 	void SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername);
@@ -129,6 +143,9 @@ public:
 
 	FString ApiBaseUrl = TEXT("http://localhost:8080/api/auth");  // Базовый URL для API аутентификации
 
+	UPROPERTY(BlueprintAssignable, Category = "Login") // делегат логина
+	FLoginAttemptCompletedSignature OnLoginAttemptCompleted;
+
 	virtual void Init() override; // виртуальная (переопределяемая в дочерних классах), переопределённая (override) из UGameInstance функция инициализации GameInstance
 	virtual void Shutdown() override; // функция завершения работы GameInstance
 
@@ -141,8 +158,10 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> CurrentTopLevelWidget = nullptr;  // указатель на текущий виджет верхнего уровня (контейнер или полноэкранный)
 
-	FTimerHandle LoadingScreenTimerHandle; // стурктура для хранения идентификатора таймера и управления им
-	void OnLoadingScreenTimerComplete();  // функция обратного вызова (callback), которая будет вызвана по завершении таймера LoadingScreenTimerHandle.
+	/** Коллбэк завершения асинхронной загрузки пакета */
+	void OnLevelPackageLoaded(const FName& PackageName, UPackage* LoadedPackage, EAsyncLoadingResult::Type Result);
+	/** Проверяет, можно ли завершить переход */
+	void CheckAndFinalizeLevelTransition();
 
 	bool bIsInitialWindowSetupComplete = false;
 
@@ -179,5 +198,11 @@ protected:
 
 	FTimerHandle ResizeTimerHandle; 
 	void DelayedInitialResize();
+
+private:
+	// --- Новые переменные состояния загрузки (ДОБАВИТЬ) ---
+	FName LevelToLoadAsync = NAME_None;
+	bool bIsLevelLoadComplete = false;
+	bool bIsLoadingVideoFinished = false;
 
 };

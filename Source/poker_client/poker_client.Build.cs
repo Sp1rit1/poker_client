@@ -19,7 +19,8 @@ public class poker_client : ModuleRules
             "Json",          // Для работы с JSON
             "JsonUtilities", // Для JSON утилит
             "Slate",         // Для доступа к SWindow и FSlateApplication
-            "SlateCore"      // Базовые элементы Slate
+            "SlateCore",      // Базовые элементы Slate
+            "MediaAssets"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] { 

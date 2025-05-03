@@ -21,6 +21,16 @@
 // Включаем наш класс для управления логикой оффлайн игры.
 #include "OfflineGameManager.h"
 
+
+#include "MediaPlayer.h"
+
+#include "MediaSource.h"
+
+#include "UObject/UObjectGlobals.h" // Для FindField, LoadClass (если нужны)
+
+#include "UObject/Package.h"
+
+
 // --- Инклуды для работы с HTTP и JSON ---
 // Модуль Unreal Engine, предоставляющий функциональность для HTTP запросов.
 #include "HttpModule.h"
@@ -85,6 +95,18 @@ void UMyGameInstance::Init()
 	else { UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!")); }
 
 	UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Finished."));
+}
+
+// --- Вспомогательная функция ---
+FString AsyncLoadingResultToString(EAsyncLoadingResult::Type Result)
+{
+	switch (Result)
+	{
+	case EAsyncLoadingResult::Succeeded: return TEXT("Succeeded");
+	case EAsyncLoadingResult::Failed:    return TEXT("Failed");
+	case EAsyncLoadingResult::Canceled:  return TEXT("Canceled");
+	default: return FString::Printf(TEXT("Unknown (%d)"), static_cast<int32>(Result));
+	}
 }
 
 /**
@@ -471,9 +493,6 @@ void UMyGameInstance::ShowStartScreen()
 	{
 		UE_LOG(LogTemp, Log, TEXT("ShowStartScreen: StartScreen displayed successfully."));
 	}
-
-	// Останавливаем таймер экрана загрузки, если он был активен.
-	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
@@ -498,9 +517,6 @@ void UMyGameInstance::ShowLoginScreen()
 	{
 		UE_LOG(LogTemp, Log, TEXT("ShowLoginScreen: LoginScreen displayed successfully."));
 	}
-
-	// Останавливаем таймер загрузки.
-	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
@@ -525,64 +541,130 @@ void UMyGameInstance::ShowRegisterScreen()
 	{
 		UE_LOG(LogTemp, Log, TEXT("ShowRegisterScreen: RegisterScreen displayed successfully."));
 	}
-
-	// Останавливаем таймер загрузки.
-	GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 
-/**
- * @brief Показывает полноэкранный виджет "загрузки" на заданное время.
- * По истечении времени автоматически вызывает OnLoadingScreenTimerComplete (которая покажет главное меню).
- * @param Duration Время в секундах, на которое показывается экран загрузки.
- */
-void UMyGameInstance::ShowLoadingScreen(float Duration)
+void UMyGameInstance::StartLoadLevelWithVideoWidget(FName LevelName)
 {
-	// Проверка класса виджета загрузки.
-	if (!LoadingScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowLoadingScreen: LoadingScreenClass is not set!")); return; }
+	UE_LOG(LogTemp, Log, TEXT(">>> StartLoadLevelWithVideoWidget: ENTERING. LevelName='%s'"), *LevelName.ToString());
 
-	// Показываем виджет загрузки в полноэкранном режиме (true).
-	UUserWidget* LoadingWidget = ShowWidget<UUserWidget>(LoadingScreenClass, true);
+	// 1. Проверки
+	if (!LoadingScreenClass) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingScreenClass is not set!")); return; }
+	if (LevelName.IsNone()) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LevelName is None!")); return; }
+	if (!LoadingMediaPlayerAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingMediaPlayerAsset is not set!")); return; }
+	if (!LoadingMediaSourceAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingMediaSourceAsset is not set!")); return; }
 
-	// Если виджет успешно создан.
-	if (LoadingWidget)
+	// 2. Показываем виджет
+	UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: Showing loading screen widget '%s'..."), *LoadingScreenClass->GetName());
+	UUserWidget* LoadingWidgetInstance = ShowWidget<UUserWidget>(LoadingScreenClass, true);
+	if (!LoadingWidgetInstance) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Failed to create/show LoadingScreenWidget! Fallback OpenLevel.")); UGameplayStatics::OpenLevel(this, LevelName); return; }
+
+	// 3. Сброс флагов
+	LevelToLoadAsync = LevelName;
+	bIsLevelLoadComplete = false;
+	bIsLoadingVideoFinished = false;
+	UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: State reset. LevelToLoad='%s'"), *LevelToLoadAsync.ToString());
+
+	// 4. Настройка виджета (передача ссылок на плеер/источник)
+	UClass* ActualWidgetClass = LoadingWidgetInstance->GetClass();
+	if (ActualWidgetClass && ActualWidgetClass->IsChildOf(LoadingScreenClass))
 	{
-		// Останавливаем предыдущий таймер (если был).
-		GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
-		// Запускаем новый таймер.
-		GetWorld()->GetTimerManager().SetTimer(
-			LoadingScreenTimerHandle, // Хэндл таймера для возможности его остановки.
-			this,                     // Объект, на котором будет вызван метод.
-			&UMyGameInstance::OnLoadingScreenTimerComplete, // Указатель на метод-колбэк.
-			Duration,                 // Задержка перед вызовом.
-			false);                   // false - таймер не повторяющийся.
-		UE_LOG(LogTemp, Log, TEXT("ShowLoadingScreen: Timer Started for %.2f seconds."), Duration);
+		// Установка плеера
+		FProperty* MediaPlayerBaseProp = ActualWidgetClass->FindPropertyByName(FName("LoadingMediaPlayer"));
+		FObjectProperty* MediaPlayerProp = CastField<FObjectProperty>(MediaPlayerBaseProp);
+		if (MediaPlayerProp) { MediaPlayerProp->SetObjectPropertyValue_InContainer(LoadingWidgetInstance, LoadingMediaPlayerAsset); }
+		else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithVideoWidget: Could not find/cast 'LoadingMediaPlayer' property in widget.")); }
+		// Установка источника
+		FProperty* MediaSourceBaseProp = ActualWidgetClass->FindPropertyByName(FName("LoadingMediaSource"));
+		FObjectProperty* MediaSourceProp = CastField<FObjectProperty>(MediaSourceBaseProp);
+		if (MediaSourceProp) { MediaSourceProp->SetObjectPropertyValue_InContainer(LoadingWidgetInstance, LoadingMediaSourceAsset); }
+		else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithVideoWidget: Could not find/cast 'LoadingMediaSource' property in widget.")); }
 	}
+	else { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Widget class mismatch!")); }
+
+	// 5. Запуск асинхронной загрузки
+	FString PackagePath = FString::Printf(TEXT("/Game/Maps/%s"), *LevelName.ToString());
+	UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: Requesting async load for package '%s'..."), *PackagePath);
+	FLoadPackageAsyncDelegate LoadCallback = FLoadPackageAsyncDelegate::CreateUObject(this, &UMyGameInstance::OnLevelPackageLoaded);
+	if (LoadCallback.IsBound()) { LoadPackageAsync(PackagePath, LoadCallback, 0, PKG_ContainsMap); }
+	else { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Failed to bind LoadPackageAsync delegate!")); CheckAndFinalizeLevelTransition(); }
+
+	UE_LOG(LogTemp, Log, TEXT("<<< StartLoadLevelWithVideoWidget: EXITING function."));
 }
 
-/**
- * @brief Метод, вызываемый по завершении таймера экрана загрузки.
- * Переводит игру на главный экран.
- */
-void UMyGameInstance::OnLoadingScreenTimerComplete()
+/** Коллбэк завершения асинхронной загрузки пакета */
+void UMyGameInstance::OnLevelPackageLoaded(const FName& PackageName, UPackage* LoadedPackage, EAsyncLoadingResult::Type Result)
 {
-	UE_LOG(LogTemp, Log, TEXT("Loading Screen Timer Complete. Showing Main Menu."));
-	// Просто вызываем функцию показа главного меню.
-	ShowMainMenu();
+	UE_LOG(LogTemp, Log, TEXT(">>> OnLevelPackageLoaded: ENTERING (Callback). Package='%s', Result=%s"), *PackageName.ToString(), *AsyncLoadingResultToString(Result));
+	if (Result != EAsyncLoadingResult::Succeeded) { UE_LOG(LogTemp, Error, TEXT("OnLevelPackageLoaded: Async package load FAILED for '%s'!"), *PackageName.ToString()); }
+	else { UE_LOG(LogTemp, Log, TEXT("OnLevelPackageLoaded: Async package load SUCCEEDED for '%s'."), *PackageName.ToString()); }
+	bIsLevelLoadComplete = true;
+	CheckAndFinalizeLevelTransition();
+	UE_LOG(LogTemp, Log, TEXT("<<< OnLevelPackageLoaded: EXITING function."));
 }
 
-/**
- * @brief Показывает главное меню игры (полноэкранный режим).
- */
+/** Вызывается из Blueprint виджета, когда видео завершилось */
+void UMyGameInstance::NotifyLoadingVideoFinished()
+{
+	UE_LOG(LogTemp, Log, TEXT(">>> NotifyLoadingVideoFinished: ENTERING (Called by Widget)."));
+	bIsLoadingVideoFinished = true;
+	CheckAndFinalizeLevelTransition();
+	UE_LOG(LogTemp, Log, TEXT("<<< NotifyLoadingVideoFinished: EXITING."));
+}
+
+/** Проверяет, можно ли завершить переход */
+void UMyGameInstance::CheckAndFinalizeLevelTransition()
+{
+	UE_LOG(LogTemp, Verbose, TEXT(">>> CheckAndFinalizeLevelTransition: Checking: LevelLoadComplete=%s, VideoFinished=%s"),
+		bIsLevelLoadComplete ? TEXT("True") : TEXT("False"), bIsLoadingVideoFinished ? TEXT("True") : TEXT("False"));
+
+	if (bIsLevelLoadComplete && bIsLoadingVideoFinished)
+	{
+		UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: ---> Conditions MET. Finalizing transition!"));
+
+		// --- ОТПИСКА ОТ ДЕЛЕГАТА БОЛЬШЕ НЕ НУЖНА, ТАК КАК МЫ ЕГО НЕ ИСПОЛЬЗУЕМ ДЛЯ ЭТОГО ---
+
+		// Сохраняем имя уровня перед сбросом CurrentTopLevelWidget
+		FName LevelToOpen = LevelToLoadAsync;
+
+		// Удаляем виджет загрузки
+		if (CurrentTopLevelWidget != nullptr)
+		{
+			UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Removing loading screen widget: %s"), *CurrentTopLevelWidget->GetName());
+			CurrentTopLevelWidget->RemoveFromParent();
+			CurrentTopLevelWidget = nullptr;
+		}
+
+		// Сбрасываем переменные состояния СРАЗУ
+		LevelToLoadAsync = NAME_None;
+		bIsLevelLoadComplete = false;
+		bIsLoadingVideoFinished = false;
+		UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: State flags reset."));
+
+		// Открываем УЖЕ загруженный уровень
+		if (!LevelToOpen.IsNone())
+		{
+			UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Calling OpenLevel for '%s'..."), *LevelToOpen.ToString());
+			UGameplayStatics::OpenLevel(this, LevelToOpen);
+		}
+		else { UE_LOG(LogTemp, Error, TEXT("CheckAndFinalizeLevelTransition: LevelToOpen is None!")); }
+
+	}
+	else { UE_LOG(LogTemp, Verbose, TEXT("CheckAndFinalizeLevelTransition: ---> Conditions NOT MET. Waiting...")); }
+	UE_LOG(LogTemp, Verbose, TEXT("<<< CheckAndFinalizeLevelTransition: EXITING."));
+}
+
+
+
+
 void UMyGameInstance::ShowMainMenu()
 {
-	// Проверка класса.
 	if (!MainMenuClass) { UE_LOG(LogTemp, Error, TEXT("ShowMainMenu: MainMenuClass is not set!")); return; }
-	// Показываем виджет главного меню в полноэкранном режиме (true).
-	ShowWidget<UUserWidget>(MainMenuClass, true);
-	// Останавливаем таймер загрузки, если он еще работал.
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
+	UE_LOG(LogTemp, Log, TEXT("ShowMainMenu: Displaying Main Menu Widget."));
+	ShowWidget<UUserWidget>(MainMenuClass, true); // Просто показать виджет
 }
+
+
 
 /**
  * @brief Показывает экран настроек (полноэкранный режим).
@@ -593,8 +675,6 @@ void UMyGameInstance::ShowSettingsScreen()
 	if (!SettingsScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowSettingsScreen: SettingsScreenClass is not set!")); return; }
 	// Показ виджета.
 	ShowWidget<UUserWidget>(SettingsScreenClass, true);
-	// Остановка таймера.
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 /**
@@ -606,8 +686,6 @@ void UMyGameInstance::ShowProfileScreen()
 	if (!ProfileScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowProfileScreen: ProfileScreenClass is not set!")); return; }
 	// Показ виджета.
 	ShowWidget<UUserWidget>(ProfileScreenClass, true);
-	// Остановка таймера.
-	GetWorld()->GetTimerManager().ClearTimer(LoadingScreenTimerHandle);
 }
 
 
@@ -768,7 +846,7 @@ void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResp
 		// DisplayLoginError(ResponseErrorMsg); // Можно оставить для логов
 		// !!! ВЫЗЫВАЕМ ДЕЛЕГАТ С НЕУДАЧЕЙ и выходим !!!
 		OnLoginAttemptCompleted.Broadcast(false, ResponseErrorMsg);
-		return;
+		return; // Выходим из функции
 	}
 
 	// --- Шаг 2: Анализ ответа сервера ---
@@ -789,7 +867,7 @@ void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResp
 				ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername))
 			{
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
-				SetLoginStatus(true, ReceivedUserId, ReceivedUsername); // Обновляем статус
+				SetLoginStatus(true, ReceivedUserId, ReceivedUsername); // Обновляем статус как и раньше
 				bLoginSuccess = true; // Успех!
 				// --- !!! УДАЛЕН ВЫЗОВ ShowLoadingScreen() ИЛИ ДРУГОГО ПЕРЕХОДА !!! ---
 			}
