@@ -719,8 +719,6 @@ void UMyGameInstance::RequestLogin(const FString& Username, const FString& Passw
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to serialize JSON body."));
-		// Сообщаем об ошибке пользователю через UI.
-		DisplayLoginError(TEXT("Ошибка клиента: Не удалось создать запрос")); 
 		return;
 	}
 
@@ -740,7 +738,6 @@ void UMyGameInstance::RequestLogin(const FString& Username, const FString& Passw
 	if (!HttpRequest->ProcessRequest())
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestLogin: Failed to start HTTP request (ProcessRequest failed)."));
-		DisplayLoginError(TEXT("Ошибка сети: Не удалось начать запрос")); 
 	}
 	else {
 		UE_LOG(LogTemp, Log, TEXT("RequestLogin: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/login")));
@@ -767,7 +764,6 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 	if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestRegister: Failed to serialize JSON body."));
-		DisplayRegisterError(TEXT("Ошибка клиента: Не удалось создать запрос")); 
 		return;
 	}
 
@@ -787,7 +783,6 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 	if (!HttpRequest->ProcessRequest())
 	{
 		UE_LOG(LogTemp, Error, TEXT("RequestRegister: Failed to start HTTP request (ProcessRequest failed)."));
-		DisplayRegisterError(TEXT("Ошибка сети: Не удалось начать запрос")); 
 	}
 	else {
 		UE_LOG(LogTemp, Log, TEXT("RequestRegister: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/register")));
@@ -801,27 +796,24 @@ void UMyGameInstance::RequestRegister(const FString& Username, const FString& Pa
 
 void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// --- Инициализация переменных для результата ---
 	bool bLoginSuccess = false;
-	FString ResponseErrorMsg = TEXT(""); // Используем локальную переменную
+	FString ResponseMessage = TEXT(""); // Используем одно имя для успеха/ошибки
 
-	// --- Шаг 1: Проверка базовой успешности запроса ---
+	// Шаг 1: Проверка базовой успешности запроса
 	if (!bWasSuccessful || !Response.IsValid())
 	{
-		ResponseErrorMsg = TEXT("Сервер не доступен или проблемы с сетью");
-		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed. Message: %s"), *ResponseErrorMsg);
-		// DisplayLoginError(ResponseErrorMsg); // Можно оставить для логов
-		// !!! ВЫЗЫВАЕМ ДЕЛЕГАТ С НЕУДАЧЕЙ и выходим !!!
-		OnLoginAttemptCompleted.Broadcast(false, ResponseErrorMsg);
-		return; // Выходим из функции
+		ResponseMessage = TEXT("Сервер не доступен или проблемы с сетью");
+		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Request failed. Message: %s"), *ResponseMessage);
+		OnLoginAttemptCompleted.Broadcast(false, ResponseMessage); // Вызываем делегат с неудачей
+		return;
 	}
 
-	// --- Шаг 2: Анализ ответа сервера ---
+	// Шаг 2: Анализ ответа сервера
 	int32 ResponseCode = Response->GetResponseCode();
 	FString ResponseBody = Response->GetContentAsString();
 	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// --- Шаг 3: Обработка в зависимости от кода ответа ---
+	// Шаг 3: Обработка в зависимости от кода ответа
 	if (ResponseCode == 200) // Успешный логин (200 OK).
 	{
 		TSharedPtr<FJsonObject> ResponseJson;
@@ -830,256 +822,108 @@ void UMyGameInstance::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResp
 		{
 			int64 ReceivedUserId = -1;
 			FString ReceivedUsername;
+			// Пытаемся извлечь данные
 			if (ResponseJson->TryGetNumberField(TEXT("userId"), ReceivedUserId) &&
 				ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername))
 			{
 				UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Login successful for user: %s (ID: %lld)"), *ReceivedUsername, ReceivedUserId);
-				SetLoginStatus(true, ReceivedUserId, ReceivedUsername); // Обновляем статус как и раньше
-				bLoginSuccess = true; // Успех!
-				// --- !!! УДАЛЕН ВЫЗОВ ShowLoadingScreen() ИЛИ ДРУГОГО ПЕРЕХОДА !!! ---
+				SetLoginStatus(true, ReceivedUserId, ReceivedUsername); // Обновляем глобальное состояние
+				bLoginSuccess = true;
+				ResponseMessage = TEXT(""); // Сообщение пустое при успехе
 			}
 			else {
-				ResponseErrorMsg = TEXT("Ошибка сервера: Неверный формат ответа");
-				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed parsing JSON fields. Message: %s"), *ResponseErrorMsg);
-				// DisplayLoginError(ResponseErrorMsg);
+				ResponseMessage = TEXT("Ошибка сервера: Неверный формат ответа");
+				UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed parsing JSON fields. Message: %s"), *ResponseMessage);
 			}
 		}
 		else {
-			ResponseErrorMsg = TEXT("Ошибка сервера: Не удалось обработать ответ");
-			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed deserializing JSON. Message: %s"), *ResponseErrorMsg);
-			// DisplayLoginError(ResponseErrorMsg);
+			ResponseMessage = TEXT("Ошибка сервера: Не удалось обработать ответ");
+			UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Failed deserializing JSON. Message: %s"), *ResponseMessage);
 		}
 	}
 	else if (ResponseCode == 401) // Ошибка аутентификации (401 Unauthorized).
 	{
-		ResponseErrorMsg = TEXT("Неверное имя пользователя или пароль");
-		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401). Message: %s"), *ResponseErrorMsg);
-		// DisplayLoginError(ResponseErrorMsg);
+		ResponseMessage = TEXT("Неверное имя пользователя или пароль");
+		UE_LOG(LogTemp, Warning, TEXT("OnLoginResponseReceived: Login failed - Invalid credentials (401). Message: %s"), *ResponseMessage);
 	}
 	else // Другие ошибки сервера
 	{
-		ResponseErrorMsg = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
-		// ... (можно добавить парсинг сообщения из JSON, как было раньше) ...
-		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Server error. Message: %s"), *ResponseErrorMsg);
-		// DisplayLoginError(ResponseErrorMsg);
+		ResponseMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
+		// Попытка извлечь 'message' из JSON тела ошибки
+		TSharedPtr<FJsonObject> ErrorJson;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
+		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
+			FString ServerErrorMsg;
+			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
+				ResponseMessage = FString::Printf(TEXT("%s (Сервер: %s)"), *ResponseMessage, *ServerErrorMsg);
+			}
+		}
+		UE_LOG(LogTemp, Error, TEXT("OnLoginResponseReceived: Server error. Message: %s"), *ResponseMessage);
 	}
 
-	// !!! ВЫЗЫВАЕМ ДЕЛЕГАТ С ФИНАЛЬНЫМ РЕЗУЛЬТАТОМ в конце функции !!!
-	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Broadcasting OnLoginAttemptCompleted. Success: %s, Message: %s"), bLoginSuccess ? TEXT("True") : TEXT("False"), *ResponseErrorMsg);
-	OnLoginAttemptCompleted.Broadcast(bLoginSuccess, ResponseErrorMsg);
+	// Вызываем делегат с финальным результатом в конце функции
+	UE_LOG(LogTemp, Log, TEXT("OnLoginResponseReceived: Broadcasting OnLoginAttemptCompleted. Success: %s, Message: %s"), bLoginSuccess ? TEXT("True") : TEXT("False"), *ResponseMessage);
+	OnLoginAttemptCompleted.Broadcast(bLoginSuccess, ResponseMessage);
 }
 
 
 void UMyGameInstance::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// --- Шаг 1: Проверка базовой успешности запроса ---
+	bool bRegisterSuccess = false;
+	FString ResultMessage = TEXT(""); // Сообщение для успеха или ошибки
+
+	// Шаг 1: Проверка базовой успешности запроса
 	if (!bWasSuccessful || !Response.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: Request failed or response invalid. Connection error?"));
-		DisplayRegisterError(TEXT("Сервер не доступен или проблемы с сетью")); 
+		ResultMessage = TEXT("Сервер не доступен или проблемы с сетью");
+		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: Request failed or response invalid. Message: %s"), *ResultMessage);
+		OnRegisterAttemptCompleted.Broadcast(false, ResultMessage); // Вызываем делегат с неудачей
 		return;
 	}
 
-	// --- Шаг 2: Анализ ответа сервера ---
+	// Шаг 2: Анализ ответа сервера
 	int32 ResponseCode = Response->GetResponseCode();
 	FString ResponseBody = Response->GetContentAsString();
 	UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
 
-	// --- Шаг 3: Обработка в зависимости от кода ответа ---
+	// Шаг 3: Обработка в зависимости от кода ответа
 	if (ResponseCode == 201) // Успешная регистрация (201 Created).
 	{
 		UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Registration successful!"));
-		ShowLoginScreen();
-		// --- Показ сообщения об успехе на экране логина с небольшой задержкой ---
-		FTimerHandle TempTimerHandle;
-		if (GetWorld())
-		{
-			GetWorld()->GetTimerManager().SetTimer(TempTimerHandle, [this]() {
-				DisplayLoginSuccessMessage(TEXT("Регистрация успешна! Можете войти в аккаунт")); 
-				}, 0.1f, false);
-		}
-		// --- Конец показа сообщения ---
+		bRegisterSuccess = true;
+		ResultMessage = TEXT("Регистрация прошла успешно!"); // Сообщение об успехе
+		// --- Прямой вызов UI УДАЛЕН ---
 	}
-	else if (ResponseCode == 409) // Ошибка: Конфликт (имя пользователя или email уже заняты) (409 Conflict).
+	else // Обработка ВСЕХ ошибок (409, 400, и др.)
 	{
-		FString ErrorMessage = TEXT("Имя пользователя или Email уже существует"); // Переведено
+		// Формируем сообщение по умолчанию
+		if (ResponseCode == 409) {
+			ResultMessage = TEXT("Имя пользователя или Email уже существует");
+		}
+		else if (ResponseCode == 400) {
+			ResultMessage = TEXT("Предоставлены неверные данные");
+		}
+		else {
+			ResultMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
+		}
+
+		// Пытаемся извлечь более детальное сообщение из JSON ответа
 		TSharedPtr<FJsonObject> ErrorJson;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
 			FString ServerErrorMsg;
 			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				ErrorMessage = FString::Printf(TEXT("Ошибка регистрации: %s"), *ServerErrorMsg); 
+				// Добавляем сообщение от сервера к нашему сообщению
+				ResultMessage = FString::Printf(TEXT("%s (Сервер: %s)"), *ResultMessage, *ServerErrorMsg);
 			}
 		}
-		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (409)"), *ErrorMessage);
-		DisplayRegisterError(ErrorMessage);
+		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: Registration failed. Message: %s"), *ResultMessage);
+		// --- Вызов DisplayRegisterError УДАЛЕН ---
 	}
-	else if (ResponseCode == 400) // Ошибка: Неверный запрос (ошибка валидации данных на сервере) (400 Bad Request).
-	{
-		FString ErrorMessage = TEXT("Предоставлены неверные данные"); 
-		TSharedPtr<FJsonObject> ErrorJson;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
-		if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid()) {
-			FString ServerErrorMsg;
-			if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg)) {
-				ErrorMessage = FString::Printf(TEXT("Ошибка регистрации: %s"), *ServerErrorMsg); 
-			}
-		}
-		UE_LOG(LogTemp, Warning, TEXT("OnRegisterResponseReceived: %s (400)"), *ErrorMessage);
-		DisplayRegisterError(ErrorMessage);
-	}
-	else // Другие ошибки сервера.
-	{
-		FString ErrorMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
-		UE_LOG(LogTemp, Error, TEXT("OnRegisterResponseReceived: %s"), *ErrorMessage);
-		DisplayRegisterError(ErrorMessage);
-	}
+
+	// Вызываем делегат с финальным результатом в конце функции
+	UE_LOG(LogTemp, Log, TEXT("OnRegisterResponseReceived: Broadcasting OnRegisterAttemptCompleted. Success: %s, Message: %s"), bRegisterSuccess ? TEXT("True") : TEXT("False"), *ResultMessage);
+	OnRegisterAttemptCompleted.Broadcast(bRegisterSuccess, ResultMessage);
 }
 
-// =============================================================================
-// Вспомогательные Функции для Взаимодействия с Виджетами 
-// =============================================================================
-
-
-/**
- * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
- * @param Message Сообщение об ошибке для отображения.
- */
-void UMyGameInstance::DisplayLoginError(const FString& Message)
-{
-	UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: %s"), *Message);
-
-	// Проверяем, что текущий виджет верхнего уровня существует,
-	// и что он имеет правильный класс (LoginScreenClass).
-	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
-	{
-		// Указатель на текущий виджет (уже проверен).
-		UUserWidget* LoginWidget = CurrentTopLevelWidget;
-
-		// Имя Blueprint-функции для вызова.
-		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		// Ищем функцию в классе виджета.
-		UFunction* Function = LoginWidget->GetClass()->FindFunctionByName(FunctionName);
-		if (Function)
-		{
-			// Готовим параметры и вызываем функцию через ProcessEvent.
-			struct FDisplayParams { FString Message; };
-			FDisplayParams Params;
-			Params.Message = Message;
-			LoginWidget->ProcessEvent(Function, &Params);
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginError: Called DisplayErrorMessage on %s."), *LoginWidget->GetName());
-		}
-		else {
-			// Ошибка: функция не найдена в Blueprint виджета.
-			UE_LOG(LogTemp, Error, TEXT("DisplayLoginError: Function 'DisplayErrorMessage' not found in %s!"), *LoginScreenClass->GetName());
-		}
-	}
-	else {
-		// Логируем причину, по которой не удалось показать ошибку.
-		if (!CurrentTopLevelWidget) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget is null when trying to display error."));
-		}
-		else if (!LoginScreenClass) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: LoginScreenClass is null variable in GameInstance."));
-		}
-		else {
-			// Текущий виджет не является виджетом логина.
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginError: CurrentTopLevelWidget (%s) is not the expected LoginScreenClass (%s). Cannot display error."),
-				*CurrentTopLevelWidget->GetName(), *LoginScreenClass->GetName());
-		}
-	}
-}
-
-/**
- * @brief Находит активный виджет регистрации (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplayErrorMessage.
- * @param Message Сообщение об ошибке для отображения.
- */
-void UMyGameInstance::DisplayRegisterError(const FString& Message)
-{
-	UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: %s"), *Message);
-
-	// Проверяем текущий виджет верхнего уровня на тип RegisterScreenClass.
-	if (CurrentTopLevelWidget && RegisterScreenClass && CurrentTopLevelWidget->IsA(RegisterScreenClass))
-	{
-		UUserWidget* RegisterWidget = CurrentTopLevelWidget;
-
-		FName FunctionName = FName(TEXT("DisplayErrorMessage"));
-		UFunction* Function = RegisterWidget->GetClass()->FindFunctionByName(FunctionName);
-		if (Function)
-		{
-			struct FDisplayParams { FString Message; };
-			FDisplayParams Params;
-			Params.Message = Message;
-			RegisterWidget->ProcessEvent(Function, &Params);
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayRegisterError: Called DisplayErrorMessage on %s."), *RegisterWidget->GetName());
-		}
-		else {
-			UE_LOG(LogTemp, Error, TEXT("DisplayRegisterError: Function 'DisplayErrorMessage' not found in %s!"), *RegisterScreenClass->GetName());
-		}
-	}
-	else {
-		if (!CurrentTopLevelWidget) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: CurrentTopLevelWidget is null when trying to display error."));
-		}
-		else if (!RegisterScreenClass) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: RegisterScreenClass is null variable in GameInstance."));
-		}
-		else {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayRegisterError: CurrentTopLevelWidget (%s) is not the expected RegisterScreenClass (%s). Cannot display error."),
-				*CurrentTopLevelWidget->GetName(), *RegisterScreenClass->GetName());
-		}
-	}
-}
-
-/**
- * @brief Находит активный виджет логина (проверяя CurrentTopLevelWidget)
- * и вызывает на нем Blueprint-функцию DisplaySuccessMessage (или DisplayErrorMessage).
- * @param Message Сообщение об успехе для отображения.
- */
-void UMyGameInstance::DisplayLoginSuccessMessage(const FString& Message)
-{
-	UE_LOG(LogTemp, Log, TEXT("DisplayLoginSuccessMessage: %s"), *Message);
-
-	// Проверяем текущий виджет верхнего уровня на тип LoginScreenClass.
-	if (CurrentTopLevelWidget && LoginScreenClass && CurrentTopLevelWidget->IsA(LoginScreenClass))
-	{
-		UUserWidget* LoginWidget = CurrentTopLevelWidget;
-
-		FName SuccessFuncName = FName(TEXT("DisplaySuccessMessage"));
-		FName ErrorFuncName = FName(TEXT("DisplayErrorMessage"));
-
-		UFunction* FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(SuccessFuncName);
-		if (!FunctionToCall)
-		{
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Function '%s' not found, falling back to '%s'."), *SuccessFuncName.ToString(), *ErrorFuncName.ToString());
-			FunctionToCall = LoginWidget->GetClass()->FindFunctionByName(ErrorFuncName);
-		}
-
-		if (FunctionToCall)
-		{
-			struct FDisplayParams { FString Message; };
-			FDisplayParams Params;
-			Params.Message = Message;
-			LoginWidget->ProcessEvent(FunctionToCall, &Params);
-			UE_LOG(LogTemp, Verbose, TEXT("DisplayLoginSuccessMessage: Called %s on %s."), *FunctionToCall->GetName(), *LoginWidget->GetName());
-		}
-		else {
-			UE_LOG(LogTemp, Error, TEXT("DisplayLoginSuccessMessage: Neither '%s' nor '%s' found in %s!"), *SuccessFuncName.ToString(), *ErrorFuncName.ToString(), *LoginScreenClass->GetName());
-		}
-	}
-	else {
-		if (!CurrentTopLevelWidget) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: CurrentTopLevelWidget is null when trying to display message."));
-		}
-		else if (!LoginScreenClass) {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: LoginScreenClass is null variable in GameInstance."));
-		}
-		else {
-			UE_LOG(LogTemp, Warning, TEXT("DisplayLoginSuccessMessage: CurrentTopLevelWidget (%s) is not the expected LoginScreenClass (%s). Cannot display message."),
-				*CurrentTopLevelWidget->GetName(), *LoginScreenClass->GetName());
-		}
-	}
-}
 

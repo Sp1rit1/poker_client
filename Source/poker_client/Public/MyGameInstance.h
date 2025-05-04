@@ -32,7 +32,8 @@ class UMediaSource;
 class UMediaPlayer;
 class UPackage; // Добавили UPackage
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FLoginAttemptCompletedSignature, bool, bWasSuccessful, const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FLoginAttemptCompletedSignature, bool, bSuccess, const FString&, Message); 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FRegisterAttemptCompletedSignature, bool, bSuccess, const FString&, Message);
 
 UCLASS() // макрос, помечающий этот класс для системы рефлексии Unreal Engine.
 
@@ -125,8 +126,11 @@ public:
 
 	FString ApiBaseUrl = TEXT("http://localhost:8080/api/auth");  // Базовый URL для API аутентификации
 
-	UPROPERTY(BlueprintAssignable, Category = "Login") // делегат логина
+	UPROPERTY(BlueprintAssignable, Category = "Login")
 	FLoginAttemptCompletedSignature OnLoginAttemptCompleted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Register")
+	FRegisterAttemptCompletedSignature OnRegisterAttemptCompleted;
 
 	virtual void Init() override; // виртуальная (переопределяемая в дочерних классах), переопределённая (override) из UGameInstance функция инициализации GameInstance
 	virtual void Shutdown() override; // функция завершения работы GameInstance
@@ -158,11 +162,6 @@ protected:
 	// Объявление функций обратного вызова для обработки ответа на запрос логина и регистрации.
 	void OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 	void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
-
-
-	void DisplayLoginError(const FString& Message); 
-	void DisplayRegisterError(const FString& Message);
-	void DisplayLoginSuccessMessage(const FString& Message); 
 
 	// --- Вспомогательные Функции для Управления Окном и Вводом ---
 
