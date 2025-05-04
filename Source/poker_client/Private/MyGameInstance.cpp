@@ -656,39 +656,6 @@ void UMyGameInstance::CheckAndFinalizeLevelTransition()
 
 
 
-
-void UMyGameInstance::ShowMainMenu()
-{
-	if (!MainMenuClass) { UE_LOG(LogTemp, Error, TEXT("ShowMainMenu: MainMenuClass is not set!")); return; }
-	UE_LOG(LogTemp, Log, TEXT("ShowMainMenu: Displaying Main Menu Widget."));
-	ShowWidget<UUserWidget>(MainMenuClass, true); // Просто показать виджет
-}
-
-
-
-/**
- * @brief Показывает экран настроек (полноэкранный режим).
- */
-void UMyGameInstance::ShowSettingsScreen()
-{
-	// Проверка класса.
-	if (!SettingsScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowSettingsScreen: SettingsScreenClass is not set!")); return; }
-	// Показ виджета.
-	ShowWidget<UUserWidget>(SettingsScreenClass, true);
-}
-
-/**
- * @brief Показывает экран профиля пользователя (полноэкранный режим).
- */
-void UMyGameInstance::ShowProfileScreen()
-{
-	// Проверка класса.
-	if (!ProfileScreenClass) { UE_LOG(LogTemp, Error, TEXT("ShowProfileScreen: ProfileScreenClass is not set!")); return; }
-	// Показ виджета.
-	ShowWidget<UUserWidget>(ProfileScreenClass, true);
-}
-
-
 // =============================================================================
 // Управление Глобальным Состоянием Игры (Логин, Оффлайн Режим)
 // =============================================================================

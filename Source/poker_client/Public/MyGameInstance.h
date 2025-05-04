@@ -77,15 +77,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
 	TSubclassOf<UUserWidget> LoadingScreenClass;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
-	TSubclassOf<UUserWidget> MainMenuClass;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
-	TSubclassOf<UUserWidget> SettingsScreenClass;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Classes")
-	TSubclassOf<UUserWidget> ProfileScreenClass;
-
 	/** Ассет Media Player, используемый для экрана загрузки. Устанавливается в Defaults. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Loading Screen")
 	TObjectPtr<UMediaPlayer> LoadingMediaPlayerAsset;
@@ -115,15 +106,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
 	void ShowRegisterScreen();
-
-	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
-	void ShowMainMenu();
-
-	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
-	void ShowSettingsScreen();
-
-	UFUNCTION(BlueprintCallable, Category = "UI|Navigation")
-	void ShowProfileScreen(); 
 
 	/** Запускает показ виджета загрузки с видео и асинхронную загрузку уровня */
 	UFUNCTION(BlueprintCallable, Category = "Game Flow")
