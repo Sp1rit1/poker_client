@@ -1,36 +1,49 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Blueprint/UserWidget.h" // Для UUserWidget и TSubclassOf
 #include "PokerPlayerController.generated.h"
 
-/**
- * 
- */
+// Нет необходимости в прямом объявлении UWBP_GameHUD, так как мы будем использовать UUserWidget
+
 UCLASS()
-class POKER_CLIENT_API APokerPlayerController : public APlayerController
+class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените YOURPROJECT_API
 {
 	GENERATED_BODY()
 
+protected:
+	/** Класс виджета игрового HUD, который будет создан. Назначается в Blueprint наследнике этого контроллера. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|HUD")
+	TSubclassOf<UUserWidget> GameHUDWidgetClass; // Используем базовый UUserWidget для класса
+
+	/** Экземпляр созданного игрового HUD. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "UI|HUD")
+	UUserWidget* GameHUDWidgetInstance; // Используем базовый UUserWidget для экземпляра
+
+	virtual void BeginPlay() override;
+
 public:
-    APokerPlayerController(); // Конструктор
+	APokerPlayerController();
 
-    // Функции для управления HUD (как мы обсуждали для Дня 4)
-    UFUNCTION(BlueprintCallable, Category = "UI")
-    void ShowGameHUD();
+	// Функция для получения экземпляра HUD. Может потребоваться Cast в Blueprint, если нужны специфичные функции HUD.
+	UFUNCTION(BlueprintPure, Category = "UI|HUD")
+	UUserWidget* GetGameHUD() const; // Возвращаем UUserWidget*
 
-    UFUNCTION(BlueprintCallable, Category = "UI")
-    void HideGameHUD();
+	// ... (остальные функции HandleFoldAction, ToggleInputMode и т.д. остаются такими же) ...
+	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
+	void HandleFoldAction();
+
+	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
+	void HandleCheckCallAction();
+
+	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
+	void HandleBetRaiseAction(int64 Amount);
+
+	UFUNCTION(BlueprintCallable, Category = "Input")
+	void ToggleInputMode();
 
 protected:
-    virtual void BeginPlay() override; // Переопределяем BeginPlay
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
-    TSubclassOf<class UUserWidget> GameHUDClass; // Класс для игрового HUD
-
-    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "UI")
-    class UUserWidget* GameHUDInstance;
-	
+	bool bIsMouseCursorVisible;
+	virtual void SetupInputComponent() override;
 };

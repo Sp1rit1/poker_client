@@ -1,51 +1,110 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿#include "PokerPlayerController.h"
+// #include "WBP_GameHUD.h" // Этот инклюд теперь не нужен, если WBP_GameHUD - это чистый Blueprint
 
+#include "Kismet/GameplayStatics.h"
+#include "MyGameInstance.h" 
+#include "OfflineGameManager.h" 
 
-#include "PokerPlayerController.h"
-#include "Blueprint/UserWidget.h" // Для CreateWidget и UUserWidget
 
 APokerPlayerController::APokerPlayerController()
 {
-    // Здесь можно установить значения по умолчанию, если нужно
+	bShowMouseCursor = false;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
+	bIsMouseCursorVisible = false;
 }
+
 
 void APokerPlayerController::BeginPlay()
 {
-    Super::BeginPlay(); // ВАЖНО: Вызвать родительский BeginPlay
+	Super::BeginPlay();
 
-    // Ваша логика, которая была в Blueprint, может быть здесь или в BP наследнике
-    // Например, установка начального режима ввода для UI, если это всегда нужно при старте контроллера
-    // SetInputMode(FInputModeUIOnly()); // Или GameAndUI
-    // bShowMouseCursor = true;
+	SetInputMode(FInputModeGameOnly());
+	bShowMouseCursor = false;
+	bIsMouseCursorVisible = false;
+
+	if (GameHUDWidgetClass)
+	{
+		// Создаем экземпляр виджета, используя базовый класс UUserWidget
+		GameHUDWidgetInstance = CreateWidget<UUserWidget>(this, GameHUDWidgetClass);
+
+		if (GameHUDWidgetInstance)
+		{
+			GameHUDWidgetInstance->AddToViewport();
+			UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: GameHUDWidgetInstance created and added to viewport."));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance!"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetClass is not set!"));
+	}
 }
 
-void APokerPlayerController::ShowGameHUD()
+UUserWidget* APokerPlayerController::GetGameHUD() const // Возвращаем UUserWidget*
 {
-    if (GameHUDClass)
-    {
-        if (GameHUDInstance && GameHUDInstance->IsInViewport()) return;
-        GameHUDInstance = CreateWidget<UUserWidget>(this, GameHUDClass);
-        if (GameHUDInstance)
-        {
-            GameHUDInstance->AddToViewport();
-            // Можно здесь установить режим ввода для игры с HUD
-            // FInputModeGameAndUI InputMode;
-            // InputMode.SetWidgetToFocus(GameHUDInstance->TakeWidget()); // Опционально для фокуса
-            // InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-            // SetInputMode(InputMode);
-            // bShowMouseCursor = true;
-        }
-    }
+	return GameHUDWidgetInstance;
 }
 
-void APokerPlayerController::HideGameHUD()
+void APokerPlayerController::SetupInputComponent()
 {
-    if (GameHUDInstance && GameHUDInstance->IsInViewport())
-    {
-        GameHUDInstance->RemoveFromViewport();
-        GameHUDInstance = nullptr;
-        // Можно здесь восстановить режим ввода только для игры
-        // SetInputMode(FInputModeGameOnly());
-        // bShowMouseCursor = false;
-    }
+	Super::SetupInputComponent(); // Вызываем реализацию базового класса APlayerController
+
+	// InputComponent создается и инициализируется в APlayerController::PostInitializeComponents()
+	// и затем передается сюда. Мы должны проверить, что он существует.
+	if (InputComponent)
+	{
+		// Включаем ввод для этого контроллера, если он еще не включен
+		EnableInput(this); // Важно, чтобы контроллер мог обрабатывать ввод
+
+		InputComponent->BindAction("ToggleCursor", IE_Pressed, this, &APokerPlayerController::ToggleInputMode);
+		// ... другие ваши BindAction ...
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("APokerPlayerController::SetupInputComponent - InputComponent is NULL!"));
+	}
+}
+
+// Пример ToggleInputMode
+void APokerPlayerController::ToggleInputMode()
+{
+	bIsMouseCursorVisible = !bIsMouseCursorVisible;
+	bShowMouseCursor = bIsMouseCursorVisible;
+
+	if (bIsMouseCursorVisible)
+	{
+		FInputModeGameAndUI InputModeData;
+		InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputModeData.SetHideCursorDuringCapture(false);
+		SetInputMode(InputModeData);
+		UE_LOG(LogTemp, Log, TEXT("Input Mode: GameAndUI, Cursor Visible."));
+	}
+	else
+	{
+		SetInputMode(FInputModeGameOnly());
+		UE_LOG(LogTemp, Log, TEXT("Input Mode: GameOnly, Cursor Hidden."));
+	}
+}
+
+// Заглушки для Обработки Действий Игрока
+void APokerPlayerController::HandleFoldAction()
+{
+	UE_LOG(LogTemp, Log, TEXT("PlayerController: Fold Action Triggered"));
+	// Логика вызова OfflineGameManager будет здесь
+}
+
+void APokerPlayerController::HandleCheckCallAction()
+{
+	UE_LOG(LogTemp, Log, TEXT("PlayerController: Check/Call Action Triggered"));
+	// Логика вызова OfflineGameManager будет здесь
+}
+
+void APokerPlayerController::HandleBetRaiseAction(int64 Amount)
+{
+	UE_LOG(LogTemp, Log, TEXT("PlayerController: Bet/Raise Action Triggered with Amount: %lld"), Amount);
+	// Логика вызова OfflineGameManager будет здесь
 }

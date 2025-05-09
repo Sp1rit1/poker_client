@@ -52,5 +52,6 @@ public:
 
 private:
 	int32 GetNextActivePlayerSeat(int32 StartSeatIndex, bool bIncludeStartSeat = false) const;
-
+	void PostBlinds(int32 SmallBlindSeat, int32 BigBlindSeat, int64 SmallBlindAmount, int64 BigBlindAmount);
+	void RequestPlayerAction(int32 SeatIndex);
 };
