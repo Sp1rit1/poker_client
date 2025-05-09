@@ -38,9 +38,6 @@ void UNetworkAuthManager::RequestLogin(const FString& Username, const FString& P
     if (ApiBaseUrl.IsEmpty())
     {
         UE_LOG(LogTemp, Error, TEXT("RequestLogin: ApiBaseUrl is not set. Cannot proceed."));
-        // Можно попробовать получить его из OwningGameInstance, если там есть геттер
-        // ApiBaseUrl = OwningGameInstance->GetApiBaseUrl(); // Пример
-        // if (ApiBaseUrl.IsEmpty()) return;
         return;
     }
 
@@ -64,7 +61,7 @@ void UNetworkAuthManager::RequestLogin(const FString& Username, const FString& P
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/login")); // Используем сохраненный ApiBaseUrl
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/login")); // Используем сохраненный ApiBaseUrl
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
@@ -77,7 +74,7 @@ void UNetworkAuthManager::RequestLogin(const FString& Username, const FString& P
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestLogin: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/login")));
+        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestLogin: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/auth/login")));
     }
 }
 
@@ -114,7 +111,7 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/register")); // Используем сохраненный ApiBaseUrl
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/register")); // Используем сохраненный ApiBaseUrl
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
@@ -127,7 +124,7 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestRegister: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/register")));
+        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestRegister: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/auth/register")));
     }
 }
 

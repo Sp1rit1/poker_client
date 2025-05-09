@@ -2,6 +2,7 @@
 #include "StartScreenUIManager.h"   // Включаем заголовки наших новых менеджеров
 #include "NetworkAuthManager.h"
 #include "OfflineGameManager.h"   // OfflineGameManager остался
+#include "GameScreenUIManager.h"
 
 // --- Основные инклуды Unreal Engine (как были) ---
 #include "GameFramework/PlayerController.h"
@@ -26,6 +27,7 @@ UMyGameInstance::UMyGameInstance()
     StartScreenUIManagerInstance = nullptr;
     NetworkAuthManagerInstance = nullptr;
     OfflineGameManager = nullptr;
+    GameScreenUIManagerInstance = nullptr;
 
     // Инициализация флагов и переменных состояния (как было)
     bIsInitialWindowSetupComplete = false;
@@ -68,6 +70,20 @@ void UMyGameInstance::Init()
         UE_LOG(LogTemp, Log, TEXT("StartScreenUIManager created and initialized."));
     }
     else { UE_LOG(LogTemp, Error, TEXT("Failed to create StartScreenUIManager!")); }
+
+    GameScreenUIManagerInstance = NewObject<UGameScreenUIManager>(this);
+    if (GameScreenUIManagerInstance) {
+        GameScreenUIManagerInstance->Initialize(
+            this,
+            GameMainMenuClass,     // Передаем классы, назначенные в BP GameInstance
+            GameOfflineLobbyClass,
+            GameOnlineLobbyClass,
+            GameProfileScreenClass,
+            GameSettingsClass
+        );
+        UE_LOG(LogTemp, Log, TEXT("GameScreenUIManager created and initialized."));
+    }
+    else { UE_LOG(LogTemp, Error, TEXT("Failed to create GameScreenUIManager!")); }
 
     NetworkAuthManagerInstance = NewObject<UNetworkAuthManager>(this);
     if (NetworkAuthManagerInstance) {
