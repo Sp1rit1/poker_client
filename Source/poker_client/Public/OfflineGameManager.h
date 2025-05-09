@@ -1,49 +1,56 @@
-#pragma once
+п»ї#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-// Включаем наши типы и классы состояния/колоды
+// Р’РєР»СЋС‡Р°РµРј РЅР°С€Рё С‚РёРїС‹ Рё РєР»Р°СЃСЃС‹ СЃРѕСЃС‚РѕСЏРЅРёСЏ/РєРѕР»РѕРґС‹
 #include "PokerDataTypes.h"
 #include "OfflinePokerGameState.h"
 #include "Deck.h"
-#include "OfflineGameManager.generated.h" // Должен быть последним
+#include "OfflineGameManager.generated.h" // Р”РѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕСЃР»РµРґРЅРёРј
 
 /**
- * Класс UObject, отвечающий за управление логикой оффлайн игры в покер.
- * Создается и хранится в GameInstance для доступа на протяжении сессии.
+ * РљР»Р°СЃСЃ UObject, РѕС‚РІРµС‡Р°СЋС‰РёР№ Р·Р° СѓРїСЂР°РІР»РµРЅРёРµ Р»РѕРіРёРєРѕР№ РѕС„С„Р»Р°Р№РЅ РёРіСЂС‹ РІ РїРѕРєРµСЂ.
+ * РЎРѕР·РґР°РµС‚СЃСЏ Рё С…СЂР°РЅРёС‚СЃСЏ РІ GameInstance РґР»СЏ РґРѕСЃС‚СѓРїР° РЅР° РїСЂРѕС‚СЏР¶РµРЅРёРё СЃРµСЃСЃРёРё.
  */
-UCLASS(BlueprintType) // BlueprintType на случай, если захотим вызывать что-то из BP
+UCLASS(BlueprintType) // BlueprintType РЅР° СЃР»СѓС‡Р°Р№, РµСЃР»Рё Р·Р°С…РѕС‚РёРј РІС‹Р·С‹РІР°С‚СЊ С‡С‚Рѕ-С‚Рѕ РёР· BP
 class POKER_CLIENT_API UOfflineGameManager : public UObject
 {
 	GENERATED_BODY()
 
 public:
-	// Указатель на объект, хранящий текущее состояние игры
+	// РЈРєР°Р·Р°С‚РµР»СЊ РЅР° РѕР±СЉРµРєС‚, С…СЂР°РЅСЏС‰РёР№ С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РёРіСЂС‹
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game")
 	UOfflinePokerGameState* GameStateData;
 
-	// Указатель на объект колоды карт
+	// РЈРєР°Р·Р°С‚РµР»СЊ РЅР° РѕР±СЉРµРєС‚ РєРѕР»РѕРґС‹ РєР°СЂС‚
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game")
 	UDeck* Deck;
 
-	// Конструктор по умолчанию
+	// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 	UOfflineGameManager();
 
 	/**
-	 * Инициализирует новую оффлайн игру.
-	 * Создает GameState, Deck, рассаживает игроков/ботов.
-	 * @param NumPlayers Количество реальных игроков (обычно 1).
-	 * @param NumBots Количество ботов.
-	 * @param InitialStack Начальный стек фишек для всех.
+	 * РРЅРёС†РёР°Р»РёР·РёСЂСѓРµС‚ РЅРѕРІСѓСЋ РѕС„С„Р»Р°Р№РЅ РёРіСЂСѓ.
+	 * РЎРѕР·РґР°РµС‚ GameState, Deck, СЂР°СЃСЃР°Р¶РёРІР°РµС‚ РёРіСЂРѕРєРѕРІ/Р±РѕС‚РѕРІ.
+	 * @param NumPlayers РљРѕР»РёС‡РµСЃС‚РІРѕ СЂРµР°Р»СЊРЅС‹С… РёРіСЂРѕРєРѕРІ (РѕР±С‹С‡РЅРѕ 1).
+	 * @param NumBots РљРѕР»РёС‡РµСЃС‚РІРѕ Р±РѕС‚РѕРІ.
+	 * @param InitialStack РќР°С‡Р°Р»СЊРЅС‹Р№ СЃС‚РµРє С„РёС€РµРє РґР»СЏ РІСЃРµС….
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Offline Game")
 	void InitializeGame(int32 NumPlayers, int32 NumBots, int64 InitialStack);
 
 	/**
-	 * Возвращает текущее состояние игры (для чтения).
-	 * @return Указатель на UOfflinePokerGameState или nullptr, если игра не инициализирована.
+	 * Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РёРіСЂС‹ (РґР»СЏ С‡С‚РµРЅРёСЏ).
+	 * @return РЈРєР°Р·Р°С‚РµР»СЊ РЅР° UOfflinePokerGameState РёР»Рё nullptr, РµСЃР»Рё РёРіСЂР° РЅРµ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅР°.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Offline Game")
 	UOfflinePokerGameState* GetGameState() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
+	void StartNewHand();
+
+
+private:
+	int32 GetNextActivePlayerSeat(int32 StartSeatIndex, bool bIncludeStartSeat = false) const;
 
 };
