@@ -44,6 +44,10 @@ public:
 	void ToggleInputMode();
 
 protected:
+
 	bool bIsMouseCursorVisible;
 	virtual void SetupInputComponent() override;
+	/** Обработчик события, когда OfflineGameManager запрашивает действие у игрока. */
+	UFUNCTION() 
+	void HandleActionRequested(int32 PlayerSeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack);
 };

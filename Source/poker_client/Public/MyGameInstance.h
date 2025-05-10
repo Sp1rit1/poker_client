@@ -81,6 +81,12 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
     TSubclassOf<UUserWidget> GameSettingsClass;
 
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings") 
+    int32 PendingOfflineNumBots = 1;
+
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings")
+    int64 PendingOfflineInitialStack = 1000;
+
 
     // --- Делегаты для событий аутентификации ---
 // Виджеты будут подписываться на них
