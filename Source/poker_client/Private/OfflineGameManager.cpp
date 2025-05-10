@@ -387,23 +387,122 @@ void UOfflineGameManager::PostBlinds(int32 SmallBlindSeat, int32 BigBlindSeat, i
     GameStateData->CurrentBetToCall = BigBlindAmount;
 }
 
-// ЗАГЛУШКА для RequestPlayerAction - ее полная реализация будет следующей задачей Дня 5
 void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
 {
-    if (GameStateData && GameStateData->Seats.IsValidIndex(SeatIndex))
-    {
-        UE_LOG(LogTemp, Log, TEXT("Requesting action from Seat %d (%s)"), SeatIndex, *GameStateData->Seats[SeatIndex].PlayerName);
-        GameStateData->CurrentTurnSeat = SeatIndex; // Убедимся, что это установлено
-        GameStateData->Seats[SeatIndex].bIsTurn = true;
-
-        // TODO ДЕНЬ 5: Здесь будет логика определения доступных действий (AllowedActions)
-        // и вызов делегата/события для UI
-        // TArray<EPlayerAction> AllowedActions;
-        // ... логика заполнения AllowedActions ...
-        // OnActionRequestedDelegate.Broadcast(SeatIndex, AllowedActions);
-    }
-    else
+    if (!GameStateData || !GameStateData->Seats.IsValidIndex(SeatIndex))
     {
         UE_LOG(LogTemp, Warning, TEXT("RequestPlayerAction: Invalid SeatIndex %d or GameStateData is null"), SeatIndex);
+        // TODO: Возможно, нужно обработать ситуацию, когда не можем запросить действие (например, конец игры)
+        return;
     }
+
+    FPlayerSeatData& CurrentPlayer = GameStateData->Seats[SeatIndex];
+
+    // Сначала сбрасываем флаг bIsTurn у предыдущего игрока, если он был
+    if (GameStateData->CurrentTurnSeat != -1 && GameStateData->Seats.IsValidIndex(GameStateData->CurrentTurnSeat))
+    {
+        GameStateData->Seats[GameStateData->CurrentTurnSeat].bIsTurn = false;
+    }
+
+    // Устанавливаем текущего игрока
+    GameStateData->CurrentTurnSeat = SeatIndex;
+    CurrentPlayer.bIsTurn = true;
+
+    // Проверяем, может ли игрок вообще действовать (не в фолде, не олл-ин без возможности повлиять на банк)
+    if (CurrentPlayer.Status == EPlayerStatus::Folded || CurrentPlayer.Stack == 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("RequestPlayerAction: Seat %d (%s) is Folded or All-In with 0 stack. Skipping turn."), SeatIndex, *CurrentPlayer.PlayerName);
+        // TODO: Логика автоматического перехода хода (вызов ProcessPlayerAction с "авто-действием" или поиск следующего)
+        // Пока просто ничего не делаем, это будет обработано в ProcessPlayerAction
+        // Для простоты сейчас мы вызовем делегат с пустым набором действий или только Fold.
+        // Но лучше это обрабатывать в цикле определения следующего игрока в ProcessPlayerAction.
+        // Сейчас, для MVP, если он не может ходить, UI ничего не покажет.
+        // ProcessPlayerAction должен будет это корректно обработать.
+        // Пока что вызовем делегат с пустыми действиями, чтобы UI мог отреагировать.
+        OnActionRequestedDelegate.Broadcast(SeatIndex, {}, GameStateData->CurrentBetToCall, 0, CurrentPlayer.Stack);
+        return;
+    }
+
+
+    TArray<EPlayerAction> AllowedActions;
+    int64 PlayerStack = CurrentPlayer.Stack;
+    int64 CurrentBetOnTable = CurrentPlayer.CurrentBet; // Ставка игрока в этом раунде
+    int64 BetToCall = GameStateData->CurrentBetToCall;
+    int64 PotSize = GameStateData->Pot; // Для потенциальных ставок по размеру пота
+
+    // 1. Fold - всегда доступен, если игрок не олл-ин
+    AllowedActions.Add(EPlayerAction::Fold);
+
+    // 2. Check - доступен, если текущая ставка для колла равна ставке игрока в этом раунде
+    // (т.е. никто до него не повышал в этом круге торгов или он уже уравнял предыдущий рейз)
+    if (CurrentBetOnTable == BetToCall)
+    {
+        AllowedActions.Add(EPlayerAction::Check);
+    }
+
+    // 3. Call - доступен, если ставка для колла больше текущей ставки игрока и у игрока есть фишки
+    if (BetToCall > CurrentBetOnTable && PlayerStack > 0)
+    {
+        AllowedActions.Add(EPlayerAction::Call);
+        // Сумма для колла = BetToCall - CurrentBetOnTable, но не больше стека игрока
+        // int64 AmountToCall = FMath::Min(PlayerStack, BetToCall - CurrentBetOnTable);
+    }
+
+    // 4. Bet - доступен, если можно сделать Check (т.е. BetToCall == CurrentBetOnTable) и есть фишки
+    // Bet также означает, что до этого не было ставок в текущем круге торгов (или все уравняли и прочекали)
+    int64 MinBetAmount = 10; // TODO: Заменить на реальный BigBlindAmount или другой минимум
+    if (AllowedActions.Contains(EPlayerAction::Check) && PlayerStack >= MinBetAmount)
+    {
+        AllowedActions.Add(EPlayerAction::Bet);
+    }
+
+    // 5. Raise - доступен, если можно сделать Call (BetToCall > CurrentBetOnTable) ИЛИ если уже была ставка (Bet)
+    // и у игрока достаточно фишек для минимального рейза.
+    // Минимальный рейз обычно равен размеру последнего бета/рейза.
+    // Если перед нами был только колл или чек, то MinRaise = MinBetAmount (BigBlind)
+    // Если перед нами был бет/рейз, то MinRaise = этот бет/рейз.
+    // Сумма для рейза = (BetToCall - CurrentBetOnTable) + MinRaiseAmount (но не больше стека)
+
+    // TODO: Более точный расчет MinRaiseAmount, учитывающий предыдущие рейзы в этом раунде.
+    // Пока упрощенно: минимальный рейз = удвоение ставки для колла или просто BigBlind, если нет ставок.
+    int64 MinRaiseAmount = BetToCall > 0 ? BetToCall : MinBetAmount; // Очень упрощенно!
+    if (BetToCall > CurrentBetOnTable) // Если есть что коллировать, значит был бет/рейз
+    {
+        // Минимальный рейз должен быть как минимум на сумму предыдущего бета/рейза.
+        // Если предыдущий бет был Х, то CurrentBetToCall = Х.
+        // Игрок уже поставил CurrentBetOnTable. Ему нужно доставить (X - CurrentBetOnTable).
+        // И затем еще сделать рейз как минимум на (X - предыдущая_ставка_до_бета_X).
+        // Это сложная часть, для MVP можно упростить до "рейз хотя бы на ББ сверх суммы колла".
+        // MinRaiseAmount = GameStateData->LastRaiseAmount > 0 ? GameStateData->LastRaiseAmount : MinBetAmount;
+        // Пока просто поставим фиксированное значение или на основе BigBlind
+        MinRaiseAmount = MinBetAmount; // Для простоты MVP, минимальный рейз - это ББ
+    }
+
+
+    // Игрок может сделать рейз, если у него достаточно фишек, чтобы:
+    // 1. Заколлировать текущую ставку (BetToCall - CurrentBetOnTable)
+    // 2. И затем добавить сверху хотя бы MinRaiseAmount
+    int64 TotalCostForMinRaise = (BetToCall - CurrentBetOnTable) + MinRaiseAmount;
+    if (PlayerStack >= TotalCostForMinRaise && MinRaiseAmount > 0) // MinRaiseAmount должен быть > 0
+    {
+        AllowedActions.Add(EPlayerAction::Raise);
+    }
+    else if (PlayerStack > 0 && BetToCall > CurrentBetOnTable && PlayerStack < TotalCostForMinRaise)
+    {
+        // Если игрок не может сделать минимальный рейз, но может пойти олл-ин,
+        // и этот олл-ин больше текущего колла, то это тоже может считаться рейзом (All-In Raise).
+        // Для MVP это можно опустить или добавить EPlayerAction::AllIn как отдельное.
+        // Пока просто не добавляем Raise, если нет на MinRaise.
+    }
+
+
+    // Дополнительно: AllIn - может быть доступен, если у игрока есть фишки
+    // Можно обрабатывать AllIn как специальный случай Bet/Call/Raise.
+    // Или добавить как отдельное действие. Пока не добавляем явно, т.к. Bet(stack), Call(stack), Raise(stack) покроют это.
+
+    UE_LOG(LogTemp, Log, TEXT("RequestPlayerAction for Seat %d (%s). Stack: %lld. BetToCall: %lld. MinRaise: %lld"),
+        SeatIndex, *CurrentPlayer.PlayerName, PlayerStack, BetToCall, MinRaiseAmount);
+
+    // Вызываем делегат, передавая всю необходимую информацию
+    OnActionRequestedDelegate.Broadcast(SeatIndex, AllowedActions, BetToCall, MinRaiseAmount, PlayerStack);
 }

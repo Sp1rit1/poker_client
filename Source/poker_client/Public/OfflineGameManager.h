@@ -8,6 +8,8 @@
 #include "Deck.h"
 #include "OfflineGameManager.generated.h" // Должен быть последним
 
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FOnActionRequestedSignature, int32, PlayerSeatIndex, const TArray<EPlayerAction>&, AllowedActions, int64, BetToCall, int64, MinRaiseAmount, int64, PlayerStack);
 /**
  * Класс UObject, отвечающий за управление логикой оффлайн игры в покер.
  * Создается и хранится в GameInstance для доступа на протяжении сессии.
@@ -25,6 +27,10 @@ public:
 	// Указатель на объект колоды карт
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game")
 	UDeck* Deck;
+
+	// --- ДЕЛЕГАТ ДЛЯ ЗАПРОСА ДЕЙСТВИЯ ---
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnActionRequestedSignature OnActionRequestedDelegate;
 
 	// Конструктор по умолчанию
 	UOfflineGameManager();
@@ -49,9 +55,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
 	void StartNewHand();
 
+	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
+	void RequestPlayerAction(int32 SeatIndex);
 
 private:
 	int32 GetNextActivePlayerSeat(int32 StartSeatIndex, bool bIncludeStartSeat = false) const;
 	void PostBlinds(int32 SmallBlindSeat, int32 BigBlindSeat, int64 SmallBlindAmount, int64 BigBlindAmount);
-	void RequestPlayerAction(int32 SeatIndex);
 };

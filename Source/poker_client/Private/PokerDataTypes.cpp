@@ -1,26 +1,24 @@
-#include "PokerDataTypes.h" // Важно указать правильный путь к .h файлу
-#include "UObject/Package.h" // Для StaticEnum
+п»ї#include "PokerDataTypes.h" // Р’Р°Р¶РЅРѕ СѓРєР°Р·Р°С‚СЊ РїСЂР°РІРёР»СЊРЅС‹Р№ РїСѓС‚СЊ Рє .h С„Р°Р№Р»Сѓ
+#include "UObject/Package.h" // Р”Р»СЏ StaticEnum
 
-// Реализация метода ToString для структуры FCard
+// Р РµР°Р»РёР·Р°С†РёСЏ РјРµС‚РѕРґР° ToString РґР»СЏ СЃС‚СЂСѓРєС‚СѓСЂС‹ FCard
 FString FCard::ToString() const
 {
-	// Получаем текстовое представление ранга и масти из Enums
+	// РџРѕР»СѓС‡Р°РµРј С‚РµРєСЃС‚РѕРІРѕРµ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ СЂР°РЅРіР° Рё РјР°СЃС‚Рё РёР· Enums
 	const UEnum* SuitEnum = StaticEnum<ECardSuit>();
 	const UEnum* RankEnum = StaticEnum<ECardRank>();
 
 	FString SuitStr = SuitEnum ? SuitEnum->GetNameStringByValue(static_cast<int64>(Suit)) : TEXT("?");
 	FString RankStr = RankEnum ? RankEnum->GetNameStringByValue(static_cast<int64>(Rank)) : TEXT("?");
 
-	// Опционально: укоротить строки для читаемости
-	// Например, "ECardRank::Ace" -> "A", "ECardSuit::Hearts" -> "h"
-	if (RankStr.StartsWith(TEXT("ECardRank::"))) RankStr = RankStr.RightChop(11); // Убираем префикс
-	if (RankStr == TEXT("Ten")) RankStr = TEXT("T"); // Особый случай для 10
-	else if (RankStr.Len() > 1) RankStr = RankStr.Left(1); // Берем первую букву (J, Q, K, A) или цифру
+	if (RankStr.StartsWith(TEXT("ECardRank::"))) RankStr = RankStr.RightChop(11); // РЈР±РёСЂР°РµРј РїСЂРµС„РёРєСЃ
+	if (RankStr == TEXT("Ten")) RankStr = TEXT("T"); // РћСЃРѕР±С‹Р№ СЃР»СѓС‡Р°Р№ РґР»СЏ 10
+	else if (RankStr.Len() > 1) RankStr = RankStr.Left(1); // Р‘РµСЂРµРј РїРµСЂРІСѓСЋ Р±СѓРєРІСѓ (J, Q, K, A) РёР»Рё С†РёС„СЂСѓ
 
-	if (SuitStr.StartsWith(TEXT("ECardSuit::"))) SuitStr = SuitStr.RightChop(11); // Убираем префикс
-	if (SuitStr.Len() > 0) SuitStr = SuitStr.ToLower().Left(1); // Берем первую букву (c, d, h, s)
+	if (SuitStr.StartsWith(TEXT("ECardSuit::"))) SuitStr = SuitStr.RightChop(11); // РЈР±РёСЂР°РµРј РїСЂРµС„РёРєСЃ
+	if (SuitStr.Len() > 0) SuitStr = SuitStr.ToLower().Left(1); // Р‘РµСЂРµРј РїРµСЂРІСѓСЋ Р±СѓРєРІСѓ (c, d, h, s)
 
-	return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr); // Формат типа "Ah", "Ks", "Td", "7c"
+	return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr); // Р¤РѕСЂРјР°С‚ С‚РёРїР° "Ah", "Ks", "Td", "7c"
 }
 
-// Здесь можно добавить реализации других методов структур, если они понадобятся.
+// Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ СЂРµР°Р»РёР·Р°С†РёРё РґСЂСѓРіРёС… РјРµС‚РѕРґРѕРІ СЃС‚СЂСѓРєС‚СѓСЂ, РµСЃР»Рё РѕРЅРё РїРѕРЅР°РґРѕР±СЏС‚СЃСЏ.

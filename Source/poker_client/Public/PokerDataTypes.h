@@ -1,20 +1,20 @@
-#pragma once
+п»ї#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/ObjectMacros.h" // Needed for UENUM, USTRUCT
 #include "PokerDataTypes.generated.h" // MUST be the last include
 
-// Масть карты
+// РњР°СЃС‚СЊ РєР°СЂС‚С‹
 UENUM(BlueprintType)
 enum class ECardSuit : uint8
 {
-	Clubs		UMETA(DisplayName = "Clubs"),	 // Трефы
-	Diamonds	UMETA(DisplayName = "Diamonds"), // Бубны
-	Hearts		UMETA(DisplayName = "Hearts"),	 // Червы
-	Spades		UMETA(DisplayName = "Spades")	 // Пики
+	Clubs		UMETA(DisplayName = "Clubs"),	 // РўСЂРµС„С‹
+	Diamonds	UMETA(DisplayName = "Diamonds"), // Р‘СѓР±РЅС‹
+	Hearts		UMETA(DisplayName = "Hearts"),	 // Р§РµСЂРІС‹
+	Spades		UMETA(DisplayName = "Spades")	 // РџРёРєРё
 };
 
-// Ранг карты
+// Р Р°РЅРі РєР°СЂС‚С‹
 UENUM(BlueprintType)
 enum class ECardRank : uint8
 {
@@ -27,168 +27,182 @@ enum class ECardRank : uint8
 	Eight		UMETA(DisplayName = "8"),
 	Nine		UMETA(DisplayName = "9"),
 	Ten			UMETA(DisplayName = "10"),
-	Jack		UMETA(DisplayName = "Jack"),	 // Валет
-	Queen		UMETA(DisplayName = "Queen"),	 // Дама
-	King		UMETA(DisplayName = "King"),	 // Король
-	Ace			UMETA(DisplayName = "Ace")		 // Туз
+	Jack		UMETA(DisplayName = "Jack"),	 // Р’Р°Р»РµС‚
+	Queen		UMETA(DisplayName = "Queen"),	 // Р”Р°РјР°
+	King		UMETA(DisplayName = "King"),	 // РљРѕСЂРѕР»СЊ
+	Ace			UMETA(DisplayName = "Ace")		 // РўСѓР·
 };
 
-// Ранг покерной комбинации (от младшей к старшей)
+// Р Р°РЅРі РїРѕРєРµСЂРЅРѕР№ РєРѕРјР±РёРЅР°С†РёРё (РѕС‚ РјР»Р°РґС€РµР№ Рє СЃС‚Р°СЂС€РµР№)
 UENUM(BlueprintType)
 enum class EPokerHandRank : uint8
 {
-	HighCard		UMETA(DisplayName = "High Card"),		// Старшая карта
-	OnePair			UMETA(DisplayName = "One Pair"),		// Одна пара
-	TwoPair			UMETA(DisplayName = "Two Pair"),		// Две пары
-	ThreeOfAKind	UMETA(DisplayName = "Three of a Kind"), // Тройка (Сет/Трипс)
-	Straight		UMETA(DisplayName = "Straight"),		// Стрит
-	Flush			UMETA(DisplayName = "Flush"),			// Флеш
-	FullHouse		UMETA(DisplayName = "Full House"),		// Фулл Хаус
-	FourOfAKind		UMETA(DisplayName = "Four of a Kind"),	// Каре
-	StraightFlush	UMETA(DisplayName = "Straight Flush"),	// Стрит Флеш
-	RoyalFlush		UMETA(DisplayName = "Royal Flush")		// Роял Флеш
+	HighCard		UMETA(DisplayName = "High Card"),		// РЎС‚Р°СЂС€Р°СЏ РєР°СЂС‚Р°
+	OnePair			UMETA(DisplayName = "One Pair"),		// РћРґРЅР° РїР°СЂР°
+	TwoPair			UMETA(DisplayName = "Two Pair"),		// Р”РІРµ РїР°СЂС‹
+	ThreeOfAKind	UMETA(DisplayName = "Three of a Kind"), // РўСЂРѕР№РєР° (РЎРµС‚/РўСЂРёРїСЃ)
+	Straight		UMETA(DisplayName = "Straight"),		// РЎС‚СЂРёС‚
+	Flush			UMETA(DisplayName = "Flush"),			// Р¤Р»РµС€
+	FullHouse		UMETA(DisplayName = "Full House"),		// Р¤СѓР»Р» РҐР°СѓСЃ
+	FourOfAKind		UMETA(DisplayName = "Four of a Kind"),	// РљР°СЂРµ
+	StraightFlush	UMETA(DisplayName = "Straight Flush"),	// РЎС‚СЂРёС‚ Р¤Р»РµС€
+	RoyalFlush		UMETA(DisplayName = "Royal Flush")		// Р РѕСЏР» Р¤Р»РµС€
 };
 
-// Статус игрока в раздаче/за столом
+// РЎС‚Р°С‚СѓСЃ РёРіСЂРѕРєР° РІ СЂР°Р·РґР°С‡Рµ/Р·Р° СЃС‚РѕР»РѕРј
 UENUM(BlueprintType)
 enum class EPlayerStatus : uint8
 {
-	Waiting			UMETA(DisplayName = "Waiting"),			// Ожидает начала раздачи
-	SittingOut		UMETA(DisplayName = "Sitting Out"),		// Сидит за столом, но пропускает раздачи
-	Playing			UMETA(DisplayName = "Playing"),			// Участвует в текущей раздаче (общее) - можно детализировать
-	Folded			UMETA(DisplayName = "Folded"),			// Сбросил карты в текущей раздаче
-	Checked			UMETA(DisplayName = "Checked"),			// Сделал Чек
-	Called			UMETA(DisplayName = "Called"),			// Сделал Колл
-	Bet				UMETA(DisplayName = "Bet"),				// Сделал Бет
-	Raised			UMETA(DisplayName = "Raised"),			// Сделал Рейз
-	AllIn			UMETA(DisplayName = "All-In")			// Пошел Ва-банк
+	Waiting			UMETA(DisplayName = "Waiting"),			// РћР¶РёРґР°РµС‚ РЅР°С‡Р°Р»Р° СЂР°Р·РґР°С‡Рё
+	SittingOut		UMETA(DisplayName = "Sitting Out"),		// РЎРёРґРёС‚ Р·Р° СЃС‚РѕР»РѕРј, РЅРѕ РїСЂРѕРїСѓСЃРєР°РµС‚ СЂР°Р·РґР°С‡Рё
+	Playing			UMETA(DisplayName = "Playing"),			// РЈС‡Р°СЃС‚РІСѓРµС‚ РІ С‚РµРєСѓС‰РµР№ СЂР°Р·РґР°С‡Рµ (РѕР±С‰РµРµ) - РјРѕР¶РЅРѕ РґРµС‚Р°Р»РёР·РёСЂРѕРІР°С‚СЊ
+	Folded			UMETA(DisplayName = "Folded"),			// РЎР±СЂРѕСЃРёР» РєР°СЂС‚С‹ РІ С‚РµРєСѓС‰РµР№ СЂР°Р·РґР°С‡Рµ
+	Checked			UMETA(DisplayName = "Checked"),			// РЎРґРµР»Р°Р» Р§РµРє
+	Called			UMETA(DisplayName = "Called"),			// РЎРґРµР»Р°Р» РљРѕР»Р»
+	Bet				UMETA(DisplayName = "Bet"),				// РЎРґРµР»Р°Р» Р‘РµС‚
+	Raised			UMETA(DisplayName = "Raised"),			// РЎРґРµР»Р°Р» Р РµР№Р·
+	AllIn			UMETA(DisplayName = "All-In")			// РџРѕС€РµР» Р’Р°-Р±Р°РЅРє
 };
 
-// Стадия текущей игры/раздачи
+// РЎС‚Р°РґРёСЏ С‚РµРєСѓС‰РµР№ РёРіСЂС‹/СЂР°Р·РґР°С‡Рё
 UENUM(BlueprintType)
 enum class EGameStage : uint8
 {
-	WaitingForPlayers	UMETA(DisplayName = "Waiting For Players"), // Ожидание игроков
-	Preflop				UMETA(DisplayName = "Preflop"),			// Префлоп (ставки после раздачи карманных карт)
-	Flop				UMETA(DisplayName = "Flop"),				// Флоп (выложены 3 общие карты)
-	Turn				UMETA(DisplayName = "Turn"),				// Терн (выложена 4-я общая карта)
-	River				UMETA(DisplayName = "River"),				// Ривер (выложена 5-я общая карта)
-	Showdown			UMETA(DisplayName = "Showdown")			// Вскрытие карт
+	WaitingForPlayers	UMETA(DisplayName = "Waiting For Players"), // РћР¶РёРґР°РЅРёРµ РёРіСЂРѕРєРѕРІ
+	Preflop				UMETA(DisplayName = "Preflop"),			// РџСЂРµС„Р»РѕРї (СЃС‚Р°РІРєРё РїРѕСЃР»Рµ СЂР°Р·РґР°С‡Рё РєР°СЂРјР°РЅРЅС‹С… РєР°СЂС‚)
+	Flop				UMETA(DisplayName = "Flop"),				// Р¤Р»РѕРї (РІС‹Р»РѕР¶РµРЅС‹ 3 РѕР±С‰РёРµ РєР°СЂС‚С‹)
+	Turn				UMETA(DisplayName = "Turn"),				// РўРµСЂРЅ (РІС‹Р»РѕР¶РµРЅР° 4-СЏ РѕР±С‰Р°СЏ РєР°СЂС‚Р°)
+	River				UMETA(DisplayName = "River"),				// Р РёРІРµСЂ (РІС‹Р»РѕР¶РµРЅР° 5-СЏ РѕР±С‰Р°СЏ РєР°СЂС‚Р°)
+	Showdown			UMETA(DisplayName = "Showdown")			// Р’СЃРєСЂС‹С‚РёРµ РєР°СЂС‚
+};
+
+// Р’РѕР·РјРѕР¶РЅС‹Рµ РґРµР№СЃС‚РІРёСЏ РёРіСЂРѕРєР°
+UENUM(BlueprintType)
+enum class EPlayerAction : uint8
+{
+	None		UMETA(DisplayName = "None"),      // РќРµС‚ РґРµР№СЃС‚РІРёСЏ / РћР¶РёРґР°РЅРёРµ
+	Fold		UMETA(DisplayName = "Fold"),      // РЎР±СЂРѕСЃРёС‚СЊ РєР°СЂС‚С‹
+	Check		UMETA(DisplayName = "Check"),     // РџСЂРѕРїСѓСЃС‚РёС‚СЊ С…РѕРґ (РµСЃР»Рё РЅРµС‚ СЃС‚Р°РІРѕРє)
+	Call		UMETA(DisplayName = "Call"),      // РЈСЂР°РІРЅСЏС‚СЊ СЃС‚Р°РІРєСѓ
+	Bet			UMETA(DisplayName = "Bet"),       // РЎРґРµР»Р°С‚СЊ РїРµСЂРІСѓСЋ СЃС‚Р°РІРєСѓ РІ СЂР°СѓРЅРґРµ
+	Raise		UMETA(DisplayName = "Raise"),     // РџРѕРІС‹СЃРёС‚СЊ РїСЂРµРґС‹РґСѓС‰СѓСЋ СЃС‚Р°РІРєСѓ
+	AllIn       UMETA(DisplayName = "All-In")     // РџРѕР№С‚Рё РІР°-Р±Р°РЅРє (РјРѕР¶РµС‚ Р±С‹С‚СЊ РІР°СЂРёР°РЅС‚РѕРј Bet, Call РёР»Рё Raise)
+	// РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РґСЂСѓРіРёРµ, РµСЃР»Рё РїРѕРЅР°РґРѕР±СЏС‚СЃСЏ (РЅР°РїСЂРёРјРµСЂ, PostBlind)
 };
 
 
 
-// Структура, представляющая одну игральную карту
+// РЎС‚СЂСѓРєС‚СѓСЂР°, РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰Р°СЏ РѕРґРЅСѓ РёРіСЂР°Р»СЊРЅСѓСЋ РєР°СЂС‚Сѓ
 USTRUCT(BlueprintType)
 struct FCard
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
-	ECardSuit Suit = ECardSuit::Clubs; // Масть по умолчанию
+	ECardSuit Suit = ECardSuit::Clubs; // РњР°СЃС‚СЊ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
-	ECardRank Rank = ECardRank::Two; // Ранг по умолчанию
+	ECardRank Rank = ECardRank::Two; // Р Р°РЅРі РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 
-	// Конструкторы
+	// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂС‹
 	FCard() = default;
 	FCard(ECardSuit InSuit, ECardRank InRank) : Suit(InSuit), Rank(InRank) {}
 
-	// Функция для текстового представления (для отладки)
+	// Р¤СѓРЅРєС†РёСЏ РґР»СЏ С‚РµРєСЃС‚РѕРІРѕРіРѕ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёСЏ (РґР»СЏ РѕС‚Р»Р°РґРєРё)
 	FString ToString() const;
 
-	// Оператор сравнения
+	// РћРїРµСЂР°С‚РѕСЂ СЃСЂР°РІРЅРµРЅРёСЏ
 	bool operator==(const FCard& Other) const
 	{
 		return Suit == Other.Suit && Rank == Other.Rank;
 	}
-	// Добавим оператор неравенства для удобства
+	// Р”РѕР±Р°РІРёРј РѕРїРµСЂР°С‚РѕСЂ РЅРµСЂР°РІРµРЅСЃС‚РІР° РґР»СЏ СѓРґРѕР±СЃС‚РІР°
 	bool operator!=(const FCard& Other) const
 	{
 		return !(*this == Other);
 	}
-	// (Опционально) Оператор < для сортировки, если понадобится
+	// (РћРїС†РёРѕРЅР°Р»СЊРЅРѕ) РћРїРµСЂР°С‚РѕСЂ < РґР»СЏ СЃРѕСЂС‚РёСЂРѕРІРєРё, РµСЃР»Рё РїРѕРЅР°РґРѕР±РёС‚СЃСЏ
 	bool operator<(const FCard& Other) const
 	{
 		return Rank < Other.Rank || (Rank == Other.Rank && Suit < Other.Suit);
 	}
 };
 
-// Структура, представляющая результат оценки покерной комбинации
+// РЎС‚СЂСѓРєС‚СѓСЂР°, РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰Р°СЏ СЂРµР·СѓР»СЊС‚Р°С‚ РѕС†РµРЅРєРё РїРѕРєРµСЂРЅРѕР№ РєРѕРјР±РёРЅР°С†РёРё
 USTRUCT(BlueprintType)
 struct FPokerHandResult
 {
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	EPokerHandRank HandRank = EPokerHandRank::HighCard; // Ранг комбинации
+	EPokerHandRank HandRank = EPokerHandRank::HighCard; // Р Р°РЅРі РєРѕРјР±РёРЅР°С†РёРё
 
-	// Кикеры - карты, определяющие силу руки при равных рангах
-	// Храним только ранги, т.к. масть в кикерах не важна для стандартного покера
+	// РљРёРєРµСЂС‹ - РєР°СЂС‚С‹, РѕРїСЂРµРґРµР»СЏСЋС‰РёРµ СЃРёР»Сѓ СЂСѓРєРё РїСЂРё СЂР°РІРЅС‹С… СЂР°РЅРіР°С…
+	// РҐСЂР°РЅРёРј С‚РѕР»СЊРєРѕ СЂР°РЅРіРё, С‚.Рє. РјР°СЃС‚СЊ РІ РєРёРєРµСЂР°С… РЅРµ РІР°Р¶РЅР° РґР»СЏ СЃС‚Р°РЅРґР°СЂС‚РЅРѕРіРѕ РїРѕРєРµСЂР°
 	UPROPERTY(BlueprintReadOnly, Category = "Poker")
 	TArray<ECardRank> Kickers;
 
-	// (Опционально) Можно добавить ранги ключевых карт комбинации
+	// (РћРїС†РёРѕРЅР°Р»СЊРЅРѕ) РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ СЂР°РЅРіРё РєР»СЋС‡РµРІС‹С… РєР°СЂС‚ РєРѕРјР±РёРЅР°С†РёРё
 	// UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	// ECardRank PrimaryRank = ECardRank::Two; // Ранг пары, тройки, каре, старшая карта стрита/флеша
+	// ECardRank PrimaryRank = ECardRank::Two; // Р Р°РЅРі РїР°СЂС‹, С‚СЂРѕР№РєРё, РєР°СЂРµ, СЃС‚Р°СЂС€Р°СЏ РєР°СЂС‚Р° СЃС‚СЂРёС‚Р°/С„Р»РµС€Р°
 	// UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	// ECardRank SecondaryRank = ECardRank::Two; // Ранг второй пары, пары в фулл-хаусе
+	// ECardRank SecondaryRank = ECardRank::Two; // Р Р°РЅРі РІС‚РѕСЂРѕР№ РїР°СЂС‹, РїР°СЂС‹ РІ С„СѓР»Р»-С…Р°СѓСЃРµ
 
 	FPokerHandResult() = default;
 };
 
-// Структура, хранящая данные об одном игроке (или месте) за столом
+// РЎС‚СЂСѓРєС‚СѓСЂР°, С…СЂР°РЅСЏС‰Р°СЏ РґР°РЅРЅС‹Рµ РѕР± РѕРґРЅРѕРј РёРіСЂРѕРєРµ (РёР»Рё РјРµСЃС‚Рµ) Р·Р° СЃС‚РѕР»РѕРј
 USTRUCT(BlueprintType)
 struct FPlayerSeatData
 {
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, Category = "Player Seat")
-	int32 SeatIndex = -1; // Индекс места (0-8)
+	int32 SeatIndex = -1; // РРЅРґРµРєСЃ РјРµСЃС‚Р° (0-8)
 
 	UPROPERTY(BlueprintReadOnly, Category = "Player Seat")
-	FString PlayerName = TEXT("Empty"); // Имя игрока
+	FString PlayerName = TEXT("Empty"); // РРјСЏ РёРіСЂРѕРєР°
 
 	UPROPERTY(BlueprintReadOnly, Category = "Player Seat")
-	int64 PlayerId = -1; // ID пользователя (если залогинен)
+	int64 PlayerId = -1; // ID РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РµСЃР»Рё Р·Р°Р»РѕРіРёРЅРµРЅ)
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite чтобы можно было менять извне
-		int64 Stack = 0; // Количество фишек
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite С‡С‚РѕР±С‹ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ РјРµРЅСЏС‚СЊ РёР·РІРЅРµ
+		int64 Stack = 0; // РљРѕР»РёС‡РµСЃС‚РІРѕ С„РёС€РµРє
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite - сюда будем класть карты
-		TArray<FCard> HoleCards; // Карманные карты (обычно 2)
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite - СЃСЋРґР° Р±СѓРґРµРј РєР»Р°СЃС‚СЊ РєР°СЂС‚С‹
+		TArray<FCard> HoleCards; // РљР°СЂРјР°РЅРЅС‹Рµ РєР°СЂС‚С‹ (РѕР±С‹С‡РЅРѕ 2)
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для обновления статуса
-		EPlayerStatus Status = EPlayerStatus::Waiting; // Текущий статус игрока
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ СЃС‚Р°С‚СѓСЃР°
+		EPlayerStatus Status = EPlayerStatus::Waiting; // РўРµРєСѓС‰РёР№ СЃС‚Р°С‚СѓСЃ РёРіСЂРѕРєР°
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для установки, кто бот
-		bool bIsBot = false; // Является ли это место ботом
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё, РєС‚Рѕ Р±РѕС‚
+		bool bIsBot = false; // РЇРІР»СЏРµС‚СЃСЏ Р»Рё СЌС‚Рѕ РјРµСЃС‚Рѕ Р±РѕС‚РѕРј
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для подсветки хода
-		bool bIsTurn = false; // Сейчас ход этого игрока?
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РїРѕРґСЃРІРµС‚РєРё С…РѕРґР°
+		bool bIsTurn = false; // РЎРµР№С‡Р°СЃ С…РѕРґ СЌС‚РѕРіРѕ РёРіСЂРѕРєР°?
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения баттона
-		bool bIsDealer = false; // Находится ли баттон дилера на этом месте?
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ Р±Р°С‚С‚РѕРЅР°
+		bool bIsDealer = false; // РќР°С…РѕРґРёС‚СЃСЏ Р»Рё Р±Р°С‚С‚РѕРЅ РґРёР»РµСЂР° РЅР° СЌС‚РѕРј РјРµСЃС‚Рµ?
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения SB
-		bool bIsSmallBlind = false; // Поставил ли малый блайнд?
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ SB
+		bool bIsSmallBlind = false; // РџРѕСЃС‚Р°РІРёР» Р»Рё РјР°Р»С‹Р№ Р±Р»Р°Р№РЅРґ?
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения BB
-		bool bIsBigBlind = false; // Поставил ли большой блайнд?
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ BB
+		bool bIsBigBlind = false; // РџРѕСЃС‚Р°РІРёР» Р»Рё Р±РѕР»СЊС€РѕР№ Р±Р»Р°Р№РЅРґ?
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения ставки
-		int64 CurrentBet = 0; // Сумма, поставленная в текущем раунде торговли
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ СЃС‚Р°РІРєРё
+		int64 CurrentBet = 0; // РЎСѓРјРјР°, РїРѕСЃС‚Р°РІР»РµРЅРЅР°СЏ РІ С‚РµРєСѓС‰РµРј СЂР°СѓРЅРґРµ С‚РѕСЂРіРѕРІР»Рё
 
-	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для возможности сидеть вне игры
-		bool bIsSittingIn = true; // Участвует ли игрок сейчас (не в Sit Out)?
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite РґР»СЏ РІРѕР·РјРѕР¶РЅРѕСЃС‚Рё СЃРёРґРµС‚СЊ РІРЅРµ РёРіСЂС‹
+		bool bIsSittingIn = true; // РЈС‡Р°СЃС‚РІСѓРµС‚ Р»Рё РёРіСЂРѕРє СЃРµР№С‡Р°СЃ (РЅРµ РІ Sit Out)?
 
 	FPlayerSeatData() = default;
 
-	// Конструктор для удобной инициализации
+	// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РґР»СЏ СѓРґРѕР±РЅРѕР№ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё
 	FPlayerSeatData(int32 InSeatIndex, const FString& InPlayerName, int64 InPlayerId, int64 InStack, bool InIsBot)
 		: SeatIndex(InSeatIndex), PlayerName(InPlayerName), PlayerId(InPlayerId), Stack(InStack), bIsBot(InIsBot)
 	{
-		Status = EPlayerStatus::Waiting; // Начальный статус
-		HoleCards.Reserve(2); // Резервируем место под 2 карты
+		Status = EPlayerStatus::Waiting; // РќР°С‡Р°Р»СЊРЅС‹Р№ СЃС‚Р°С‚СѓСЃ
+		HoleCards.Reserve(2); // Р РµР·РµСЂРІРёСЂСѓРµРј РјРµСЃС‚Рѕ РїРѕРґ 2 РєР°СЂС‚С‹
 	}
 };
