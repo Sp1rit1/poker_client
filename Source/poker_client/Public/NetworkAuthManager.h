@@ -8,6 +8,8 @@
 // Прямое объявление для UMyGameInstance, чтобы избежать циклической зависимости в заголовках
 class UMyGameInstance;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAddFriendAttemptCompleted, bool, bSuccess, const FString&, Message);
+
 UCLASS()
 class POKER_CLIENT_API UNetworkAuthManager : public UObject // Замените YOURPROJECT_API
 {
@@ -15,7 +17,6 @@ class POKER_CLIENT_API UNetworkAuthManager : public UObject // Замените 
 
 public:
     UNetworkAuthManager();
-
     /**
      * Инициализирует менеджер, устанавливая ссылку на GameInstance и базовый URL API.
      * @param InGameInstance Указатель на владеющий GameInstance.
@@ -40,6 +41,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Network|Authentication")
     void RequestRegister(const FString& Username, const FString& Password, const FString& Email);
 
+    UPROPERTY(BlueprintAssignable, Category = "Network|Friends")
+    FOnAddFriendAttemptCompleted OnAddFriendAttemptCompleted;
+
+    UFUNCTION(BlueprintCallable, Category = "Network|Friends")
+    void RequestAddFriend(const FString& FriendCode);
+
 protected:
     /**
      * Обработчик ответа на запрос входа.
@@ -52,6 +59,9 @@ protected:
      * Вызывается по завершении HTTP запроса.
      */
     void OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+
+    //Обработчик ответа на запрос добавления друга.
+    void OnAddFriendResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
 private:
     // Указатель на владеющий GameInstance для доступа к его состоянию и делегатам

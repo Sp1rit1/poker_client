@@ -128,6 +128,94 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     }
 }
 
+
+
+void UNetworkAuthManager::RequestAddFriend(const FString& FriendCode)
+{
+    if (!OwningGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("RequestAddFriend: OwningGameInstance is null. Cannot proceed."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Внутренняя ошибка: нет GameInstance."));
+        }
+        return;
+    }
+    if (ApiBaseUrl.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("RequestAddFriend: ApiBaseUrl is not set. Cannot proceed."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Внутренняя ошибка: не задан URL API."));
+        }
+        return;
+    }
+    if (FriendCode.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RequestAddFriend: FriendCode is empty."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Код друга не может быть пустым."));
+        }
+        return;
+    }
+    // Проверяем только флаг bIsLoggedIn, так как токен теперь не хранится явно на клиенте
+    if (!OwningGameInstance->bIsLoggedIn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RequestAddFriend: User not logged in."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Для добавления друга необходимо войти в аккаунт."));
+        }
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestAddFriend: Attempting to add friend with code: %s"), *FriendCode);
+
+    TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
+    RequestJson->SetStringField(TEXT("friendCode"), FriendCode);
+
+    FString RequestBodyString;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBodyString);
+    if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
+    {
+        UE_LOG(LogTemp, Error, TEXT("UNetworkAuthManager::RequestAddFriend: Failed to serialize JSON body."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Внутренняя ошибка: не удалось создать запрос."));
+        }
+        return;
+    }
+
+    FHttpModule& HttpModule = FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
+
+    HttpRequest->SetVerb(TEXT("POST"));
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/friends/add"));
+    HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    // Заголовок Authorization с токеном больше НЕ НУЖЕН, если используются сессии и Cookies
+    // HttpRequest->SetHeader(TEXT("Authorization"), TEXT("Bearer ") + OwningGameInstance->LoggedInAuthToken); 
+    HttpRequest->SetContentAsString(RequestBodyString);
+
+    HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnAddFriendResponseReceived);
+
+    if (!HttpRequest->ProcessRequest())
+    {
+        UE_LOG(LogTemp, Error, TEXT("UNetworkAuthManager::RequestAddFriend: Failed to start HTTP request."));
+        if (OnAddFriendAttemptCompleted.IsBound())
+        {
+            OnAddFriendAttemptCompleted.Broadcast(false, TEXT("Ошибка сети: не удалось отправить запрос."));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestAddFriend: HTTP request sent to %s"), *(ApiBaseUrl + TEXT("/friends/add")));
+    }
+}
+
+
+
+
 void UNetworkAuthManager::OnLoginResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
     if (!OwningGameInstance)
@@ -321,4 +409,78 @@ void UNetworkAuthManager::OnRegisterResponseReceived(FHttpRequestPtr Request, FH
 
     UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::OnRegisterResponseReceived: Broadcasting OnRegisterAttemptCompleted. Success: %s, Message: %s"), bRegisterSuccess ? TEXT("True") : TEXT("False"), *ResultMessage);
     OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(bRegisterSuccess, ResultMessage);
+}
+
+// --- ИЗМЕНЕННАЯ ФУНКЦИЯ OnAddFriendResponseReceived ---
+void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+    if (!OwningGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("OnAddFriendResponseReceived: OwningGameInstance is null. Cannot process response or broadcast."));
+        return;
+    }
+    // Делегат будет вызван в конце, поэтому проверку IsBound() лучше делать перед Broadcast
+
+    bool bAddSuccess = false;
+    FString ResultMessage = TEXT("Неизвестная ошибка при добавлении друга.");
+
+    if (!bWasSuccessful || !Response.IsValid())
+    {
+        ResultMessage = TEXT("Сервер не доступен или проблемы с сетью.");
+        UE_LOG(LogTemp, Error, TEXT("UNetworkAuthManager::OnAddFriendResponseReceived: Request failed or response invalid. Message: %s"), *ResultMessage);
+        if (OnAddFriendAttemptCompleted.IsBound()) { OnAddFriendAttemptCompleted.Broadcast(false, ResultMessage); }
+        return;
+    }
+
+    int32 ResponseCode = Response->GetResponseCode();
+    FString ResponseBody = Response->GetContentAsString();
+    UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::OnAddFriendResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
+
+    if (ResponseCode == 200 || ResponseCode == 201)
+    {
+        bAddSuccess = true;
+        TSharedPtr<FJsonObject> ResponseJson;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
+        if (FJsonSerializer::Deserialize(Reader, ResponseJson) && ResponseJson.IsValid() && ResponseJson->HasField(TEXT("message")))
+        {
+            ResultMessage = ResponseJson->GetStringField(TEXT("message"));
+        }
+        else {
+            // Если сервер не вернул "message", но код 200/201, считаем успехом
+            ResultMessage = TEXT("Друг успешно добавлен!");
+        }
+        UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::OnAddFriendResponseReceived: Friend added. Message: %s"), *ResultMessage);
+    }
+    else
+    {
+        // Логика парсинга JSON ошибки, как в OnLoginResponseReceived
+        TSharedPtr<FJsonObject> ErrorJson;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
+        if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid())
+        {
+            FString ServerErrorMsg;
+            if (ErrorJson->TryGetStringField(TEXT("message"), ServerErrorMsg) || ErrorJson->TryGetStringField(TEXT("error"), ServerErrorMsg))
+            {
+                if (!ServerErrorMsg.IsEmpty()) ResultMessage = ServerErrorMsg;
+            }
+            // ... (обработка массива "errors", если нужно) ...
+        }
+        else if (!ResponseBody.IsEmpty())
+        {
+            ResultMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d): %s"), ResponseCode, *ResponseBody);
+        }
+        else
+        {
+            ResultMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d)"), ResponseCode);
+        }
+        UE_LOG(LogTemp, Warning, TEXT("UNetworkAuthManager::OnAddFriendResponseReceived: Failed to add friend. Final Message: %s"), *ResultMessage);
+    }
+
+    if (OnAddFriendAttemptCompleted.IsBound()) // Проверяем перед вызовом
+    {
+        OnAddFriendAttemptCompleted.Broadcast(bAddSuccess, ResultMessage);
+    }
+    else {
+        UE_LOG(LogTemp, Warning, TEXT("OnAddFriendResponseReceived: OnAddFriendAttemptCompleted delegate is not bound. UI will not be notified."));
+    }
 }
