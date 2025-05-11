@@ -55,6 +55,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI Navigation|MenuScreens")
     void ShowSettings();
 
+    UFUNCTION(BlueprintCallable, Category = "UI Navigation|MenuScreens")
+    void TriggerTransitionToGameLevel();
+
     /** Возвращает текущий активный виджет, если он есть и принадлежит этому менеджеру.
      *  Может быть полезно для проверки, какой экран сейчас открыт.
      */

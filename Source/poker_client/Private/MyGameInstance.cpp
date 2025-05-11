@@ -3,6 +3,7 @@
 #include "NetworkAuthManager.h"
 #include "OfflineGameManager.h"   // OfflineGameManager остался
 #include "MenuScreenUIManager.h"
+#include "LevelTransitionManager.h"
 
 // --- Основные инклуды Unreal Engine (как были) ---
 #include "GameFramework/PlayerController.h"
@@ -62,10 +63,7 @@ void UMyGameInstance::Init()
             this,
             StartScreenClass,
             LoginScreenClass,
-            RegisterScreenClass,
-            ScreensaverClass,
-            ScreensaverMediaPlayerAsset,
-            ScreensaverMediaSourceAsset
+            RegisterScreenClass
         );
         UE_LOG(LogTemp, Log, TEXT("StartScreenUIManager created and initialized."));
     }
@@ -96,6 +94,14 @@ void UMyGameInstance::Init()
     if (OfflineGameManager) { UE_LOG(LogTemp, Log, TEXT("OfflineGameManager created successfully.")); }
     else { UE_LOG(LogTemp, Error, TEXT("Failed to create OfflineGameManager!")); }
 
+    LevelTransitionManagerInstance = NewObject<ULevelTransitionManager>(this);
+    if (LevelTransitionManagerInstance) // Всегда проверяйте указатель после NewObject
+    {
+        LevelTransitionManagerInstance->Initialize(this); // Вызов метода через ->
+        UE_LOG(LogTemp, Log, TEXT("LevelTransitionManager created and initialized."));
+    }
+    else { UE_LOG(LogTemp, Error, TEXT("Failed to create LevelTransitionManagerInstance!")); }
+
 
     // Запуск таймера для DelayedInitialResize (как было)
     const float ResizeDelay = 0.1f;
@@ -104,6 +110,8 @@ void UMyGameInstance::Init()
 
     UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::Init() Finished."));
 }
+
+
 
 void UMyGameInstance::DelayedInitialResize()
 {

@@ -7,6 +7,7 @@ class UStartScreenUIManager;
 class UNetworkAuthManager;
 class UOfflineGameManager;
 class UMenuScreenUIManager;
+class ULevelTransitionManager;
 class UUserWidget; // Базовый класс виджетов
 class UMediaPlayer;
 class UMediaSource;
@@ -54,16 +55,6 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "UI|Start Screens")
     TSubclassOf<UUserWidget> RegisterScreenClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TSubclassOf<UUserWidget> ScreensaverClass;
-
-    // --- Ассеты для экрана загрузки (настраиваются в Blueprint GameInstance) ---
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TObjectPtr<UMediaPlayer> ScreensaverMediaPlayerAsset;
-
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TObjectPtr<UMediaSource> ScreensaverMediaSourceAsset;
-
     // --- Классы виджетов для основных экранов
 
     UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
@@ -80,6 +71,15 @@ public:
 
     UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
     TSubclassOf<UUserWidget> SettingsClass;
+
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TSubclassOf<UUserWidget> DefaultScreensaverWidgetClass;
+
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TObjectPtr<UMediaPlayer> DefaultScreensaverMediaPlayer;
+
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TObjectPtr<UMediaSource> DefaultScreensaverMediaSource;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings") 
     int32 PendingOfflineNumBots = 1;
@@ -114,6 +114,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Managers")
     UMenuScreenUIManager* GetMenuScreenUIManager() const { return MenuScreenUIManagerInstance; }
 
+    UFUNCTION(BlueprintPure, Category = "Managers")
+    ULevelTransitionManager* GetLevelTransitionManager() const { return LevelTransitionManagerInstance; }
+
     // Обновленная функция для установки статуса логина
     UFUNCTION(BlueprintCallable, Category = "User Session")
     void SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername, const FString& NewFriendCode);
@@ -144,6 +147,9 @@ protected:
 
     UPROPERTY()
     TObjectPtr<UMenuScreenUIManager> MenuScreenUIManagerInstance;
+
+    UPROPERTY()
+    TObjectPtr<ULevelTransitionManager> LevelTransitionManagerInstance;
 
     FTimerHandle ResizeTimerHandle;
     FIntPoint DesiredWindowedResolution; // Для сохранения при выходе

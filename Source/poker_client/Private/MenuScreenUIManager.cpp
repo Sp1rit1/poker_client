@@ -1,4 +1,5 @@
 ﻿#include "MenuScreenUIManager.h"
+#include "LevelTransitionManager.h"
 #include "MyGameInstance.h" // Для доступа к функциям GameInstance
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
@@ -152,5 +153,26 @@ void UMenuScreenUIManager::ShowSettings()
     if (RawPtrInstance != SettingsInstance.Get())
     {
         SettingsInstance = RawPtrInstance;
+    }
+}
+
+void UMenuScreenUIManager::TriggerTransitionToGameLevel() // Пример новой функции
+{
+    if (!OwningGameInstance) return;
+    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
+    if (LTM)
+    {
+        // Формируем опции для смены GameMode на BP_PokerGameMode
+        FString GameModeOptions = FString::Printf(TEXT("?Game=/Game/Blueprints/GameModes/BP_PokerGameMode.BP_PokerGameMode_C"));
+        // ^^^ ЗАМЕНИТЕ ПУТЬ НА ВАШ ПРАВИЛЬНЫЙ ПУТЬ К BP_PokerGameMode + _C
+
+        // Используем дефолтные ассеты из GameInstance (или можете иметь другие для этого перехода)
+        LTM->StartLoadLevelWithVideo(
+            FName("L_PokerTable"), // Имя вашего игрового уровня
+            OwningGameInstance->DefaultScreensaverWidgetClass,
+            OwningGameInstance->DefaultScreensaverMediaPlayer,
+            OwningGameInstance->DefaultScreensaverMediaSource,
+            GameModeOptions
+        );
     }
 }

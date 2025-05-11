@@ -1,6 +1,6 @@
 ﻿#include "StartScreenUIManager.h"
 #include "MyGameInstance.h" // Для доступа к функциям GameInstance
-
+#include "LevelTransitionManager.h"
 // Инклуды из вашего MyGameInstance.cpp, необходимые для этой логики
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/UserWidget.h"
@@ -18,31 +18,21 @@ UStartScreenUIManager::UStartScreenUIManager()
     StartScreenClass = nullptr;
     LoginScreenClass = nullptr;
     RegisterScreenClass = nullptr;
-    ScreensaverClass = nullptr;
-    ScreensaverMediaPlayerAsset = nullptr;
-    ScreensaverMediaSourceAsset = nullptr;
     CurrentTopLevelWidget = nullptr;
-    LevelToLoadAsync = NAME_None;
-    bIsLevelLoadComplete = false;
-    bIsScreensaverVideoFinished = false;
 }
 
 void UStartScreenUIManager::Initialize(
     UMyGameInstance* InGameInstance,
     TSubclassOf<UUserWidget> InStartScreenClass,
     TSubclassOf<UUserWidget> InLoginScreenClass,
-    TSubclassOf<UUserWidget> InRegisterScreenClass,
-    TSubclassOf<UUserWidget> InScreensaverClass,
-    UMediaPlayer* InScreensaverMediaPlayerAsset,
-    UMediaSource* InScreensaverMediaSourceAsset)
+    TSubclassOf<UUserWidget> InRegisterScreenClass
+)
+
 {
     OwningGameInstance = InGameInstance;
     StartScreenClass = InStartScreenClass;
     LoginScreenClass = InLoginScreenClass;
     RegisterScreenClass = InRegisterScreenClass;
-    ScreensaverClass = InScreensaverClass;
-    ScreensaverMediaPlayerAsset = InScreensaverMediaPlayerAsset;
-    ScreensaverMediaSourceAsset = InScreensaverMediaSourceAsset;
 
     if (!OwningGameInstance)
     {
@@ -125,128 +115,62 @@ void UStartScreenUIManager::ShowRegisterScreen()
     ShowWidget<UUserWidget>(RegisterScreenClass, false);
 }
 
-void UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget(FName LevelName)
+
+void UStartScreenUIManager::TriggerTransitionToMenuLevel() // Пример новой функции
 {
-    if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: OwningGameInstance is null.")); return; }
+    if (!OwningGameInstance) return;
+    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
+    if (LTM)
+    {
+        // Используем дефолтные ассеты из GameInstance
+        LTM->StartLoadLevelWithVideo(
+            FName("MenuLevel"), // Имя вашего уровня меню
+            OwningGameInstance->DefaultScreensaverWidgetClass,
+            OwningGameInstance->DefaultScreensaverMediaPlayer,
+            OwningGameInstance->DefaultScreensaverMediaSource,
+            TEXT("") // GameMode для MenuLevel будет установлен в его World Settings
+        );
+    }
+}
 
-    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget: ENTERING. LevelName='%s'"), *LevelName.ToString());
-
-    if (!ScreensaverClass) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverClass is not set!")); return; }
-    if (LevelName.IsNone()) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: LevelName is None!")); return; }
-    if (!ScreensaverMediaPlayerAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverMediaPlayerAsset is not set!")); return; }
-    if (!ScreensaverMediaSourceAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverMediaSourceAsset is not set!")); return; }
-
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: Showing Screensaver widget '%s'..."), *ScreensaverClass->GetName());
-    UUserWidget* ScreensaverWidgetInstance = ShowWidget<UUserWidget>(ScreensaverClass, true); // Экран загрузки полноэкранный
-    if (!ScreensaverWidgetInstance) {
-        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Failed to create/show ScreensaverWidget! Fallback OpenLevel."));
-        UGameplayStatics::OpenLevel(OwningGameInstance, LevelName); // Используем OwningGameInstance как WorldContext
+void UStartScreenUIManager::TransitionToMainLevel(FName LevelName)
+{
+    if (!OwningGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::TransitionToMainLevel - OwningGameInstance is null!"));
         return;
     }
 
-    LevelToLoadAsync = LevelName;
-    bIsLevelLoadComplete = false;
-    bIsScreensaverVideoFinished = false;
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: State reset. LevelToLoad='%s'"), *LevelToLoadAsync.ToString());
-
-    // Настройка виджета (передача ссылок на плеер/источник через рефлексию, как было у вас)
-    // Этот код взят из вашего MyGameInstance.cpp и предполагает, что имена свойств в виджете такие же.
-    UClass* ActualWidgetClass = ScreensaverWidgetInstance->GetClass();
-    if (ActualWidgetClass && ActualWidgetClass->IsChildOf(ScreensaverClass))
+    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
+    if (LTM)
     {
-        FProperty* MediaPlayerBaseProp = ActualWidgetClass->FindPropertyByName(FName("ScreensaverMediaPlayer"));
-        FObjectProperty* MediaPlayerProp = CastField<FObjectProperty>(MediaPlayerBaseProp);
-        if (MediaPlayerProp) { MediaPlayerProp->SetObjectPropertyValue_InContainer(ScreensaverWidgetInstance, ScreensaverMediaPlayerAsset); }
-        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithScreensaverVideoWidget: Could not find/cast 'ScreensaverMediaPlayer' property in widget.")); }
+        UE_LOG(LogTemp, Log, TEXT("UStartScreenUIManager: Initiating transition to level '%s' via LevelTransitionManager."), *LevelName.ToString());
 
-        FProperty* MediaSourceBaseProp = ActualWidgetClass->FindPropertyByName(FName("ScreensaverMediaSource"));
-        FObjectProperty* MediaSourceProp = CastField<FObjectProperty>(MediaSourceBaseProp);
-        if (MediaSourceProp) { MediaSourceProp->SetObjectPropertyValue_InContainer(ScreensaverWidgetInstance, ScreensaverMediaSourceAsset); }
-        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithScreensaverVideoWidget: Could not find/cast 'ScreensaverMediaSource' property in widget.")); }
-    }
-    else { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Widget class mismatch or null!")); }
+        // Получаем ассеты заставки из GameInstance
+        TSubclassOf<UUserWidget> ScreensaverWidget = OwningGameInstance->DefaultScreensaverWidgetClass;
+        UMediaPlayer* MediaPlayer = OwningGameInstance->DefaultScreensaverMediaPlayer;
+        UMediaSource* MediaSource = OwningGameInstance->DefaultScreensaverMediaSource;
 
-
-    FString PackagePath = FString::Printf(TEXT("/Game/Maps/%s"), *LevelName.ToString()); // Убедитесь, что путь к картам правильный
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: Requesting async load for package '%s'..."), *PackagePath);
-    FLoadPackageAsyncDelegate LoadCallback = FLoadPackageAsyncDelegate::CreateUObject(this, &UStartScreenUIManager::OnLevelPackageLoaded);
-    if (LoadCallback.IsBound()) {
-        LoadPackageAsync(PackagePath, LoadCallback, 0, PKG_ContainsMap);
-    }
-    else {
-        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Failed to bind LoadPackageAsync delegate!"));
-        CheckAndFinalizeLevelTransition(); // Попытка завершить, если биндинг не удался
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget: EXITING function."));
-}
-
-void UStartScreenUIManager::OnLevelPackageLoaded(const FName& PackageName, UPackage* LoadedPackage, EAsyncLoadingResult::Type Result)
-{
-    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::OnLevelPackageLoaded: ENTERING (Callback). Package='%s', Result=%s"), *PackageName.ToString(), *AsyncLoadingResultToString(Result));
-    if (Result != EAsyncLoadingResult::Succeeded) {
-        UE_LOG(LogTemp, Error, TEXT("OnLevelPackageLoaded: Async package load FAILED for '%s'!"), *PackageName.ToString());
-    }
-    else {
-        UE_LOG(LogTemp, Log, TEXT("OnLevelPackageLoaded: Async package load SUCCEEDED for '%s'."), *PackageName.ToString());
-    }
-    bIsLevelLoadComplete = true;
-    CheckAndFinalizeLevelTransition();
-    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::OnLevelPackageLoaded: EXITING function."));
-}
-
-void UStartScreenUIManager::NotifyScreensaverVideoFinished()
-{
-    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::NotifyScreensaverVideoFinished: ENTERING (Called by Widget)."));
-    bIsScreensaverVideoFinished = true;
-    CheckAndFinalizeLevelTransition();
-    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::NotifyScreensaverVideoFinished: EXITING."));
-}
-
-void UStartScreenUIManager::CheckAndFinalizeLevelTransition()
-{
-    if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("CheckAndFinalizeLevelTransition: OwningGameInstance is null.")); return; }
-
-    UE_LOG(LogTemp, Verbose, TEXT(">>> UStartScreenUIManager::CheckAndFinalizeLevelTransition: Checking: LevelLoadComplete=%s, VideoFinished=%s"),
-        bIsLevelLoadComplete ? TEXT("True") : TEXT("False"), bIsScreensaverVideoFinished ? TEXT("True") : TEXT("False"));
-
-    if (bIsLevelLoadComplete && bIsScreensaverVideoFinished)
-    {
-        UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: ---> Conditions MET. Finalizing transition!"));
-
-        FName LevelToOpen = LevelToLoadAsync; // Сохраняем перед сбросом
-
-        if (CurrentTopLevelWidget != nullptr)
+        if (!ScreensaverWidget || !MediaPlayer || !MediaSource)
         {
-            UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Removing Screensaver widget: %s"), *CurrentTopLevelWidget->GetName());
-            CurrentTopLevelWidget->RemoveFromParent();
-            CurrentTopLevelWidget = nullptr;
+            UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::TransitionToMainLevel - One or more screensaver assets are not set in GameInstance! Fallback to simple OpenLevel."));
+            UGameplayStatics::OpenLevel(OwningGameInstance, LevelName); // Простой переход без видео
+            return;
         }
 
-        LevelToLoadAsync = NAME_None;
-        bIsLevelLoadComplete = false;
-        bIsScreensaverVideoFinished = false;
-        UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: State flags reset."));
-
-        if (!LevelToOpen.IsNone())
-        {
-            UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Calling OpenLevel for '%s'..."), *LevelToOpen.ToString());
-            UGameplayStatics::OpenLevel(OwningGameInstance, LevelToOpen); // Используем OwningGameInstance как WorldContext
-        }
-        else { UE_LOG(LogTemp, Error, TEXT("CheckAndFinalizeLevelTransition: LevelToOpen is None!")); }
+        // Для перехода на MainLevel, где будет меню на стене, мы используем BP_MenuGameMode.
+        // Этот GameMode должен быть назначен по умолчанию для MainLevel в его World Settings.
+        // Поэтому GameModeOverrideOptions оставляем пустым.
+        LTM->StartLoadLevelWithVideo(
+            LevelName,
+            ScreensaverWidget,
+            MediaPlayer,
+            MediaSource,
+            TEXT("") // Пустые опции, GameMode уровня MainLevel сработает по умолчанию
+        );
     }
-    else { UE_LOG(LogTemp, Verbose, TEXT("CheckAndFinalizeLevelTransition: ---> Conditions NOT MET. Waiting...")); }
-    UE_LOG(LogTemp, Verbose, TEXT("<<< UStartScreenUIManager::CheckAndFinalizeLevelTransition: EXITING."));
-}
-
-FString UStartScreenUIManager::AsyncLoadingResultToString(EAsyncLoadingResult::Type Result)
-{
-    // Эта функция была в вашем MyGameInstance.cpp, я ее просто скопировал
-    switch (Result)
+    else
     {
-    case EAsyncLoadingResult::Succeeded: return TEXT("Succeeded");
-    case EAsyncLoadingResult::Failed:    return TEXT("Failed");
-    case EAsyncLoadingResult::Canceled:  return TEXT("Canceled");
-    default: return FString::Printf(TEXT("Unknown (%d)"), static_cast<int32>(Result));
+        UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::TransitionToMainLevel - LevelTransitionManager is null! Cannot transition."));
     }
 }

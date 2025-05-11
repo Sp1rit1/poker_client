@@ -26,18 +26,12 @@ public:
      * @param InStartScreenClass Класс виджета стартового экрана.
      * @param InLoginScreenClass Класс виджета экрана входа.
      * @param InRegisterScreenClass Класс виджета экрана регистрации.
-     * @param InScreensaverClass Класс виджета экрана загрузки с видео.
-     * @param InScreensaverMediaPlayerAsset Ассет MediaPlayer для экрана загрузки.
-     * @param InScreensaverMediaSourceAsset Ассет MediaSource для экрана загрузки.
      */
     void Initialize(
         UMyGameInstance* InGameInstance,
         TSubclassOf<UUserWidget> InStartScreenClass,
         TSubclassOf<UUserWidget> InLoginScreenClass,
-        TSubclassOf<UUserWidget> InRegisterScreenClass,
-        TSubclassOf<UUserWidget> InScreensaverClass,
-        UMediaPlayer* InScreensaverMediaPlayerAsset,
-        UMediaSource* InScreensaverMediaSourceAsset
+        TSubclassOf<UUserWidget> InRegisterScreenClass
     );
 
     // --- Функции Навигации Стартовых Экранов ---
@@ -50,18 +44,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI Navigation|StartScreens")
     void ShowRegisterScreen();
 
-    /**
-     * Запускает процесс загрузки нового уровня с показом виджета с видео.
-     * @param LevelName Имя уровня для загрузки (без префиксов пути).
-     */
-    UFUNCTION(BlueprintCallable, Category = "UI Navigation|Screensaver")
-    void StartLoadLevelWithScreensaverVideoWidget(FName LevelName);
+    UFUNCTION(BlueprintCallable, Category = "UI Navigation|StartScreens")
+    void TriggerTransitionToMenuLevel();
 
-    /**
-     * Вызывается из Blueprint виджета экрана загрузки, когда видео завершило проигрывание.
-     */
-    UFUNCTION(BlueprintCallable, Category = "UI Navigation|Screensaver")
-    void NotifyScreensaverVideoFinished();
+    UFUNCTION(BlueprintCallable, Category = "UI Navigation|StartScreens")
+    void TransitionToMainLevel(FName LevelName);
 
 protected:
     /**
@@ -73,16 +60,6 @@ protected:
      */
     template <typename T>
     T* ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow, bool bIsFullscreenWidget);
-
-    /**
-     * Коллбэк, вызываемый по завершении асинхронной загрузки пакета уровня.
-     */
-    void OnLevelPackageLoaded(const FName& PackageName, UPackage* LoadedPackage, EAsyncLoadingResult::Type Result);
-
-    /**
-     * Проверяет, завершены ли загрузка уровня и проигрывание видео, и если да, осуществляет переход на новый уровень.
-     */
-    void CheckAndFinalizeLevelTransition();
 
 private:
     UPROPERTY()
@@ -98,24 +75,8 @@ private:
     UPROPERTY()
     TSubclassOf<UUserWidget> RegisterScreenClass;
 
-    UPROPERTY()
-    TSubclassOf<UUserWidget> ScreensaverClass;
-
-    // --- Ассеты для экрана загрузки (передаются при инициализации) ---
-    UPROPERTY()
-    TObjectPtr<UMediaPlayer> ScreensaverMediaPlayerAsset;
-
-    UPROPERTY()
-    TObjectPtr<UMediaSource> ScreensaverMediaSourceAsset;
-
     // --- Состояние текущего UI и загрузки ---
     UPROPERTY()
-    TObjectPtr<UUserWidget> CurrentTopLevelWidget; // Текущий отображаемый виджет (Start, Login, Register или Screensaver)
+    TObjectPtr<UUserWidget> CurrentTopLevelWidget; // Текущий отображаемый виджет (Start, Login, Register)
 
-    FName LevelToLoadAsync;        // Имя уровня, который асинхронно загружается
-    bool bIsLevelLoadComplete;     // Флаг завершения загрузки пакета уровня
-    bool bIsScreensaverVideoFinished;  // Флаг завершения проигрывания видео
-
-    // Вспомогательная функция для преобразования EAsyncScreensaverResult в строку
-    FString AsyncLoadingResultToString(EAsyncLoadingResult::Type Result);
 };
