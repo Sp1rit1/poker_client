@@ -18,13 +18,13 @@ UStartScreenUIManager::UStartScreenUIManager()
     StartScreenClass = nullptr;
     LoginScreenClass = nullptr;
     RegisterScreenClass = nullptr;
-    LoadingScreenClass = nullptr;
-    LoadingMediaPlayerAsset = nullptr;
-    LoadingMediaSourceAsset = nullptr;
+    ScreensaverClass = nullptr;
+    ScreensaverMediaPlayerAsset = nullptr;
+    ScreensaverMediaSourceAsset = nullptr;
     CurrentTopLevelWidget = nullptr;
     LevelToLoadAsync = NAME_None;
     bIsLevelLoadComplete = false;
-    bIsLoadingVideoFinished = false;
+    bIsScreensaverVideoFinished = false;
 }
 
 void UStartScreenUIManager::Initialize(
@@ -32,17 +32,17 @@ void UStartScreenUIManager::Initialize(
     TSubclassOf<UUserWidget> InStartScreenClass,
     TSubclassOf<UUserWidget> InLoginScreenClass,
     TSubclassOf<UUserWidget> InRegisterScreenClass,
-    TSubclassOf<UUserWidget> InLoadingScreenClass,
-    UMediaPlayer* InLoadingMediaPlayerAsset,
-    UMediaSource* InLoadingMediaSourceAsset)
+    TSubclassOf<UUserWidget> InScreensaverClass,
+    UMediaPlayer* InScreensaverMediaPlayerAsset,
+    UMediaSource* InScreensaverMediaSourceAsset)
 {
     OwningGameInstance = InGameInstance;
     StartScreenClass = InStartScreenClass;
     LoginScreenClass = InLoginScreenClass;
     RegisterScreenClass = InRegisterScreenClass;
-    LoadingScreenClass = InLoadingScreenClass;
-    LoadingMediaPlayerAsset = InLoadingMediaPlayerAsset;
-    LoadingMediaSourceAsset = InLoadingMediaSourceAsset;
+    ScreensaverClass = InScreensaverClass;
+    ScreensaverMediaPlayerAsset = InScreensaverMediaPlayerAsset;
+    ScreensaverMediaSourceAsset = InScreensaverMediaSourceAsset;
 
     if (!OwningGameInstance)
     {
@@ -125,60 +125,60 @@ void UStartScreenUIManager::ShowRegisterScreen()
     ShowWidget<UUserWidget>(RegisterScreenClass, false);
 }
 
-void UStartScreenUIManager::StartLoadLevelWithVideoWidget(FName LevelName)
+void UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget(FName LevelName)
 {
-    if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: OwningGameInstance is null.")); return; }
+    if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: OwningGameInstance is null.")); return; }
 
-    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::StartLoadLevelWithVideoWidget: ENTERING. LevelName='%s'"), *LevelName.ToString());
+    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget: ENTERING. LevelName='%s'"), *LevelName.ToString());
 
-    if (!LoadingScreenClass) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingScreenClass is not set!")); return; }
-    if (LevelName.IsNone()) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LevelName is None!")); return; }
-    if (!LoadingMediaPlayerAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingMediaPlayerAsset is not set!")); return; }
-    if (!LoadingMediaSourceAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: LoadingMediaSourceAsset is not set!")); return; }
+    if (!ScreensaverClass) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverClass is not set!")); return; }
+    if (LevelName.IsNone()) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: LevelName is None!")); return; }
+    if (!ScreensaverMediaPlayerAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverMediaPlayerAsset is not set!")); return; }
+    if (!ScreensaverMediaSourceAsset) { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: ScreensaverMediaSourceAsset is not set!")); return; }
 
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: Showing loading screen widget '%s'..."), *LoadingScreenClass->GetName());
-    UUserWidget* LoadingWidgetInstance = ShowWidget<UUserWidget>(LoadingScreenClass, true); // Экран загрузки полноэкранный
-    if (!LoadingWidgetInstance) {
-        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Failed to create/show LoadingScreenWidget! Fallback OpenLevel."));
+    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: Showing Screensaver widget '%s'..."), *ScreensaverClass->GetName());
+    UUserWidget* ScreensaverWidgetInstance = ShowWidget<UUserWidget>(ScreensaverClass, true); // Экран загрузки полноэкранный
+    if (!ScreensaverWidgetInstance) {
+        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Failed to create/show ScreensaverWidget! Fallback OpenLevel."));
         UGameplayStatics::OpenLevel(OwningGameInstance, LevelName); // Используем OwningGameInstance как WorldContext
         return;
     }
 
     LevelToLoadAsync = LevelName;
     bIsLevelLoadComplete = false;
-    bIsLoadingVideoFinished = false;
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: State reset. LevelToLoad='%s'"), *LevelToLoadAsync.ToString());
+    bIsScreensaverVideoFinished = false;
+    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: State reset. LevelToLoad='%s'"), *LevelToLoadAsync.ToString());
 
     // Настройка виджета (передача ссылок на плеер/источник через рефлексию, как было у вас)
     // Этот код взят из вашего MyGameInstance.cpp и предполагает, что имена свойств в виджете такие же.
-    UClass* ActualWidgetClass = LoadingWidgetInstance->GetClass();
-    if (ActualWidgetClass && ActualWidgetClass->IsChildOf(LoadingScreenClass))
+    UClass* ActualWidgetClass = ScreensaverWidgetInstance->GetClass();
+    if (ActualWidgetClass && ActualWidgetClass->IsChildOf(ScreensaverClass))
     {
-        FProperty* MediaPlayerBaseProp = ActualWidgetClass->FindPropertyByName(FName("LoadingMediaPlayer"));
+        FProperty* MediaPlayerBaseProp = ActualWidgetClass->FindPropertyByName(FName("ScreensaverMediaPlayer"));
         FObjectProperty* MediaPlayerProp = CastField<FObjectProperty>(MediaPlayerBaseProp);
-        if (MediaPlayerProp) { MediaPlayerProp->SetObjectPropertyValue_InContainer(LoadingWidgetInstance, LoadingMediaPlayerAsset); }
-        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithVideoWidget: Could not find/cast 'LoadingMediaPlayer' property in widget.")); }
+        if (MediaPlayerProp) { MediaPlayerProp->SetObjectPropertyValue_InContainer(ScreensaverWidgetInstance, ScreensaverMediaPlayerAsset); }
+        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithScreensaverVideoWidget: Could not find/cast 'ScreensaverMediaPlayer' property in widget.")); }
 
-        FProperty* MediaSourceBaseProp = ActualWidgetClass->FindPropertyByName(FName("LoadingMediaSource"));
+        FProperty* MediaSourceBaseProp = ActualWidgetClass->FindPropertyByName(FName("ScreensaverMediaSource"));
         FObjectProperty* MediaSourceProp = CastField<FObjectProperty>(MediaSourceBaseProp);
-        if (MediaSourceProp) { MediaSourceProp->SetObjectPropertyValue_InContainer(LoadingWidgetInstance, LoadingMediaSourceAsset); }
-        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithVideoWidget: Could not find/cast 'LoadingMediaSource' property in widget.")); }
+        if (MediaSourceProp) { MediaSourceProp->SetObjectPropertyValue_InContainer(ScreensaverWidgetInstance, ScreensaverMediaSourceAsset); }
+        else { UE_LOG(LogTemp, Warning, TEXT("StartLoadLevelWithScreensaverVideoWidget: Could not find/cast 'ScreensaverMediaSource' property in widget.")); }
     }
-    else { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Widget class mismatch or null!")); }
+    else { UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Widget class mismatch or null!")); }
 
 
     FString PackagePath = FString::Printf(TEXT("/Game/Maps/%s"), *LevelName.ToString()); // Убедитесь, что путь к картам правильный
-    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithVideoWidget: Requesting async load for package '%s'..."), *PackagePath);
+    UE_LOG(LogTemp, Log, TEXT("StartLoadLevelWithScreensaverVideoWidget: Requesting async load for package '%s'..."), *PackagePath);
     FLoadPackageAsyncDelegate LoadCallback = FLoadPackageAsyncDelegate::CreateUObject(this, &UStartScreenUIManager::OnLevelPackageLoaded);
     if (LoadCallback.IsBound()) {
         LoadPackageAsync(PackagePath, LoadCallback, 0, PKG_ContainsMap);
     }
     else {
-        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithVideoWidget: Failed to bind LoadPackageAsync delegate!"));
+        UE_LOG(LogTemp, Error, TEXT("StartLoadLevelWithScreensaverVideoWidget: Failed to bind LoadPackageAsync delegate!"));
         CheckAndFinalizeLevelTransition(); // Попытка завершить, если биндинг не удался
     }
 
-    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::StartLoadLevelWithVideoWidget: EXITING function."));
+    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::StartLoadLevelWithScreensaverVideoWidget: EXITING function."));
 }
 
 void UStartScreenUIManager::OnLevelPackageLoaded(const FName& PackageName, UPackage* LoadedPackage, EAsyncLoadingResult::Type Result)
@@ -195,12 +195,12 @@ void UStartScreenUIManager::OnLevelPackageLoaded(const FName& PackageName, UPack
     UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::OnLevelPackageLoaded: EXITING function."));
 }
 
-void UStartScreenUIManager::NotifyLoadingVideoFinished()
+void UStartScreenUIManager::NotifyScreensaverVideoFinished()
 {
-    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::NotifyLoadingVideoFinished: ENTERING (Called by Widget)."));
-    bIsLoadingVideoFinished = true;
+    UE_LOG(LogTemp, Log, TEXT(">>> UStartScreenUIManager::NotifyScreensaverVideoFinished: ENTERING (Called by Widget)."));
+    bIsScreensaverVideoFinished = true;
     CheckAndFinalizeLevelTransition();
-    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::NotifyLoadingVideoFinished: EXITING."));
+    UE_LOG(LogTemp, Log, TEXT("<<< UStartScreenUIManager::NotifyScreensaverVideoFinished: EXITING."));
 }
 
 void UStartScreenUIManager::CheckAndFinalizeLevelTransition()
@@ -208,9 +208,9 @@ void UStartScreenUIManager::CheckAndFinalizeLevelTransition()
     if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("CheckAndFinalizeLevelTransition: OwningGameInstance is null.")); return; }
 
     UE_LOG(LogTemp, Verbose, TEXT(">>> UStartScreenUIManager::CheckAndFinalizeLevelTransition: Checking: LevelLoadComplete=%s, VideoFinished=%s"),
-        bIsLevelLoadComplete ? TEXT("True") : TEXT("False"), bIsLoadingVideoFinished ? TEXT("True") : TEXT("False"));
+        bIsLevelLoadComplete ? TEXT("True") : TEXT("False"), bIsScreensaverVideoFinished ? TEXT("True") : TEXT("False"));
 
-    if (bIsLevelLoadComplete && bIsLoadingVideoFinished)
+    if (bIsLevelLoadComplete && bIsScreensaverVideoFinished)
     {
         UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: ---> Conditions MET. Finalizing transition!"));
 
@@ -218,14 +218,14 @@ void UStartScreenUIManager::CheckAndFinalizeLevelTransition()
 
         if (CurrentTopLevelWidget != nullptr)
         {
-            UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Removing loading screen widget: %s"), *CurrentTopLevelWidget->GetName());
+            UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: Removing Screensaver widget: %s"), *CurrentTopLevelWidget->GetName());
             CurrentTopLevelWidget->RemoveFromParent();
             CurrentTopLevelWidget = nullptr;
         }
 
         LevelToLoadAsync = NAME_None;
         bIsLevelLoadComplete = false;
-        bIsLoadingVideoFinished = false;
+        bIsScreensaverVideoFinished = false;
         UE_LOG(LogTemp, Log, TEXT("CheckAndFinalizeLevelTransition: State flags reset."));
 
         if (!LevelToOpen.IsNone())

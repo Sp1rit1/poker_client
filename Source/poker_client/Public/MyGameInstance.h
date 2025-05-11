@@ -6,7 +6,7 @@
 class UStartScreenUIManager;
 class UNetworkAuthManager;
 class UOfflineGameManager;
-class UGameScreenUIManager;
+class UMenuScreenUIManager;
 class UUserWidget; // Базовый класс виджетов
 class UMediaPlayer;
 class UMediaSource;
@@ -54,32 +54,32 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "UI|Start Screens")
     TSubclassOf<UUserWidget> RegisterScreenClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Loading Screen")
-    TSubclassOf<UUserWidget> LoadingScreenClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TSubclassOf<UUserWidget> ScreensaverClass;
 
     // --- Ассеты для экрана загрузки (настраиваются в Blueprint GameInstance) ---
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Loading Screen")
-    TObjectPtr<UMediaPlayer> LoadingMediaPlayerAsset;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TObjectPtr<UMediaPlayer> ScreensaverMediaPlayerAsset;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Loading Screen")
-    TObjectPtr<UMediaSource> LoadingMediaSourceAsset;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
+    TObjectPtr<UMediaSource> ScreensaverMediaSourceAsset;
 
     // --- Классы виджетов для основных экранов
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
-    TSubclassOf<UUserWidget> GameMainMenuClass; 
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
+    TSubclassOf<UUserWidget> MainMenuClass; 
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
-    TSubclassOf<UUserWidget> GameOfflineLobbyClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
+    TSubclassOf<UUserWidget> OfflineLobbyClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
-    TSubclassOf<UUserWidget> GameOnlineLobbyClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
+    TSubclassOf<UUserWidget> OnlineLobbyClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
-    TSubclassOf<UUserWidget> GameProfileScreenClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
+    TSubclassOf<UUserWidget> ProfileScreenClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Game Screens")
-    TSubclassOf<UUserWidget> GameSettingsClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
+    TSubclassOf<UUserWidget> SettingsClass;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings") 
     int32 PendingOfflineNumBots = 1;
@@ -112,7 +112,7 @@ public:
     UOfflineGameManager* GetOfflineGameManager() const { return OfflineGameManager; }
 
     UFUNCTION(BlueprintPure, Category = "Managers")
-    UGameScreenUIManager* GetGameScreenUIManager() const { return GameScreenUIManagerInstance; }
+    UMenuScreenUIManager* GetMenuScreenUIManager() const { return MenuScreenUIManagerInstance; }
 
     // Обновленная функция для установки статуса логина
     UFUNCTION(BlueprintCallable, Category = "User Session")
@@ -143,7 +143,7 @@ protected:
         TObjectPtr<UOfflineGameManager> OfflineGameManager;
 
     UPROPERTY()
-    TObjectPtr<UGameScreenUIManager> GameScreenUIManagerInstance;
+    TObjectPtr<UMenuScreenUIManager> MenuScreenUIManagerInstance;
 
     FTimerHandle ResizeTimerHandle;
     FIntPoint DesiredWindowedResolution; // Для сохранения при выходе
