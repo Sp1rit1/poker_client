@@ -15,11 +15,10 @@ APokerPlayerController::APokerPlayerController()
 
 void APokerPlayerController::BeginPlay()
 {
-    Super::BeginPlay();
+    Super::BeginPlay(); // Всегда вызываем родительский BeginPlay первым
 
-    ToggleInputMode(); // Устанавливаем начальный режим через вашу функцию ToggleInputMode (чтобы bIsMouseCursorVisible была false)
-
-    if (GameHUDWidgetClass)
+    // 1. Создание и отображение игрового HUD
+    if (GameHUDWidgetClass) // GameHUDWidgetClass должен быть назначен в Class Defaults вашего BP_PokerPlayerController
     {
         GameHUDWidgetInstance = CreateWidget<UUserWidget>(this, GameHUDWidgetClass);
         if (GameHUDWidgetInstance)
@@ -29,35 +28,43 @@ void APokerPlayerController::BeginPlay()
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance!"));
+            UE_LOG(LogTemp, Error, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance from GameHUDClass!"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetClass is not set!"));
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetClass is not set in Class Defaults of BP_PokerPlayerController!"));
     }
 
-    // --- ПОДПИСКА НА ДЕЛЕГАТ ---
+    // 2. Установка начального игрового режима ввода (GameAndUI, курсор СКРЫТ по умолчанию)
+    bIsMouseCursorVisible = false; // Устанавливаем начальное состояние нашего флага, чтобы первое нажатие Tab показало курсор
+    SetShowMouseCursor(bIsMouseCursorVisible); // Скрываем курсор операционной системы
+
+    FInputModeGameAndUI InputModeData; // Используем GameAndUI, чтобы HUD мог быть интерактивным, КОГДА курсор станет видимым
+    InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+    InputModeData.SetHideCursorDuringCapture(false); // Если курсор видим и игра захватывает ввод, не прятать его
+    SetInputMode(InputModeData);
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Initial Input Mode set to GameAndUI. Mouse Cursor Hidden."));
+
+    // 3. Подписка на делегат OnActionRequestedDelegate (код остается таким же)
     UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
     if (GI)
     {
         UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
         if (OfflineManager)
         {
-            // FOnActionRequestedSignature - это имя типа делегата, объявленного в OfflineGameManager.h
             OfflineManager->OnActionRequestedDelegate.AddDynamic(this, &APokerPlayerController::HandleActionRequested);
             UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Subscribed to OnActionRequestedDelegate."));
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineGameManager is null in GameInstance, cannot subscribe to OnActionRequestedDelegate."));
+            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineManager is null in GameInstance. Cannot subscribe."));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance."));
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance. Cannot get OfflineManager."));
     }
-    // ---------------------------
 }
 
 UUserWidget* APokerPlayerController::GetGameHUD() const

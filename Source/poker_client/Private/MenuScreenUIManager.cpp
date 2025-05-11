@@ -63,8 +63,6 @@ void UMenuScreenUIManager::ChangeActiveMenuScreenWidget(TSubclassOf<UUserWidget>
     }
     CurrentActiveMenuScreenWidget = nullptr;
 
-    OwningGameInstance->SetupInputMode(true, true);
-
     // Создаем или получаем существующий экземпляр виджета
     // OutWidgetInstanceVariable здесь - это временный сырой указатель
     if (!OutWidgetInstanceVariable)

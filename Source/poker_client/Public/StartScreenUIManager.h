@@ -47,9 +47,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI Navigation|StartScreens")
     void TriggerTransitionToMenuLevel();
 
-    UFUNCTION(BlueprintCallable, Category = "UI Navigation|StartScreens")
-    void TransitionToMainLevel(FName LevelName);
-
 protected:
     /**
      * Шаблонная функция для показа виджетов верхнего уровня.
