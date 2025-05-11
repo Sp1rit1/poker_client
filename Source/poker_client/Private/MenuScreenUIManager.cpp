@@ -154,23 +154,42 @@ void UMenuScreenUIManager::ShowSettings()
     }
 }
 
-void UMenuScreenUIManager::TriggerTransitionToGameLevel() // Пример новой функции
+void UMenuScreenUIManager::TriggerTransitionToGameLevel()
 {
-    if (!OwningGameInstance) return;
-    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
-    if (LTM)
+    if (!OwningGameInstance)
     {
-        // Формируем опции для смены GameMode на BP_PokerGameMode
-        FString GameModeOptions = FString::Printf(TEXT("?Game=/Game/Blueprints/GameModes/BP_PokerGameMode.BP_PokerGameMode_C"));
-        // ^^^ ЗАМЕНИТЕ ПУТЬ НА ВАШ ПРАВИЛЬНЫЙ ПУТЬ К BP_PokerGameMode + _C
-
-        // Используем дефолтные ассеты из GameInstance (или можете иметь другие для этого перехода)
-        LTM->StartLoadLevelWithVideo(
-            FName("L_PokerTable"), // Имя вашего игрового уровня
-            OwningGameInstance->DefaultScreensaverWidgetClass,
-            OwningGameInstance->DefaultScreensaverMediaPlayer,
-            OwningGameInstance->DefaultScreensaverMediaSource,
-            GameModeOptions
-        );
+        UE_LOG(LogTemp, Error, TEXT("UMenuScreenUIManager::TriggerTransitionToGameLevel - OwningGameInstance is null!"));
+        return;
     }
+    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
+    if (!LTM)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UMenuScreenUIManager::TriggerTransitionToGameLevel - LevelTransitionManager is null!"));
+        return;
+    }
+
+    FString GameModeOptions = FString::Printf(TEXT("?Game=/Game/Blueprints/GameModes/BP_OfflineGameMode.BP_OfflineGameMode_C"));
+    // ^^^ ЗАМЕНИТЕ ПУТЬ НА ВАШ ПРАВИЛЬНЫЙ ПУТЬ к BP_OfflineGameMode (или BP_OnlinePokerGameMode для онлайна)
+
+    UE_LOG(LogTemp, Log, TEXT("UMenuScreenUIManager: Triggering transition to GameLevel using 'LoadingVideo' assets."));
+
+    // Используем набор ассетов "LoadingVideo"
+    TSubclassOf<UUserWidget> WidgetClass = OwningGameInstance->LoadingVideo_WidgetClass;
+    UMediaPlayer* MediaPlayer = OwningGameInstance->LoadingVideo_MediaPlayer;
+    UMediaSource* MediaSource = OwningGameInstance->LoadingVideo_MediaSource;
+
+    if (!WidgetClass || !MediaPlayer || !MediaSource)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UMenuScreenUIManager: Missing 'LoadingVideo' assets in GameInstance for Menu->Game transition. Using fallback or default if available."));
+        // Опционально: можно попробовать использовать DefaultScreensaver...
+        return; // Или просто выходим
+    }
+
+    LTM->StartLoadLevelWithVideo(
+        FName("MainLevel"), // Или L_PokerTable, как называется ваш игровой уровень
+        WidgetClass,
+        MediaPlayer,
+        MediaSource,
+        GameModeOptions
+    );
 }

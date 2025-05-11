@@ -18,7 +18,7 @@ protected:
 	TSubclassOf<UUserWidget> GameHUDWidgetClass; // Используем базовый UUserWidget для класса
 
 	/** Экземпляр созданного игрового HUD. */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "UI|HUD")
+	UPROPERTY(BlueprintReadOnly, Category = "UI|HUD")
 	UUserWidget* GameHUDWidgetInstance; // Используем базовый UUserWidget для экземпляра
 
 	virtual void BeginPlay() override;

@@ -116,19 +116,41 @@ void UStartScreenUIManager::ShowRegisterScreen()
 }
 
 
-void UStartScreenUIManager::TriggerTransitionToMenuLevel() // Пример новой функции
+void UStartScreenUIManager::TriggerTransitionToMenuLevel()
 {
-    if (!OwningGameInstance) return;
-    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
-    if (LTM)
+    if (!OwningGameInstance)
     {
-        // Используем дефолтные ассеты из GameInstance
-        LTM->StartLoadLevelWithVideo(
-            FName("MenuLevel"), // Имя вашего уровня меню
-            OwningGameInstance->DefaultScreensaverWidgetClass,
-            OwningGameInstance->DefaultScreensaverMediaPlayer,
-            OwningGameInstance->DefaultScreensaverMediaSource,
-            TEXT("") // GameMode для MenuLevel будет установлен в его World Settings
-        );
+        UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::TriggerTransitionToMenuLevel - OwningGameInstance is null!"));
+        return;
     }
+
+    ULevelTransitionManager* LTM = OwningGameInstance->GetLevelTransitionManager();
+    if (!LTM)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::TriggerTransitionToMenuLevel - LevelTransitionManager is null!"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("UStartScreenUIManager: Triggering transition to MenuLevel using 'Screensaver' assets."));
+
+    // Используем набор ассетов "Screensaver"
+    TSubclassOf<UUserWidget> WidgetClass = OwningGameInstance->Screensaver_WidgetClass;
+    UMediaPlayer* MediaPlayer = OwningGameInstance->Screensaver_MediaPlayer;
+    UMediaSource* MediaSource = OwningGameInstance->Screensaver_MediaSource;
+
+    if (!WidgetClass || !MediaPlayer || !MediaSource)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager: Missing 'Screensaver' assets in GameInstance for Start->Menu transition. Using fallback or default if available."));
+        return; 
+    }
+
+    // OwningGameInstance->bShouldShowMainMenuOnNextUIMode = true; // Если используете этот флаг
+
+    LTM->StartLoadLevelWithVideo(
+        FName("MenuLevel"),
+        WidgetClass,
+        MediaPlayer,
+        MediaSource,
+        TEXT("")
+    );
 }

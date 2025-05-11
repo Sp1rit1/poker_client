@@ -72,14 +72,25 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "UI|Menu Screens")
     TSubclassOf<UUserWidget> SettingsClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TSubclassOf<UUserWidget> DefaultScreensaverWidgetClass;
+    // --- Ассеты для Заставки "Screensaver" (например, Старт -> Меню) ---
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|Screensaver")
+    TSubclassOf<UUserWidget> Screensaver_WidgetClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TObjectPtr<UMediaPlayer> DefaultScreensaverMediaPlayer;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|Screensaver")
+    TObjectPtr<UMediaPlayer> Screensaver_MediaPlayer;
 
-    UPROPERTY(EditDefaultsOnly, Category = "UI|Screensaver")
-    TObjectPtr<UMediaSource> DefaultScreensaverMediaSource;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|Screensaver")
+    TObjectPtr<UMediaSource> Screensaver_MediaSource;
+
+    // --- Ассеты для Заставки "LoadingVideo" (например, Меню -> Игра) ---
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|LoadingVideo")
+    TSubclassOf<UUserWidget> LoadingVideo_WidgetClass;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|LoadingVideo")
+    TObjectPtr<UMediaPlayer> LoadingVideo_MediaPlayer;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Transitions|LoadingVideo")
+    TObjectPtr<UMediaSource> LoadingVideo_MediaSource;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings") 
     int32 PendingOfflineNumBots = 1;
