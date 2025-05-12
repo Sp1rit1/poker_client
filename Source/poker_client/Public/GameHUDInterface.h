@@ -26,14 +26,14 @@ public:
      * Обновляет кнопки действий и информацию о текущем ходе в HUD.
      * Эту функцию нужно будет реализовать в Blueprint виджете HUD.
      */
-    UFUNCTION(BlueprintImplementableEvent, Category = "HUD Interface")
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
     void UpdateActionButtonsAndPlayerTurn(int32 ForPlayerSeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
 
     /**
      * Инициализирует HUD начальными данными состояния игры.
      * Эту функцию нужно будет реализовать в Blueprint виджете HUD.
      */
-    UFUNCTION(BlueprintImplementableEvent, Category = "HUD Interface")
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
     void InitializeHUDFromState(int64 Pot, const TArray<FPlayerSeatData>& Seats);
 
     // Можете добавить другие функции интерфейса по мере необходимости
