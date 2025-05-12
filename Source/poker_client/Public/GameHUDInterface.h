@@ -34,7 +34,7 @@ public:
      * Эту функцию нужно будет реализовать в Blueprint виджете HUD.
      */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
-    void InitializeHUDFromState(int64 Pot, const TArray<FPlayerSeatData>& Seats);
+    void InitializetPotFromState(int64 Pot);
 
     // Можете добавить другие функции интерфейса по мере необходимости
     // Например, для показа карманных карт локального игрока, обновления банка и т.д.
