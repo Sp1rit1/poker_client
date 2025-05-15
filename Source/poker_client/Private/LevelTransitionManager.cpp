@@ -63,7 +63,6 @@ void ULevelTransitionManager::StartLoadLevelWithVideo(
     }
 
     OwningGameInstance->ApplyWindowMode(true); // Полноэкранный для заставки
-    OwningGameInstance->SetupInputMode(true, false); // UIOnly, мышь не видна
     CurrentScreensaverWidget->AddToViewport(100); // Большой ZOrder, чтобы быть поверх всего
 
     LevelToLoadAsync = InLevelNameToLoad;

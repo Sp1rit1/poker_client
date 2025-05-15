@@ -42,7 +42,7 @@ public:
     FString LoggedInFriendCode = TEXT(""); // Добавлено
 
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "User Session")
-    bool bIsInOfflineMode = true;
+    bool bIsInOfflineMode = false;
 
     // --- Классы виджетов для стартовых экранов (настраиваются в Blueprint GameInstance) ---
 // Они нужны здесь, чтобы их можно было назначить в редакторе и передать в StartScreenUIManager
@@ -135,14 +135,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "User Session")
     void SetOfflineMode(bool bNewIsOffline);
 
-
-    // --- Настройки Окна (остаются здесь, т.к. это глобальные настройки приложения) ---
-    void DelayedInitialResize(); // Вызывается таймером
+    UFUNCTION(BlueprintCallable, Category = "Window Settings")
     void ApplyWindowMode(bool bWantFullscreen);
-    void SetupInputMode(bool bIsUIOnly, bool bShowMouse);
 
     UPROPERTY(BlueprintReadOnly, Category = "Window Settings")
     bool bIsInitialWindowSetupComplete = false;
+
+    void DelayedInitialResize(); // Вызывается таймером
 
 protected:
 

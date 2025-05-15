@@ -73,7 +73,6 @@ T* UStartScreenUIManager::ShowWidget(TSubclassOf<UUserWidget> WidgetClassToShow,
     {
         UE_LOG(LogTemp, Log, TEXT("ShowWidget: Skipping ApplyWindowMode for initial windowed widget because initial setup is complete."));
     }
-    OwningGameInstance->SetupInputMode(!bIsFullscreenWidget, !bIsFullscreenWidget);
 
     // --- Шаг 3: Создаем и показываем новый виджет ---
     // Кастуем PC к UUserWidget, чтобы передать его как Outer, но лучше передавать PC
