@@ -1,53 +1,51 @@
 ﻿#include "PokerPlayerController.h"
+#include "Blueprint/UserWidget.h"
+#include "GameFramework/Pawn.h"
+#include "MyGameInstance.h"
+#include "OfflineGameManager.h"
+#include "GameHUDInterface.h" // Ваш C++ интерфейс HUD
 #include "Kismet/GameplayStatics.h"
-#include "MyGameInstance.h" 
-#include "OfflineGameManager.h" 
-#include "GameHUDInterface.h"     // <-- ДОБАВЬТЕ ЭТОТ ИНКЛЮД
-#include "PokerDataTypes.h"       // <-- ДОБАВЬТЕ ЭТОТ ИНКЛЮД (для EPlayerAction в HandleActionRequested, если GameHUDInterface.h его не подтянет транзитивно)
 
 APokerPlayerController::APokerPlayerController()
 {
-    bShowMouseCursor = false;
-    bEnableClickEvents = false;
-    bEnableMouseOverEvents = false;
-    bIsMouseCursorVisible = false;
+    bIsUIModeActive = false;
+    GameHUDClass = nullptr;
+    GameHUDWidgetInstance = nullptr;
 }
 
 void APokerPlayerController::BeginPlay()
 {
-    Super::BeginPlay(); // Всегда вызываем родительский BeginPlay первым
+    Super::BeginPlay();
 
-    // 1. Создание и отображение игрового HUD
-    if (GameHUDWidgetClass) // GameHUDWidgetClass должен быть назначен в Class Defaults вашего BP_PokerPlayerController
+    if (IsLocalPlayerController() && GameHUDClass)
     {
-        GameHUDWidgetInstance = CreateWidget<UUserWidget>(this, GameHUDWidgetClass);
+        GameHUDWidgetInstance = CreateWidget<UUserWidget>(this, GameHUDClass);
         if (GameHUDWidgetInstance)
         {
             GameHUDWidgetInstance->AddToViewport();
             UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: GameHUDWidgetInstance created and added to viewport."));
+
+            // Начальная деактивация кнопок через интерфейс
+            if (GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+            {
+                IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
+                UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Initial DisableButtons called on HUD."));
+            }
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance from GameHUDClass!"));
+            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance from GameHUDClass."));
         }
     }
-    else
+    else if (IsLocalPlayerController())
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetClass is not set in Class Defaults of BP_PokerPlayerController!"));
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDClass is not set in Blueprint Defaults. Cannot create HUD."));
     }
 
-    // 2. Установка начального игрового режима ввода (GameAndUI, курсор СКРЫТ по умолчанию)
-    bIsMouseCursorVisible = false; // Устанавливаем начальное состояние нашего флага, чтобы первое нажатие Tab показало курсор
-    SetShowMouseCursor(bIsMouseCursorVisible); // Скрываем курсор операционной системы
+    bIsUIModeActive = false;
+    SetInputModeGameOnlyAdvanced();
 
-    FInputModeGameAndUI InputModeData; // Используем GameAndUI, чтобы HUD мог быть интерактивным, КОГДА курсор станет видимым
-    InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-    InputModeData.SetHideCursorDuringCapture(false); // Если курсор видим и игра захватывает ввод, не прятать его
-    SetInputMode(InputModeData);
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Initial Input Mode set to GameAndUI. Mouse Cursor Hidden."));
-
-    // 3. Подписка на делегат OnActionRequestedDelegate (код остается таким же)
-    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
     if (GI)
     {
         UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
@@ -58,18 +56,13 @@ void APokerPlayerController::BeginPlay()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineManager is null in GameInstance. Cannot subscribe."));
+            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineGameManager is null in GameInstance, cannot subscribe."));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance. Cannot get OfflineManager."));
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance type."));
     }
-}
-
-UUserWidget* APokerPlayerController::GetGameHUD() const
-{
-    return GameHUDWidgetInstance;
 }
 
 void APokerPlayerController::SetupInputComponent()
@@ -77,92 +70,134 @@ void APokerPlayerController::SetupInputComponent()
     Super::SetupInputComponent();
     if (InputComponent)
     {
-        EnableInput(this);
-        InputComponent->BindAction("ToggleCursor", IE_Pressed, this, &APokerPlayerController::ToggleInputMode);
-        // ... другие ваши BindAction ...
+        InputComponent->BindAxis("LookUp", this, &APokerPlayerController::LookUp);
+        InputComponent->BindAxis("Turn", this, &APokerPlayerController::Turn);
+        InputComponent->BindAction("ToggleCursorMode", IE_Pressed, this, &APokerPlayerController::ToggleInputMode);
     }
-    else
+}
+
+void APokerPlayerController::LookUp(float Value)
+{
+    if (!bIsUIModeActive && Value != 0.0f)
     {
-        UE_LOG(LogTemp, Error, TEXT("APokerPlayerController::SetupInputComponent - InputComponent is NULL!"));
+        APawn* const ControlledPawn = GetPawn();
+        if (ControlledPawn)
+        {
+            ControlledPawn->AddControllerPitchInput(Value);
+        }
+    }
+}
+
+void APokerPlayerController::Turn(float Value)
+{
+    if (!bIsUIModeActive && Value != 0.0f)
+    {
+        APawn* const ControlledPawn = GetPawn();
+        if (ControlledPawn)
+        {
+            ControlledPawn->AddControllerYawInput(Value);
+        }
     }
 }
 
 void APokerPlayerController::ToggleInputMode()
 {
-    // Ваша реализация ToggleInputMode выглядит хорошо.
-    // Можно немного ее уточнить для ясности начального состояния, если BeginPlay всегда устанавливает GameOnly.
-    bIsMouseCursorVisible = !bIsMouseCursorVisible; // Инвертируем состояние
+    bIsUIModeActive = !bIsUIModeActive;
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::ToggleInputMode - bIsUIModeActive is now %s"), bIsUIModeActive ? TEXT("true") : TEXT("false"));
 
-    if (bIsMouseCursorVisible)
+    if (bIsUIModeActive)
     {
-        FInputModeGameAndUI InputModeData;
-        InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-        InputModeData.SetHideCursorDuringCapture(false); // Чтобы курсор не пропадал при клике в UI
-        SetInputMode(InputModeData);
-        bShowMouseCursor = true; // Явно показываем
-        UE_LOG(LogTemp, Log, TEXT("Input Mode: GameAndUI, Cursor Visible."));
+        // При переходе в UI режим, если это не ход игрока, кнопки должны быть выключены.
+        // Вызов DisableButtons здесь может быть избыточен, если UpdateActionButtonsAndPlayerTurn
+        // корректно обрабатывает ситуацию, когда нет доступных действий.
+        // Но если вы хотите гарантированно их выключить при открытии курсора (если это не активный ход):
+        // if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+        // {
+        //    // Возможно, проверить, действительно ли сейчас НЕ ход игрока, прежде чем вызывать
+        //    IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
+        // }
+        SetInputModeUIOnlyAdvanced(GameHUDWidgetInstance, false);
     }
     else
     {
-        SetInputMode(FInputModeGameOnly());
-        bShowMouseCursor = false; // Явно скрываем
-        UE_LOG(LogTemp, Log, TEXT("Input Mode: GameOnly, Cursor Hidden."));
+        SetInputModeGameOnlyAdvanced();
     }
 }
 
-// --- РЕАЛИЗАЦИЯ ФУНКЦИИ-ОБРАБОТЧИКА ДЕЛЕГАТА ---
-void APokerPlayerController::HandleActionRequested(int32 PlayerSeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack)
+void APokerPlayerController::SetInputModeGameOnlyAdvanced()
 {
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleActionRequested for Seat %d. BetToCall: %lld, MinRaise: %lld, Stack: %lld"),
-        PlayerSeatIndex, BetToCall, MinRaiseAmount, PlayerStack);
+    FInputModeGameOnly InputModeData;
+    SetInputMode(InputModeData);
+    bShowMouseCursor = false;
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: SetInputModeGameOnlyAdvanced called. Cursor hidden."));
+}
 
-    for (EPlayerAction Action : AllowedActions)
+void APokerPlayerController::SetInputModeUIOnlyAdvanced(UUserWidget* InWidgetToFocus, bool bLockMouseToViewport)
+{
+    FInputModeUIOnly InputModeData;
+    if (InWidgetToFocus)
     {
-        const UEnum* EnumPtr = StaticEnum<EPlayerAction>();
-        FString ActionString = EnumPtr ? EnumPtr->GetNameStringByValue(static_cast<int64>(Action)) : TEXT("UnknownAction");
-        UE_LOG(LogTemp, Log, TEXT("Allowed Action: %s"), *ActionString);
+        InputModeData.SetWidgetToFocus(InWidgetToFocus->TakeWidget());
     }
+    InputModeData.SetLockMouseToViewportBehavior(bLockMouseToViewport ? EMouseLockMode::LockAlways : EMouseLockMode::DoNotLock);
+
+    SetInputMode(InputModeData);
+    bShowMouseCursor = true;
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: SetInputModeUIOnlyAdvanced called. Cursor shown. WidgetToFocus: %s"), *GetNameSafe(InWidgetToFocus));
+}
+
+void APokerPlayerController::HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack)
+{
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleActionRequested for Seat %d. BetToCall: %lld, MinRaise: %lld, Stack: %lld"), SeatIndex, BetToCall, MinRaiseAmount, PlayerStack);
 
     if (GameHUDWidgetInstance)
     {
-        // Проверяем, реализует ли наш виджет HUD интерфейс IGameHUDInterface
         if (GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
         {
-            // Вызываем функцию интерфейса, которая будет реализована в Blueprint (WBP_GameHUD)
-            IGameHUDInterface::Execute_UpdateActionButtonsAndPlayerTurn(GameHUDWidgetInstance, PlayerSeatIndex, AllowedActions, BetToCall, MinRaiseAmount, PlayerStack);
-            UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Called UpdateActionButtonsAndPlayerTurn via IGameHUDInterface."));
+            // Проверяем, является ли текущий контроллер контроллером игрока, для которого запрошено действие
+            // В оффлайн-игре с одним локальным игроком, PlayerIndex обычно 0.
+            // Если SeatIndex (из OfflineGameManager) соответствует нашему локальному игроку (обычно место 0):
+            if (SeatIndex == 0) // Упрощенная проверка для локального игрока на месте 0
+            {
+                IGameHUDInterface::Execute_UpdateActionButtonsAndPlayerTurn(GameHUDWidgetInstance, SeatIndex, AllowedActions, BetToCall, MinRaiseAmount, PlayerStack);
+            }
+            else
+            {
+                // Если это ход бота, или другого игрока (в будущем онлайн режиме),
+                // то для локального игрока все кнопки действий должны быть выключены.
+                IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
+                // Дополнительно можно обновить HUD, чтобы показать, чей ход (например, "Bot 1 is thinking...")
+                // Это можно сделать, расширив UpdateActionButtonsAndPlayerTurn или добавив новую функцию в интерфейс.
+                // Пока что просто выключаем кнопки.
+                UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Not local player's turn (Seat %d). Disabling buttons."), SeatIndex);
+            }
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetInstance (%s) does not implement IGameHUDInterface. Cannot update action buttons."), *GameHUDWidgetInstance->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetInstance (%s) does not implement IGameHUDInterface!"), *GetNameSafe(GameHUDWidgetInstance));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetInstance is null in HandleActionRequested."));
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDWidgetInstance is null, cannot update HUD actions."));
     }
 }
-// -------------------------------------------------
 
-// Заглушки для Обработки Действий Игрока (остаются, как у вас, вызов ProcessPlayerAction будет позже)
+// Функции-обработчики действий
 void APokerPlayerController::HandleFoldAction()
 {
-    UE_LOG(LogTemp, Log, TEXT("PlayerController: Fold Action Triggered"));
-    // UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
-    // if (GI && GI->GetOfflineGameManager())
-    // {
-    //     GI->GetOfflineGameManager()->ProcessPlayerAction(GI->GetOfflineGameManager()->GetGameState()->CurrentTurnSeat, EPlayerAction::Fold, 0);
-    // }
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleFoldAction called by UI."));
+    // ... (ваша логика вызова ProcessPlayerAction) ...
 }
 
 void APokerPlayerController::HandleCheckCallAction()
 {
-    UE_LOG(LogTemp, Log, TEXT("PlayerController: Check/Call Action Triggered"));
-    // ... (логика вызова ProcessPlayerAction с определением Check или Call) ...
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleCheckCallAction called by UI."));
+    // ... (ваша логика вызова ProcessPlayerAction) ...
 }
 
 void APokerPlayerController::HandleBetRaiseAction(int64 Amount)
 {
-    UE_LOG(LogTemp, Log, TEXT("PlayerController: Bet/Raise Action Triggered with Amount: %lld"), Amount);
-    // ... (логика вызова ProcessPlayerAction с определением Bet или Raise) ...
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleBetRaiseAction called by UI with Amount: %lld"), Amount);
+    // ... (ваша логика вызова ProcessPlayerAction) ...
 }

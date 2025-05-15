@@ -42,7 +42,7 @@ public:
     FString LoggedInFriendCode = TEXT(""); // Добавлено
 
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "User Session")
-    bool bIsInOfflineMode = false;
+    bool bIsInOfflineMode = true;
 
     // --- Классы виджетов для стартовых экранов (настраиваются в Blueprint GameInstance) ---
 // Они нужны здесь, чтобы их можно было назначить в редакторе и передать в StartScreenUIManager

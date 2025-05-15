@@ -177,13 +177,6 @@ void UMyGameInstance::DelayedInitialResize()
             bIsInitialWindowSetupComplete = true;
             UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Initial setup complete flag set. Calling ShowStartScreen..."));
 
-            // Вызываем ShowStartScreen через новый менеджер
-            if (StartScreenUIManagerInstance)
-            {
-                StartScreenUIManagerInstance->ShowStartScreen();
-            }
-            else { UE_LOG(LogTemp, Error, TEXT("DelayedInitialResize: StartScreenUIManagerInstance is null! Cannot show start screen.")); }
-
         }
         else { UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: FSlateApplication not initialized. Skipping resize.")); }
     }

@@ -36,6 +36,9 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
     void InitializetPotFromState(int64 Pot);
 
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
+    void DisableButtons();
+
     // Можете добавить другие функции интерфейса по мере необходимости
     // Например, для показа карманных карт локального игрока, обновления банка и т.д.
     // UFUNCTION(BlueprintImplementableEvent, Category = "HUD Interface")

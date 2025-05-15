@@ -2,52 +2,62 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "Blueprint/UserWidget.h" // Для UUserWidget и TSubclassOf
+#include "PokerDataTypes.h" // Для EPlayerAction
 #include "PokerPlayerController.generated.h"
 
-// Нет необходимости в прямом объявлении UWBP_GameHUD, так как мы будем использовать UUserWidget
+class UUserWidget;
+class UGameHUDInterface; // Прямое объявление C++ интерфейса
 
 UCLASS()
 class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените YOURPROJECT_API
 {
-	GENERATED_BODY()
-
-protected:
-	/** Класс виджета игрового HUD, который будет создан. Назначается в Blueprint наследнике этого контроллера. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|HUD")
-	TSubclassOf<UUserWidget> GameHUDWidgetClass; // Используем базовый UUserWidget для класса
-
-	/** Экземпляр созданного игрового HUD. */
-	UPROPERTY(BlueprintReadOnly, Category = "UI|HUD")
-	UUserWidget* GameHUDWidgetInstance; // Используем базовый UUserWidget для экземпляра
-
-	virtual void BeginPlay() override;
+    GENERATED_BODY()
 
 public:
-	APokerPlayerController();
+    APokerPlayerController();
 
-	// Функция для получения экземпляра HUD. Может потребоваться Cast в Blueprint, если нужны специфичные функции HUD.
-	UFUNCTION(BlueprintPure, Category = "UI|HUD")
-	UUserWidget* GetGameHUD() const; // Возвращаем UUserWidget*
+    // Класс виджета HUD, назначается в Blueprint наследнике этого контроллера
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<UUserWidget> GameHUDClass;
 
-	// ... (остальные функции HandleFoldAction, ToggleInputMode и т.д. остаются такими же) ...
-	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
-	void HandleFoldAction();
+    // Экземпляр созданного HUD
+    UPROPERTY(BlueprintReadOnly, Category = "UI")
+    UUserWidget* GameHUDWidgetInstance;
 
-	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
-	void HandleCheckCallAction();
+    // Вызывается для установки игрового режима ввода (осмотр)
+    UFUNCTION(BlueprintCallable, Category = "Input")
+    void SetInputModeGameOnlyAdvanced();
 
-	UFUNCTION(BlueprintCallable, Category = "Poker Actions")
-	void HandleBetRaiseAction(int64 Amount);
-
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	void ToggleInputMode();
+    // Вызывается для установки UI режима ввода (курсор)
+    UFUNCTION(BlueprintCallable, Category = "Input")
+    void SetInputModeUIOnlyAdvanced(UUserWidget* InWidgetToFocus = nullptr, bool bLockMouseToViewport = false);
 
 protected:
+    virtual void BeginPlay() override;
+    virtual void SetupInputComponent() override;
 
-	bool bIsMouseCursorVisible;
-	virtual void SetupInputComponent() override;
-	/** Обработчик события, когда OfflineGameManager запрашивает действие у игрока. */
-	UFUNCTION() 
-	void HandleActionRequested(int32 PlayerSeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack);
+    // Функции обработки ввода осей
+    void LookUp(float Value);
+    void Turn(float Value);
+
+    // Функция переключения режимов
+    void ToggleInputMode();
+
+    // Переменная для отслеживания текущего UI режима
+    bool bIsUIModeActive;
+
+    // Функция-обработчик делегата от OfflineGameManager
+    UFUNCTION()
+    void HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack);
+
+public:
+    // Функции-заглушки для обработки нажатий кнопок HUD (вызываются из WBP_GameHUD)
+    UFUNCTION(BlueprintCallable, Category = "Player Actions")
+    void HandleFoldAction();
+
+    UFUNCTION(BlueprintCallable, Category = "Player Actions")
+    void HandleCheckCallAction();
+
+    UFUNCTION(BlueprintCallable, Category = "Player Actions")
+    void HandleBetRaiseAction(int64 Amount);
 };
