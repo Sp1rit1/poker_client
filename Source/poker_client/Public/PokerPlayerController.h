@@ -9,7 +9,8 @@
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
-class UGameHUDInterface; // Прямое объявление C++ интерфейса
+class UGameHUDInterface; // Ваш C++ интерфейс для HUD
+class UEnhancedInputLocalPlayerSubsystem;
 
 UCLASS()
 class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените YOURPROJECT_API
@@ -20,32 +21,54 @@ public:
     APokerPlayerController();
 
     // --- Enhanced Input Свойства ---
+    // Назначаются в Blueprint наследнике этого контроллера
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Mappings")
-    UInputMappingContext* DefaultMappingContext;
+    UInputMappingContext* PlayerInputMappingContext; // Контекст для игрового режима (переименован для ясности)
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* LookUpAction;
+    UInputAction* LookUpAction; // Для осмотра вверх/вниз
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* TurnAction;
+    UInputAction* TurnAction; // Для осмотра влево/вправо
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
+    UInputAction* ToggleToUIAction; // Для переключения В UI-режим (Tab или другая клавиша)
 
     // --- UI Свойства ---
+    // Назначается в Blueprint наследнике этого контроллера
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UUserWidget> GameHUDClass;
 
+    // Экземпляр созданного HUD
     UPROPERTY(BlueprintReadOnly, Category = "UI")
     UUserWidget* GameHUDWidgetInstance;
 
+    // --- Функции Управления Режимом Ввода (вызываются из BP или C++) ---
+    /** Переключает контроллер в режим "только игра": ввод для Pawn'а, курсор скрыт.
+     *  Эта функция будет вызываться из WBP_GameHUD.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Input Management")
+    void SwitchToGameInputMode();
+
+    /** Переключает контроллер в режим "только UI": ввод для UI, курсор виден.
+     *  Эта функция будет вызываться при нажатии ToggleToUIAction.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Input Management") // Сделаем BlueprintCallable на всякий случай
+        void SwitchToUIInputMode(UUserWidget* WidgetToFocus = nullptr);
+
+
 protected:
     virtual void BeginPlay() override;
-    // SetupPlayerInputComponent теперь не нужен, так как привязка будет в BeginPlay
-    // virtual void SetupPlayerInputComponent() override; // Закомментировано или удалено
-
-    void SetupInputComponent() override;
+    virtual void SetupInputComponent() override;
 
     // Функции-обработчики для Input Actions
     void HandleLookUp(const struct FInputActionValue& Value);
     void HandleTurn(const struct FInputActionValue& Value);
+    void HandleToggleToUI(const struct FInputActionValue& Value); // Обработчик для ToggleToUIAction
+
+    // Переменная для отслеживания текущего UI режима (все еще полезна)
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Input Management")
+    bool bIsInUIMode;
 
     // Функция-обработчик делегата от OfflineGameManager
     UFUNCTION()
