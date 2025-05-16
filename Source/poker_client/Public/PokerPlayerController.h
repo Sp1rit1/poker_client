@@ -3,8 +3,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "PokerDataTypes.h" // Для EPlayerAction
-#include "PokerPlayerController.generated.h"
+#include "PokerPlayerController.generated.h" // Убедитесь, что это имя вашего файла
 
+// Прямые объявления для UPROPERTY
+class UInputMappingContext;
+class UInputAction;
 class UUserWidget;
 class UGameHUDInterface; // Прямое объявление C++ интерфейса
 
@@ -16,42 +19,40 @@ class POKER_CLIENT_API APokerPlayerController : public APlayerController // За
 public:
     APokerPlayerController();
 
-    // Класс виджета HUD, назначается в Blueprint наследнике этого контроллера
+    // --- Enhanced Input Свойства ---
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Mappings")
+    UInputMappingContext* DefaultMappingContext;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
+    UInputAction* LookUpAction;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
+    UInputAction* TurnAction;
+
+    // --- UI Свойства ---
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UUserWidget> GameHUDClass;
 
-    // Экземпляр созданного HUD
     UPROPERTY(BlueprintReadOnly, Category = "UI")
     UUserWidget* GameHUDWidgetInstance;
 
-    // Вызывается для установки игрового режима ввода (осмотр)
-    UFUNCTION(BlueprintCallable, Category = "Input")
-    void SetInputModeGameOnlyAdvanced();
-
-    // Вызывается для установки UI режима ввода (курсор)
-    UFUNCTION(BlueprintCallable, Category = "Input")
-    void SetInputModeUIOnlyAdvanced(UUserWidget* InWidgetToFocus = nullptr, bool bLockMouseToViewport = false);
-
 protected:
     virtual void BeginPlay() override;
-    virtual void SetupInputComponent() override;
+    // SetupPlayerInputComponent теперь не нужен, так как привязка будет в BeginPlay
+    // virtual void SetupPlayerInputComponent() override; // Закомментировано или удалено
 
-    // Функции обработки ввода осей
-    void LookUp(float Value);
-    void Turn(float Value);
+    void SetupInputComponent() override;
 
-    // Функция переключения режимов
-    void ToggleInputMode();
-
-    // Переменная для отслеживания текущего UI режима
-    bool bIsUIModeActive;
+    // Функции-обработчики для Input Actions
+    void HandleLookUp(const struct FInputActionValue& Value);
+    void HandleTurn(const struct FInputActionValue& Value);
 
     // Функция-обработчик делегата от OfflineGameManager
     UFUNCTION()
     void HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack);
 
 public:
-    // Функции-заглушки для обработки нажатий кнопок HUD (вызываются из WBP_GameHUD)
+    // Функции-заглушки для обработки нажатий кнопок HUD
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
     void HandleFoldAction();
 
