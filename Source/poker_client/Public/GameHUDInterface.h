@@ -1,9 +1,8 @@
-﻿// GameHUDInterface.h
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "PokerDataTypes.h" // Включаем для EPlayerAction
+#include "PokerDataTypes.h" // Включаем для EPlayerAction и FPlayerSeatData (если будете использовать для инициализации)
 #include "GameHUDInterface.generated.h"
 
 // This class does not need to be modified.
@@ -16,31 +15,52 @@ class UGameHUDInterface : public UInterface
 /**
  * Интерфейс для взаимодействия с игровым HUD.
  */
-class POKER_CLIENT_API IGameHUDInterface // Имя интерфейса обычно начинается с 'I'
+class POKER_CLIENT_API IGameHUDInterface // Замените YOURPROJECT_API. Имя интерфейса обычно начинается с 'I'
 {
     GENERATED_BODY()
 
-    // Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
     /**
-     * Обновляет кнопки действий и информацию о текущем ходе в HUD.
-     * Эту функцию нужно будет реализовать в Blueprint виджете HUD.
+     * Инициализирует/обновляет основную информацию о состоянии игры и текущем ходе в HUD.
+     * Вызывается как при начальной настройке HUD, так и после каждого действия, чтобы показать, чей ход.
+     * @param ForPlayerSeatIndex Индекс места игрока, чей сейчас ход (или -1, если ход не определен/ожидание).
+     * @param CurrentPot Текущий размер общего банка.
+     * @param CurrentBetToCall Сумма, которую нужно доставить, чтобы остаться в игре (сделать колл).
+     * @param MinimumRaise Минимальная сумма для бета или рейза.
+     * @param PlayerStack Стек игрока, чей сейчас ход (или стек локального игрока, если ForPlayerSeatIndex = -1).
      */
-    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
-    void UpdateActionButtonsAndPlayerTurn(int32 ForPlayerSeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
+    void UpdatePlayerTurnInfo(int32 ForPlayerSeatIndex, int64 CurrentPot, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
 
     /**
-     * Инициализирует HUD начальными данными состояния игры.
-     * Эту функцию нужно будет реализовать в Blueprint виджете HUD.
+     * Обновляет состояние кнопок действий в HUD на основе доступных действий для текущего игрока.
+     * Вызывается, когда наступает ход локального игрока.
+     * @param AllowedActions Массив действий, доступных текущему игроку.
      */
-    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
-    void InitializetPotFromState(int64 Pot);
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
+    void UpdateActionButtons(const TArray<EPlayerAction>& AllowedActions);
 
-    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
+    /**
+     * Деактивирует все кнопки действий игрока в HUD.
+     * Вызывается, когда не ход локального игрока или когда никакие действия невозможны.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Controls")
     void DisableButtons();
 
-    // Можете добавить другие функции интерфейса по мере необходимости
-    // Например, для показа карманных карт локального игрока, обновления банка и т.д.
-    // UFUNCTION(BlueprintImplementableEvent, Category = "HUD Interface")
-    // void ShowLocalPlayerHoleCards(const TArray<FCard>& HoleCards);
+
+    // --- Опциональные функции, которые могут понадобиться позже ---
+
+    // /**
+    //  * Обновляет отображение общих карт на столе.
+    //  * @param CommunityCards Массив общих карт.
+    //  */
+    // UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
+    // void UpdateCommunityCards(const TArray<FCard>& CommunityCards);
+
+    // /**
+    //  * Показывает сообщение в HUD (например, "Player X folds", "Bot Y raises to Z").
+    //  * @param Message Текст сообщения.
+    //  */
+    // UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Feedback")
+    // void ShowGameMessage(const FText& Message);
 };

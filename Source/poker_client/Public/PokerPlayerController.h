@@ -72,7 +72,7 @@ protected:
 
     // Функция-обработчик делегата от OfflineGameManager
     UFUNCTION()
-    void HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack);
+    void HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack, int64 CurrentPot);
 
 public:
     // Функции-заглушки для обработки нажатий кнопок HUD
