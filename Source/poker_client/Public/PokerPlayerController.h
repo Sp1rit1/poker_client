@@ -84,4 +84,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
     void HandleBetRaiseAction(int64 Amount);
+
+    UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Player UI|Cards") // Категория для удобства в BP
+    void OnLocalPlayerCardsDealt_BP(const TArray<FCard>& DealtHoleCards);
 };

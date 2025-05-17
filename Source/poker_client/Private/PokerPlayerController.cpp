@@ -10,6 +10,8 @@
 #include "OfflinePokerGameState.h" // Для доступа к GameState через OfflineManager
 #include "GameHUDInterface.h"      // Ваш C++ интерфейс HUD
 #include "Kismet/GameplayStatics.h"
+#include "Misc/OutputDeviceNull.h"
+#include "GameFramework/GameModeBase.h"
 
 APokerPlayerController::APokerPlayerController()
 {
@@ -199,7 +201,7 @@ void APokerPlayerController::SwitchToUIInputMode(UUserWidget* WidgetToFocus)
 
 void APokerPlayerController::HandleActionRequested(int32 SeatIndex, const TArray<EPlayerAction>& AllowedActions, int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStack, int64 CurrentPot)
 {
-    // Логирование полученных данных (очень полезно для отладки)
+    // Логирование полученных данных
     UE_LOG(LogTemp, Log,
         TEXT("APokerPlayerController::HandleActionRequested: SeatIndex=%d, Pot=%lld, Stack=%lld, BetToCall=%lld, MinRaise=%lld"),
         SeatIndex, CurrentPot, PlayerStack, BetToCall, MinRaiseAmount);
@@ -213,7 +215,7 @@ void APokerPlayerController::HandleActionRequested(int32 SeatIndex, const TArray
             ActionsString += EnumPtr->GetNameStringByValue(static_cast<int64>(Action)) + TEXT(", ");
         }
     }
-    UE_LOG(LogTemp, Log, TEXT("%s"), *ActionsString);
+    UE_LOG(LogTemp, Log, TEXT("Actions: %s"), *ActionsString);
 
 
     if (!GameHUDWidgetInstance)
@@ -222,46 +224,73 @@ void APokerPlayerController::HandleActionRequested(int32 SeatIndex, const TArray
         return;
     }
 
-    // Проверяем, реализует ли наш HUD нужный интерфейс
-    if (!GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass())) // Замените UGameHUDInterface на ваше имя C++ класса интерфейса
+    if (!GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
     {
         UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::HandleActionRequested - GameHUDWidgetInstance (%s) does not implement IGameHUDInterface!"), *GetNameSafe(GameHUDWidgetInstance));
         return;
     }
 
     // 1. Обновляем основную информацию о ходе и состоянии стола в HUD.
-    // Эта информация отображается всегда, независимо от того, чей ход (локального игрока или бота).
-    IGameHUDInterface::Execute_UpdatePlayerTurnInfo( // Замените IGameHUDInterface и UpdatePlayerTurnInfo на ваши точные имена
-        GameHUDWidgetInstance,    // Target
-        SeatIndex,                // ForPlayerSeatIndex (чей сейчас ход по данным от GameManager)
-        CurrentPot,               // CurrentPot
-        BetToCall,                // CurrentBetToCall
-        MinRaiseAmount,           // MinimumRaise
-        PlayerStack               // PlayerStack (стек игрока, чей сейчас ход)
+    IGameHUDInterface::Execute_UpdatePlayerTurnInfo(
+        GameHUDWidgetInstance,
+        SeatIndex,
+        CurrentPot,
+        BetToCall,
+        MinRaiseAmount,
+        PlayerStack
     );
 
-    // 2. Обновляем состояние кнопок действий в зависимости от того, чей ход.
-    // Предполагаем, что локальный игрок всегда имеет SeatIndex 0 в оффлайн-режиме.
-    // Вам может понадобиться более сложная логика для определения, является ли SeatIndex ходом локального игрока,
-    // особенно если вы планируете мультиплеер или возможность играть за разные места.
-    // Например, можно хранить LocalPlayerSeatIndex в PlayerController.
-    const int32 LocalPlayerSeatIndex = 0; // Пока что жестко задаем для оффлайна
+    // 2. Обновляем состояние кнопок действий и режим ввода.
+    const int32 LocalPlayerSeatIndex = 0; // Предположение для оффлайн-игры
 
     if (SeatIndex == LocalPlayerSeatIndex)
     {
-        // Это ход локального игрока. Обновляем кнопки доступными действиями.
-        IGameHUDInterface::Execute_UpdateActionButtons( // Замените IGameHUDInterface и UpdateActionButtons на ваши точные имена
-            GameHUDWidgetInstance,    // Target
-            AllowedActions            // AllowedActions (массив действий, которые может совершить локальный игрок)
+        IGameHUDInterface::Execute_UpdateActionButtons(
+            GameHUDWidgetInstance,
+            AllowedActions
         );
 
+        // Отображаем карты локального игрока, если это подходящий момент
+        UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
+        if (GI)
+        {
+            UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
+            if (OfflineManager && OfflineManager->GetGameState())
+            {
+                UOfflinePokerGameState* CurrentGameState = OfflineManager->GetGameState();
+                if (CurrentGameState->GetCurrentGameStage() >= EGameStage::Preflop &&
+                    CurrentGameState->Seats.IsValidIndex(LocalPlayerSeatIndex))
+                {
+                    const FPlayerSeatData& LocalPlayerData = CurrentGameState->Seats[LocalPlayerSeatIndex];
+                    if (LocalPlayerData.HoleCards.Num() == 2)
+                    {
+                        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Calling OnLocalPlayerCardsDealt_BP for Seat %d."), LocalPlayerSeatIndex);
+                        OnLocalPlayerCardsDealt_BP(LocalPlayerData.HoleCards);
+                    }
+                }
+            }
+        }
+    }
+    else // Ход другого игрока (бота)
+    {
+        IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
+        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Not local player's turn (Seat %d). Disabling buttons for local player."), SeatIndex);
+    }
+
+    // 3. Обновляем ВСЕ PlayerSeatVisualizers через GameMode ПОСЛЕ обновления HUD.
+    // Это гарантирует, что 3D-виджеты игроков (имена, стеки) также будут актуальны.
+    AGameModeBase* CurrentGameModeBase = GetWorld()->GetAuthGameMode();
+    if (CurrentGameModeBase)
+    {
+        // Вызываем Blueprint-функцию/событие "RefreshAllSeatVisualizersUI_Event" в BP_PokerGameMode.
+        // Убедитесь, что это имя точно совпадает с именем Custom Event или BlueprintCallable функции в вашем BP_PokerGameMode.
+        FOutputDeviceNull Ar; // Нужен для CallFunctionByNameWithArguments, если у события нет параметров
+        CurrentGameModeBase->CallFunctionByNameWithArguments(TEXT("RefreshAllSeatVisualizersUI_Event"), Ar, nullptr, true);
+        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Requested GameMode to refresh all seat visualizers."));
     }
     else
     {
-        // Это ход другого игрока (бота). Деактивируем все кнопки действий для локального игрока.
-        IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance); // Замените IGameHUDInterface и DisableButtons на ваши точные имена
-        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleActionRequested - Not local player's turn (Seat %d). Disabling buttons for local player."), SeatIndex);
-
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: Could not get GameMode to refresh seat visualizers."));
     }
 }
 

@@ -18,7 +18,7 @@ class POKER_CLIENT_API IIPlayerInfoWidgetInterface // Замените YOURPROJE
 public:
     // Функция для инициализации/обновления виджета данными игрока
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Player Info Interface")
-    void InitializePlayerInfo(const FString& PlayerName, int64 PlayerStack);
+    void UpdatePlayerInfo(const FString& PlayerName, int64 PlayerStack);
     // Или: void InitializePlayerInfo(const FPlayerSeatData& SeatData);
     // BlueprintImplementableEvent означает, что реализация будет в Blueprint
 };
