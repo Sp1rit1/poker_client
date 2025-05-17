@@ -30,7 +30,7 @@ public:
      * @param PlayerStack Стек игрока, чей сейчас ход (или стек локального игрока, если ForPlayerSeatIndex = -1).
      */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
-    void UpdatePlayerTurnInfo(int32 ForPlayerSeatIndex, int64 CurrentPot, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
+    void UpdatePlayerTurnInfo(const FString& MovingPlayerName, int64 CurrentPot, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
 
     /**
      * Обновляет состояние кнопок действий в HUD на основе доступных действий для текущего игрока.

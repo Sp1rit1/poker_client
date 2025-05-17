@@ -8,8 +8,17 @@
 #include "OfflineGameManager.generated.h" // Должен быть последним инклюдом
 
 // Объявление делегата для уведомления UI о необходимости запроса действия у игрока
-// Добавлен параметр CurrentPot
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_SixParams(FOnActionRequestedSignature, int32, PlayerSeatIndex, const TArray<EPlayerAction>&, AllowedActions, int64, BetToCall, int64, MinRaiseAmount, int64, PlayerStack, int64, CurrentPot);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_SevenParams(
+	FOnActionRequestedSignature,
+	int32, MovingPlayerSeatIndex,             
+	const FString&, MovingPlayerName,       
+	const TArray<EPlayerAction>&, AllowedActions,
+	int64, BetToCall,
+	int64, MinRaiseAmount,
+	int64, PlayerStackOfMovingPlayer,
+	int64, CurrentPot
+);
 
 UCLASS(BlueprintType)
 class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените YOURPROJECT_API
