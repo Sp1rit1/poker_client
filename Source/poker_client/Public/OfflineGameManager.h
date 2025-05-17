@@ -9,16 +9,20 @@
 
 // Объявление делегата для уведомления UI о необходимости запроса действия у игрока
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_SevenParams(
-	FOnActionRequestedSignature,
-	int32, MovingPlayerSeatIndex,             
-	const FString&, MovingPlayerName,       
-	const TArray<EPlayerAction>&, AllowedActions,
-	int64, BetToCall,
-	int64, MinRaiseAmount,
-	int64, PlayerStackOfMovingPlayer,
-	int64, CurrentPot
-);
+// Делегат 1: Уведомление о том, чей сейчас ход
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerTurnStartedSignature, int32, MovingPlayerSeatIndex);
+
+// Делегат 2: Уведомление о доступных действиях для текущего игрока
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerActionsAvailableSignature, const TArray<EPlayerAction>&, AllowedActions);
+
+// Делегат 3: Обновление общей информации о столе (имя ходящего, текущий банк)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTableStateInfoSignature, const FString&, MovingPlayerName, int64, CurrentPot);
+
+// Делегат 4: Детальная информация для кнопок действий (ставки, стек ходящего)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnActionUIDetailsSignature, int64, BetToCall, int64, MinRaiseAmount, int64, PlayerStackOfMovingPlayer);
+
+// Делегат 5: Сообщение для истории игры
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameHistoryEventSignature, const FString&, HistoryMessage);
 
 UCLASS(BlueprintType)
 class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените YOURPROJECT_API
@@ -34,9 +38,21 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game Deck")
 	UDeck* Deck;
 
-	// Делегат, вызываемый, когда нужно запросить действие у игрока
+	// --- Переменные для новых делегатов ---
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnActionRequestedSignature OnActionRequestedDelegate;
+	FOnPlayerTurnStartedSignature OnPlayerTurnStartedDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnPlayerActionsAvailableSignature OnPlayerActionsAvailableDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnTableStateInfoSignature OnTableStateInfoDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnActionUIDetailsSignature OnActionUIDetailsDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnGameHistoryEventSignature OnGameHistoryEventDelegate; // Этот уже был, оставляем
 
 	// Конструктор по умолчанию
 	UOfflineGameManager();

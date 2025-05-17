@@ -2,18 +2,18 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "PokerDataTypes.h" // Для EPlayerAction
-#include "PokerPlayerController.generated.h" // Убедитесь, что это имя вашего файла
+#include "PokerDataTypes.h" // Для EPlayerAction и FCard
+#include "PokerPlayerController.generated.h"
 
-// Прямые объявления для UPROPERTY
+// Прямые объявления
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
-class UGameHUDInterface; // Ваш C++ интерфейс для HUD
+class UGameHUDInterface;
 class UEnhancedInputLocalPlayerSubsystem;
 
 UCLASS()
-class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените YOURPROJECT_API
+class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените POKER_CLIENT_API
 {
     GENERATED_BODY()
 
@@ -21,40 +21,31 @@ public:
     APokerPlayerController();
 
     // --- Enhanced Input Свойства ---
-    // Назначаются в Blueprint наследнике этого контроллера
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Mappings")
-    UInputMappingContext* PlayerInputMappingContext; // Контекст для игрового режима (переименован для ясности)
+    UInputMappingContext* PlayerInputMappingContext;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* LookUpAction; // Для осмотра вверх/вниз
+    UInputAction* LookUpAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* TurnAction; // Для осмотра влево/вправо
+    UInputAction* TurnAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* ToggleToUIAction; // Для переключения В UI-режим (Tab или другая клавиша)
+    UInputAction* ToggleToUIAction;
 
     // --- UI Свойства ---
-    // Назначается в Blueprint наследнике этого контроллера
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UUserWidget> GameHUDClass;
 
-    // Экземпляр созданного HUD
     UPROPERTY(BlueprintReadOnly, Category = "UI")
     UUserWidget* GameHUDWidgetInstance;
 
-    // --- Функции Управления Режимом Ввода (вызываются из BP или C++) ---
-    /** Переключает контроллер в режим "только игра": ввод для Pawn'а, курсор скрыт.
-     *  Эта функция будет вызываться из WBP_GameHUD.
-     */
+    // --- Функции Управления Режимом Ввода ---
     UFUNCTION(BlueprintCallable, Category = "Input Management")
     void SwitchToGameInputMode();
 
-    /** Переключает контроллер в режим "только UI": ввод для UI, курсор виден.
-     *  Эта функция будет вызываться при нажатии ToggleToUIAction.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Input Management") // Сделаем BlueprintCallable на всякий случай
-        void SwitchToUIInputMode(UUserWidget* WidgetToFocus = nullptr);
+    UFUNCTION(BlueprintCallable, Category = "Input Management")
+    void SwitchToUIInputMode(UUserWidget* WidgetToFocus = nullptr);
 
 
 protected:
@@ -64,26 +55,44 @@ protected:
     // Функции-обработчики для Input Actions
     void HandleLookUp(const struct FInputActionValue& Value);
     void HandleTurn(const struct FInputActionValue& Value);
-    void HandleToggleToUI(const struct FInputActionValue& Value); // Обработчик для ToggleToUIAction
+    void HandleToggleToUI(const struct FInputActionValue& Value);
 
-    // Переменная для отслеживания текущего UI режима (все еще полезна)
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Input Management")
     bool bIsInUIMode;
 
-    // Функция-обработчик делегата от OfflineGameManager
+    // --- Функции-обработчики для НОВЫХ делегатов от OfflineGameManager ---
     UFUNCTION()
-    void HandleActionRequested(
-        int32 MovingPlayerSeatIndex,        
-        const FString& MovingPlayerName,   
-        const TArray<EPlayerAction>& AllowedActions,
-        int64 BetToCall,
-        int64 MinRaiseAmount,
-        int64 MovingPlayerStack,
-        int64 CurrentPot
-    );
+    void HandlePlayerTurnStarted(int32 MovingPlayerSeatIndex);
+
+    UFUNCTION()
+    void HandlePlayerActionsAvailable(const TArray<EPlayerAction>& AllowedActions);
+
+    UFUNCTION()
+    void HandleTableStateInfo(const FString& MovingPlayerName, int64 CurrentPot);
+
+    UFUNCTION()
+    void HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer);
+
+    UFUNCTION()
+    void HandleGameHistoryEvent(const FString& HistoryMessage); // Этот уже был для истории
+
+private:
+    // --- Переменные для агрегации данных от делегатов перед обновлением HUD ---
+    // Эти переменные будут хранить последние полученные данные от каждого делегата.
+    // Мы используем TOptional, чтобы знать, было ли значение уже установлено для текущего запроса действия.
+    TOptional<int32> OptMovingPlayerSeatIndex;
+    TOptional<FString> OptMovingPlayerName;
+    TOptional<TArray<EPlayerAction>> OptAllowedActions;
+    TOptional<int64> OptBetToCall;
+    TOptional<int64> OptMinRaiseAmount;
+    TOptional<int64> OptMovingPlayerStack;
+    TOptional<int64> OptCurrentPot;
+
+    // Вспомогательная функция для проверки, все ли данные собраны, и вызова обновления HUD
+    void TryAggregateAndTriggerHUDUpdate();
 
 public:
-    // Функции-заглушки для обработки нажатий кнопок HUD
+    // Функции-обработчики нажатий кнопок HUD
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
     void HandleFoldAction();
 
@@ -96,6 +105,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
     void HandlePostBlindAction();
 
-    UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Player UI|Cards") // Категория для удобства в BP
+    // Событие для Blueprint для отображения карт локального игрока
+    UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Player UI|Cards")
     void OnLocalPlayerCardsDealt_BP(const TArray<FCard>& DealtHoleCards);
 };

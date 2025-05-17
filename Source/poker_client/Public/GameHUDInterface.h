@@ -47,20 +47,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Controls")
     void DisableButtons();
 
-
-    // --- Опциональные функции, которые могут понадобиться позже ---
-
-    // /**
-    //  * Обновляет отображение общих карт на столе.
-    //  * @param CommunityCards Массив общих карт.
-    //  */
-    // UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
-    // void UpdateCommunityCards(const TArray<FCard>& CommunityCards);
-
-    // /**
-    //  * Показывает сообщение в HUD (например, "Player X folds", "Bot Y raises to Z").
-    //  * @param Message Текст сообщения.
-    //  */
-    // UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Feedback")
-    // void ShowGameMessage(const FText& Message);
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
+    void AddGameHistoryMessage(const FString& Message);
 };
