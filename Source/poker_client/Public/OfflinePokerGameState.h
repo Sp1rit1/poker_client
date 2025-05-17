@@ -1,69 +1,108 @@
-#pragma once
+п»ї#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PokerDataTypes.h" // Включаем наш файл с типами
+#include "PokerDataTypes.h"
 #include "OfflinePokerGameState.generated.h"
 
-/**
- * Класс UObject, хранящий полное состояние одного стола для оффлайн игры.
- */
 UCLASS(BlueprintType)
-class POKER_CLIENT_API UOfflinePokerGameState : public UObject // Замени POKER_CLIENT_API на YOURPROJECT_API
+class POKER_CLIENT_API UOfflinePokerGameState : public UObject // Р—Р°РјРµРЅРёС‚Рµ YOURPROJECT_API
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	// Массив данных для каждого места за столом (включая пустые места)
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	TArray<FPlayerSeatData> Seats;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    TArray<FPlayerSeatData> Seats;
 
-	// Общие карты на столе (борд)
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	TArray<FCard> CommunityCards;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    TArray<FCard> CommunityCards;
 
-	// Текущий общий размер банка (основной пот)
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	int64 Pot = 0;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int64 Pot = 0;
 
-	// Индекс места, на котором находится кнопка дилера
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	int32 DealerSeat = -1;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 DealerSeat = -1;
 
-	// Индекс места игрока, чей сейчас ход
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	int32 CurrentTurnSeat = -1;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 CurrentTurnSeat = -1;
 
-	// Текущая стадия игры (префлоп, флоп и т.д.)
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	EGameStage CurrentStage = EGameStage::WaitingForPlayers;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    EGameStage CurrentStage = EGameStage::WaitingForPlayers;
 
-	// Сумма, которую нужно доставить, чтобы остаться в игре (сделать колл)
-	UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	int64 CurrentBetToCall = 0;
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int64 CurrentBetToCall = 0;
 
-	// TODO: Позже добавить массив для побочных банков (Side Pots)
-	// UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
-	// TArray<FSidePot> SidePots;
+    // --- РќРѕРІС‹Рµ РџРѕР»СЏ ---
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int64 SmallBlindAmount = 0;
 
-	UOfflinePokerGameState() // Конструктор по умолчанию
-	{
-		// Резервируем место под обычное количество игроков + карты борда
-		Seats.Reserve(9);
-		CommunityCards.Reserve(5);
-	}
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int64 BigBlindAmount = 0;
 
-	// (Опционально) Метод для сброса состояния к начальному
-	void ResetState()
-	{
-		Seats.Empty();
-		CommunityCards.Empty();
-		Pot = 0;
-		DealerSeat = -1;
-		CurrentTurnSeat = -1;
-		CurrentStage = EGameStage::WaitingForPlayers;
-		CurrentBetToCall = 0;
-		// Reset SidePots
-	}
+    // РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: РѕС‚СЃР»РµР¶РёРІР°С‚СЊ, РєС‚Рѕ РґРѕР»Р¶РµРЅ РїРѕСЃС‚Р°РІРёС‚СЊ СЃР»РµРґСѓСЋС‰РёР№ Р±Р»Р°Р№РЅРґ
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 PendingSmallBlindSeat = -1;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 PendingBigBlindSeat = -1;
+
+
+    UOfflinePokerGameState()
+    {
+        Seats.Reserve(9);
+        CommunityCards.Reserve(5);
+    }
+
+    void ResetState()
+    {
+        Seats.Empty();
+        CommunityCards.Empty();
+        Pot = 0;
+        DealerSeat = -1;
+        CurrentTurnSeat = -1;
+        CurrentStage = EGameStage::WaitingForPlayers;
+        CurrentBetToCall = 0;
+        SmallBlindAmount = 0;
+        BigBlindAmount = 0;
+        PendingSmallBlindSeat = -1;
+        PendingBigBlindSeat = -1;
+    }
+
+    // --- РќРѕРІС‹Рµ Р“РµС‚С‚РµСЂС‹ (BlueprintCallable) ---
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int32 GetNumSeats() const { return Seats.Num(); }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    const TArray<FPlayerSeatData>& GetSeatsArray() const { return Seats; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    FPlayerSeatData GetSeatData(int32 SeatIndex) const
+    {
+        if (Seats.IsValidIndex(SeatIndex)) return Seats[SeatIndex];
+        return FPlayerSeatData(); // Р’РѕР·РІСЂР°С‰Р°РµРј РїСѓСЃС‚СѓСЋ СЃС‚СЂСѓРєС‚СѓСЂСѓ РІ СЃР»СѓС‡Р°Рµ РѕС€РёР±РєРё
+    }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    const TArray<FCard>& GetCommunityCardsArray() const { return CommunityCards; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int64 GetPotAmount() const { return Pot; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int32 GetDealerSeatIndex() const { return DealerSeat; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int32 GetCurrentTurnSeatIndex() const { return CurrentTurnSeat; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    EGameStage GetCurrentGameStage() const { return CurrentStage; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int64 GetCurrentBetToCall() const { return CurrentBetToCall; }
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int64 GetSmallBlindDefineAmount() const { return SmallBlindAmount; } // РћРїСЂРµРґРµР»РµРЅРЅС‹Р№ SB
+
+    UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
+    int64 GetBigBlindDefineAmount() const { return BigBlindAmount; }   // РћРїСЂРµРґРµР»РµРЅРЅС‹Р№ BB
 };

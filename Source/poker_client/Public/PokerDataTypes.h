@@ -49,45 +49,47 @@ enum class EPokerHandRank : uint8
 	RoyalFlush		UMETA(DisplayName = "Royal Flush")		// Роял Флеш
 };
 
-// Статус игрока в раздаче/за столом
 UENUM(BlueprintType)
 enum class EPlayerStatus : uint8
 {
-	Waiting			UMETA(DisplayName = "Waiting"),			// Ожидает начала раздачи
-	SittingOut		UMETA(DisplayName = "Sitting Out"),		// Сидит за столом, но пропускает раздачи
-	Playing			UMETA(DisplayName = "Playing"),			// Участвует в текущей раздаче (общее) - можно детализировать
-	Folded			UMETA(DisplayName = "Folded"),			// Сбросил карты в текущей раздаче
-	Checked			UMETA(DisplayName = "Checked"),			// Сделал Чек
-	Called			UMETA(DisplayName = "Called"),			// Сделал Колл
-	Bet				UMETA(DisplayName = "Bet"),				// Сделал Бет
-	Raised			UMETA(DisplayName = "Raised"),			// Сделал Рейз
-	AllIn			UMETA(DisplayName = "All-In")			// Пошел Ва-банк
+	Waiting			UMETA(DisplayName = "Waiting"),
+	SittingOut		UMETA(DisplayName = "Sitting Out"),
+	Playing			UMETA(DisplayName = "Playing"), // Игрок в текущей раздаче (после блайндов/раздачи карт)
+	MustPostSmallBlind UMETA(DisplayName = "Must Post Small Blind"), // Ожидание постановки малого блайнда
+	MustPostBigBlind UMETA(DisplayName = "Must Post Big Blind"),   // Ожидание постановки большого блайнда
+	Folded			UMETA(DisplayName = "Folded"),
+	Checked			UMETA(DisplayName = "Checked"),
+	Called			UMETA(DisplayName = "Called"),
+	Bet				UMETA(DisplayName = "Bet"),
+	Raised			UMETA(DisplayName = "Raised"),
+	AllIn			UMETA(DisplayName = "All-In")
 };
 
-// Стадия текущей игры/раздачи
 UENUM(BlueprintType)
 enum class EGameStage : uint8
 {
-	WaitingForPlayers	UMETA(DisplayName = "Waiting For Players"), // Ожидание игроков
-	Preflop				UMETA(DisplayName = "Preflop"),			// Префлоп (ставки после раздачи карманных карт)
-	Flop				UMETA(DisplayName = "Flop"),				// Флоп (выложены 3 общие карты)
-	Turn				UMETA(DisplayName = "Turn"),				// Терн (выложена 4-я общая карта)
-	River				UMETA(DisplayName = "River"),				// Ривер (выложена 5-я общая карта)
-	Showdown			UMETA(DisplayName = "Showdown")			// Вскрытие карт
+	WaitingForPlayers	UMETA(DisplayName = "Waiting For Players"),
+	Dealing				UMETA(DisplayName = "Dealing"),             // Общая стадия подготовки руки
+	WaitingForSmallBlind UMETA(DisplayName = "Waiting For Small Blind"),
+	WaitingForBigBlind	UMETA(DisplayName = "Waiting For Big Blind"),
+	Preflop				UMETA(DisplayName = "Preflop"),
+	Flop				UMETA(DisplayName = "Flop"),
+	Turn				UMETA(DisplayName = "Turn"),
+	River				UMETA(DisplayName = "River"),
+	Showdown			UMETA(DisplayName = "Showdown")
 };
 
-// Возможные действия игрока
 UENUM(BlueprintType)
 enum class EPlayerAction : uint8
 {
-	None		UMETA(DisplayName = "None"),      // Нет действия / Ожидание
-	Fold		UMETA(DisplayName = "Fold"),      // Сбросить карты
-	Check		UMETA(DisplayName = "Check"),     // Пропустить ход (если нет ставок)
-	Call		UMETA(DisplayName = "Call"),      // Уравнять ставку
-	Bet			UMETA(DisplayName = "Bet"),       // Сделать первую ставку в раунде
-	Raise		UMETA(DisplayName = "Raise"),     // Повысить предыдущую ставку
-	AllIn       UMETA(DisplayName = "All-In")     // Пойти ва-банк (может быть вариантом Bet, Call или Raise)
-	// Можно добавить другие, если понадобятся (например, PostBlind)
+	None		UMETA(DisplayName = "None"),
+	Fold		UMETA(DisplayName = "Fold"),
+	Check		UMETA(DisplayName = "Check"),
+	Call		UMETA(DisplayName = "Call"),
+	Bet			UMETA(DisplayName = "Bet"),
+	Raise		UMETA(DisplayName = "Raise"),
+	AllIn       UMETA(DisplayName = "All-In"),
+	PostBlind   UMETA(DisplayName = "Post Blind") // Новое действие
 };
 
 

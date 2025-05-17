@@ -98,6 +98,9 @@ public:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings")
     int64 PendingOfflineInitialStack = 1000;
 
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings")
+    int64 PendingSmallBlind = 50;
+
 
     // --- Делегаты для событий аутентификации ---
 // Виджеты будут подписываться на них
