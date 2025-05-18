@@ -49,4 +49,7 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface")
     void AddGameHistoryMessage(const FString& Message);
+
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Game Events")
+    void DisplayShowdownState();
 };

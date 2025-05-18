@@ -7,38 +7,47 @@
 #include "Deck.h"                  // Для UDeck
 #include "OfflineGameManager.generated.h" // Должен быть последним инклюдом
 
-// Объявление делегата для уведомления UI о необходимости запроса действия у игрока
+// --- ДЕЛЕГАТЫ ДЛЯ СВЯЗИ С APokerPlayerController ---
 
-// Делегат 1: Уведомление о том, чей сейчас ход
+// Делегат 1: Уведомление о том, чей сейчас ход начался. Передает индекс места.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerTurnStartedSignature, int32, MovingPlayerSeatIndex);
 
-// Делегат 2: Уведомление о доступных действиях для текущего игрока
+// Делегат 2: Передача списка доступных действий для текущего игрока.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerActionsAvailableSignature, const TArray<EPlayerAction>&, AllowedActions);
 
-// Делегат 3: Обновление общей информации о столе (имя ходящего, текущий банк)
+// Делегат 3: Передача основной информации о состоянии стола (имя ходящего, текущий банк).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTableStateInfoSignature, const FString&, MovingPlayerName, int64, CurrentPot);
 
-// Делегат 4: Детальная информация для кнопок действий (ставки, стек ходящего)
+// Делегат 4: Передача деталей, необходимых для UI кнопок действий (стоимость колла, мин. рейз, стек ходящего).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnActionUIDetailsSignature, int64, BetToCall, int64, MinRaiseAmount, int64, PlayerStackOfMovingPlayer);
 
-// Делегат 5: Сообщение для истории игры
+// Делегат 5: Сообщение для истории игры.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameHistoryEventSignature, const FString&, HistoryMessage);
 
+// Делегат 6: Уведомление об обновлении общих карт на столе.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommunityCardsUpdatedSignature, const TArray<FCard>&, CommunityCards);
+
+// Делегат 7: Уведомление о результатах шоудауна (опционально, можно передавать данные победителя и комбинации).
+// Пока просто сигнализирует о начале шоудауна и кто участвует.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShowdownSignature, const TArray<int32>&, ShowdownPlayerSeatIndices);
+
+
 UCLASS(BlueprintType)
-class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените YOURPROJECT_API
+class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените POKER_CLIENT_API на ваш YOURPROJECT_API
 {
 	GENERATED_BODY()
 
 public:
 	// Указатель на объект, хранящий текущее состояние игры
+	// Сделаем его UPROPERTY, чтобы GC его не собрал, и BlueprintReadOnly для доступа из BP (если нужно для отладки)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game State")
-	UOfflinePokerGameState* GameStateData;
+	TObjectPtr<UOfflinePokerGameState> GameStateData;
 
 	// Указатель на объект колоды карт
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game Deck")
-	UDeck* Deck;
+	TObjectPtr<UDeck> Deck;
 
-	// --- Переменные для новых делегатов ---
+	// --- Делегаты для уведомления внешних систем (APokerPlayerController) ---
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
 	FOnPlayerTurnStartedSignature OnPlayerTurnStartedDelegate;
 
@@ -52,7 +61,14 @@ public:
 	FOnActionUIDetailsSignature OnActionUIDetailsDelegate;
 
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnGameHistoryEventSignature OnGameHistoryEventDelegate; // Этот уже был, оставляем
+	FOnGameHistoryEventSignature OnGameHistoryEventDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnCommunityCardsUpdatedSignature OnCommunityCardsUpdatedDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnShowdownSignature OnShowdownDelegate;
+
 
 	// Конструктор по умолчанию
 	UOfflineGameManager();
@@ -73,7 +89,7 @@ public:
 	 * @return Указатель на UOfflinePokerGameState или nullptr, если игра не инициализирована.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Offline Game State|Getters")
-	UOfflinePokerGameState* GetGameState() const; // Переименован для единообразия с GetGameStateData, если такой был
+	UOfflinePokerGameState* GetGameState() const; // Оставим GetGameState, так как вы его уже использовали
 
 	/**
 	 * Начинает новую покерную раздачу.
@@ -86,38 +102,29 @@ public:
 	/**
 	 * Вызывается UI (через PlayerController), когда игрок совершает действие.
 	 * Обрабатывает действие игрока и определяет дальнейший ход игры.
+	 * @param ActingPlayerSeatIndex Индекс места игрока, совершившего действие.
 	 * @param PlayerAction Совершенное действие (Fold, Call, Bet, Raise, PostBlind).
 	 * @param Amount Сумма ставки/рейза (0 для Fold, Check, Call, PostBlind).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
-	void ProcessPlayerAction(EPlayerAction PlayerAction, int64 Amount);
+	void ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount);
+
+
+private:
+	// --- Внутренние Функции Управления Игрой ---
 
 	/**
 	 * Запрашивает действие у игрока на указанном месте.
-	 * Определяет доступные действия и вызывает OnActionRequestedDelegate.
+	 * Определяет доступные действия и вызывает соответствующие делегаты для UI.
 	 * @param SeatIndex Индекс места игрока, чей ход.
 	 */
-	 // Эта функция остается, так как она вызывается из StartNewHand, DealHoleCardsAndStartPreflop, и ProcessPlayerAction
-	UFUNCTION(BlueprintCallable, Category = "Offline Game|Internal")
 	void RequestPlayerAction(int32 SeatIndex);
 
-private:
-	// --- Вспомогательные Функции ---
-
 	/**
-	 * Находит следующее активное место игрока по часовой стрелке,
-	 * учитывая статус игрока и текущую стадию игры.
-	 * @param StartSeatIndex Индекс места, с которого начинать поиск.
-	 * @param bIncludeStartSeat Если true, то StartSeatIndex также проверяется.
-	 * @return Индекс следующего активного игрока или -1, если не найден.
+	 * Вызывается после того, как игрок на SB поставил блайнд.
+	 * Запрашивает постановку большого блайнда.
 	 */
-	int32 GetNextActivePlayerSeat(int32 StartSeatIndex, bool bIncludeStartSeat = false) const;
-
-	/**
-	 * Переходит к следующей стадии игры (Flop, Turn, River, Showdown).
-	 * Раздает общие карты, сбрасывает ставки раунда, определяет первого ходящего.
-	 */
-	void ProceedToNextGameStage(); // Будет реализована позже
+	void RequestBigBlind();
 
 	/**
 	 * Раздает карманные карты активным игрокам и начинает раунд Preflop.
@@ -126,14 +133,56 @@ private:
 	void DealHoleCardsAndStartPreflop();
 
 	/**
+	 * Переходит к следующей стадии игры (Flop, Turn, River, Showdown).
+	 * Раздает общие карты, сбрасывает ставки раунда, определяет первого ходящего.
+	 */
+	void ProceedToNextGameStage();
+
+	/**
+	 * Запускает процесс вскрытия карт.
+	 * Определяет участников, оценивает руки, находит победителя(ей).
+	 */
+	void ProceedToShowdown();
+
+	/**
+	 * Начисляет банк победителю(ям) раздачи.
+	 * @param WinningSeatIndices Массив индексов мест победителей (может быть несколько при ничьей).
+	 */
+	void AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
+	// Если победитель всегда один для MVP, можно упростить до AwardPotToWinner(int32 WinnerSeatIndex)
+
+	// --- Вспомогательные Функции ---
+
+	/**
+	 * Находит следующее активное место игрока по часовой стрелке,
+	 * учитывая статус игрока (не Folded, есть фишки или AllIn).
+	 * @param StartSeatIndex Индекс места, с которого начинать поиск.
+	 * @param bExcludeStartSeat Если true, то StartSeatIndex не проверяется как первый кандидат.
+	 * @return Индекс следующего активного игрока или -1, если не найден.
+	 */
+	int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true) const;
+	// Переименовал из GetNextActivePlayerSeat для большей ясности, что ищем именно для хода
+
+	/**
 	 * Определяет первого игрока, который должен действовать после постановки блайндов (на Preflop).
 	 * @return Индекс места первого ходящего или -1.
 	 */
-	int32 DetermineFirstPlayerToActAfterBlinds() const;
+	int32 DetermineFirstPlayerToActAtPreflop() const; // Переименовал для ясности
 
 	/**
 	 * Определяет первого игрока, который должен действовать на постфлоп раундах (Flop, Turn, River).
 	 * @return Индекс места первого ходящего или -1.
 	 */
-	int32 DetermineFirstPlayerToActPostFlop() const; // Будет использоваться в ProceedToNextGameStage
+	int32 DetermineFirstPlayerToActPostflop() const;
+
+	/**
+	 * Проверяет, завершен ли текущий круг торгов.
+	 * @return true, если круг торгов завершен, иначе false.
+	 */
+	bool IsBettingRoundOver() const;
+
+	/**
+	 * Вспомогательная функция для постановки блайндов. Вызывается из StartNewHand.
+	 */
+	void PostBlinds(); // Убрал параметры, так как SB/BB Seat и Amount будут в GameStateData
 };

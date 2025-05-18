@@ -1,7 +1,7 @@
 ﻿#include "PokerPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/Pawn.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameModeBase.h" // Не используется напрямую, но может быть полезен для контекста
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -10,8 +10,10 @@
 #include "OfflineGameManager.h"
 #include "OfflinePokerGameState.h"
 #include "GameHUDInterface.h"
-#include "Kismet/GameplayStatics.h"
-#include "Misc/OutputDeviceNull.h"
+#include "PlayerSeatVisualizerInterface.h" // Включаем интерфейс для мест
+#include "CommunityCardDisplayInterface.h"
+#include "Kismet/GameplayStatics.h"   // Для GetAllActorsWithInterface и GetActorOfClass
+#include "Misc/OutputDeviceNull.h"    // Для CallFunctionByNameWithArguments (если бы использовали)
 
 APokerPlayerController::APokerPlayerController()
 {
@@ -21,9 +23,9 @@ APokerPlayerController::APokerPlayerController()
     ToggleToUIAction = nullptr;
     GameHUDClass = nullptr;
     GameHUDWidgetInstance = nullptr;
+    CommunityCardDisplayActor = nullptr;
     bIsInUIMode = false;
 
-    // Инициализируем TOptional переменные (они по умолчанию не установлены)
     OptMovingPlayerSeatIndex.Reset();
     OptMovingPlayerName.Reset();
     OptAllowedActions.Reset();
@@ -43,16 +45,37 @@ void APokerPlayerController::BeginPlay()
         if (GameHUDWidgetInstance)
         {
             GameHUDWidgetInstance->AddToViewport();
-            UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: GameHUDWidgetInstance created and added to viewport."));
+            UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: GameHUDWidgetInstance created."));
             if (GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
             {
-                IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
+                IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
                 UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Initial DisableButtons called on HUD."));
             }
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance from GameHUDClass.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: Failed to create GameHUDWidgetInstance.")); }
     }
-    else if (IsLocalPlayerController()) { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDClass is not set in Blueprint Defaults. Cannot create HUD.")); }
+    else if (IsLocalPlayerController()) { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDClass not set.")); }
+
+    // Находим актора для отображения общих карт
+    // Рекомендуется искать по конкретному классу вашего BP_CommunityCardArea, если он есть,
+    // или если он один, можно оставить поиск по AActor и проверку интерфейса.
+    // Для большей надежности, если у вас есть C++ базовый класс для BP_CommunityCardArea, используйте его.
+    // AYourCommunityCardAreaBaseClass* FoundCCA = Cast<AYourCommunityCardAreaBaseClass>(UGameplayStatics::GetActorOfClass(GetWorld(), AYourCommunityCardAreaBaseClass::StaticClass()));
+    // if (FoundCCA && FoundCCA->GetClass()->ImplementsInterface(UCommunityCardDisplayInterface::StaticClass())) { ... }
+    // Пока оставим как было, но имейте в виду для улучшения:
+    TArray<AActor*> FoundActors;
+    UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UCommunityCardDisplayInterface::StaticClass(), FoundActors);
+    if (FoundActors.Num() > 0)
+    {
+        CommunityCardDisplayActor = FoundActors[0]; // Берем первый найденный
+        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Found CommunityCardDisplayActor: %s via Interface Search"), *CommunityCardDisplayActor->GetName());
+        ICommunityCardDisplayInterface::Execute_HideCommunityCards(CommunityCardDisplayActor.Get());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: CommunityCardDisplayActor implementing ICommunityCardDisplayInterface NOT FOUND."));
+        CommunityCardDisplayActor = nullptr;
+    }
 
     SwitchToGameInputMode();
 
@@ -62,20 +85,18 @@ void APokerPlayerController::BeginPlay()
         UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
         if (OfflineManager)
         {
-            // Удаляем старую подписку, если она была
-            // OfflineManager->OnActionRequestedDelegate.RemoveDynamic(this, &APokerPlayerController::HandleActionRequested); // Если была такая функция
-
-            // Подписываемся на новые делегаты
             OfflineManager->OnPlayerTurnStartedDelegate.AddDynamic(this, &APokerPlayerController::HandlePlayerTurnStarted);
             OfflineManager->OnPlayerActionsAvailableDelegate.AddDynamic(this, &APokerPlayerController::HandlePlayerActionsAvailable);
             OfflineManager->OnTableStateInfoDelegate.AddDynamic(this, &APokerPlayerController::HandleTableStateInfo);
             OfflineManager->OnActionUIDetailsDelegate.AddDynamic(this, &APokerPlayerController::HandleActionUIDetails);
             OfflineManager->OnGameHistoryEventDelegate.AddDynamic(this, &APokerPlayerController::HandleGameHistoryEvent);
-            UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Subscribed to new OfflineManager delegates."));
+            OfflineManager->OnCommunityCardsUpdatedDelegate.AddDynamic(this, &APokerPlayerController::HandleCommunityCardsUpdated);
+            OfflineManager->OnShowdownDelegate.AddDynamic(this, &APokerPlayerController::HandleShowdown);
+            UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Subscribed to all OfflineManager delegates."));
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineManager is null in GameInstance, cannot subscribe.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: OfflineManager is null.")); }
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance type.")); }
+    else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameInstance is not UMyGameInstance.")); }
 }
 
 void APokerPlayerController::SetupInputComponent()
@@ -84,14 +105,18 @@ void APokerPlayerController::SetupInputComponent()
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::SetupInputComponent CALLED"));
     if (UEnhancedInputComponent* EnhancedInputComp = Cast<UEnhancedInputComponent>(InputComponent))
     {
-        if (LookUpAction) EnhancedInputComp->BindAction(LookUpAction, ETriggerEvent::Triggered, this, &APokerPlayerController::HandleLookUp);
-        if (TurnAction) EnhancedInputComp->BindAction(TurnAction, ETriggerEvent::Triggered, this, &APokerPlayerController::HandleTurn);
-        if (ToggleToUIAction) EnhancedInputComp->BindAction(ToggleToUIAction, ETriggerEvent::Started, this, &APokerPlayerController::HandleToggleToUI);
+        if (LookUpAction) EnhancedInputComp->BindAction(LookUpAction.Get(), ETriggerEvent::Triggered, this, &APokerPlayerController::HandleLookUp);
+        else { UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: LookUpAction is null.")); }
+
+        if (TurnAction) EnhancedInputComp->BindAction(TurnAction.Get(), ETriggerEvent::Triggered, this, &APokerPlayerController::HandleTurn);
+        else { UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: TurnAction is null.")); }
+
+        if (ToggleToUIAction) EnhancedInputComp->BindAction(ToggleToUIAction.Get(), ETriggerEvent::Started, this, &APokerPlayerController::HandleToggleToUI);
+        else { UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: ToggleToUIAction is null.")); }
     }
     else { UE_LOG(LogTemp, Error, TEXT("APokerPlayerController::SetupInputComponent - Failed to Cast to UEnhancedInputComponent.")); }
 }
 
-// --- Функции обработки ввода и режимов (остаются без изменений) ---
 void APokerPlayerController::HandleLookUp(const FInputActionValue& Value)
 {
     if (bIsInUIMode) return;
@@ -108,8 +133,10 @@ void APokerPlayerController::HandleTurn(const FInputActionValue& Value)
 
 void APokerPlayerController::HandleToggleToUI(const FInputActionValue& Value)
 {
-    UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::HandleToggleToUI called. Current bIsInUIMode before toggle: %s"), bIsInUIMode ? TEXT("true") : TEXT("false"));
-    if (!bIsInUIMode) { SwitchToUIInputMode(GameHUDWidgetInstance); }
+    if (!bIsInUIMode)
+    {
+        SwitchToUIInputMode(GameHUDWidgetInstance.Get());
+    }
 }
 
 void APokerPlayerController::SwitchToGameInputMode()
@@ -121,7 +148,7 @@ void APokerPlayerController::SwitchToGameInputMode()
     if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
     {
         Subsystem->ClearAllMappings();
-        if (PlayerInputMappingContext) { Subsystem->AddMappingContext(PlayerInputMappingContext, 0); }
+        if (PlayerInputMappingContext) { Subsystem->AddMappingContext(PlayerInputMappingContext.Get(), 0); }
         else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: PlayerInputMappingContext is NULL in SwitchToGameInputMode.")); }
     }
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Switched to Game Input Mode. Cursor hidden."));
@@ -137,32 +164,39 @@ void APokerPlayerController::SwitchToUIInputMode(UUserWidget* WidgetToFocus)
     bIsInUIMode = true;
     if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
     {
-        if (PlayerInputMappingContext) { Subsystem->RemoveMappingContext(PlayerInputMappingContext); }
+        if (PlayerInputMappingContext) { Subsystem->RemoveMappingContext(PlayerInputMappingContext.Get()); }
     }
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Switched to UI Input Mode. Cursor shown. WidgetToFocus: %s"), *GetNameSafe(WidgetToFocus));
 }
 
-// --- Новые обработчики делегатов и логика агрегации ---
+UOfflinePokerGameState* APokerPlayerController::GetCurrentGameState() const
+{
+    UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
+    if (GI && GI->GetOfflineGameManager())
+    {
+        return GI->GetOfflineGameManager()->GetGameState();
+    }
+    return nullptr;
+}
 
+// --- Обработчики делегатов от OfflineGameManager ---
 void APokerPlayerController::HandlePlayerTurnStarted(int32 MovingPlayerSeatIndex)
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandlePlayerTurnStarted: Seat %d"), MovingPlayerSeatIndex);
-    OptMovingPlayerSeatIndex = MovingPlayerSeatIndex;
-    // Сбрасываем другие опциональные значения, так как начался новый "запрос действия"
+    OptMovingPlayerSeatIndex.Reset();
     OptMovingPlayerName.Reset();
     OptAllowedActions.Reset();
     OptBetToCall.Reset();
     OptMinRaiseAmount.Reset();
     OptMovingPlayerStack.Reset();
     OptCurrentPot.Reset();
-    // TryAggregateAndTriggerHUDUpdate(); // Не вызываем, ждем остальные данные
+    OptMovingPlayerSeatIndex = MovingPlayerSeatIndex;
 }
 
 void APokerPlayerController::HandlePlayerActionsAvailable(const TArray<EPlayerAction>& AllowedActions)
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandlePlayerActionsAvailable: %d actions"), AllowedActions.Num());
     OptAllowedActions = AllowedActions;
-    // TryAggregateAndTriggerHUDUpdate(); // Не вызываем, ждем остальные данные
 }
 
 void APokerPlayerController::HandleTableStateInfo(const FString& MovingPlayerName, int64 CurrentPot)
@@ -170,7 +204,6 @@ void APokerPlayerController::HandleTableStateInfo(const FString& MovingPlayerNam
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleTableStateInfo: Player '%s', Pot %lld"), *MovingPlayerName, CurrentPot);
     OptMovingPlayerName = MovingPlayerName;
     OptCurrentPot = CurrentPot;
-    // TryAggregateAndTriggerHUDUpdate(); // Не вызываем, ждем остальные данные
 }
 
 void APokerPlayerController::HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer)
@@ -179,14 +212,11 @@ void APokerPlayerController::HandleActionUIDetails(int64 BetToCall, int64 MinRai
     OptBetToCall = BetToCall;
     OptMinRaiseAmount = MinRaiseAmount;
     OptMovingPlayerStack = PlayerStackOfMovingPlayer;
-
-    // Это последний из основных делегатов с данными для UI хода, теперь можно попытаться обновить HUD
     TryAggregateAndTriggerHUDUpdate();
 }
 
 void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
 {
-    // Проверяем, что все необходимые данные получены
     if (OptMovingPlayerSeatIndex.IsSet() &&
         OptMovingPlayerName.IsSet() &&
         OptAllowedActions.IsSet() &&
@@ -195,86 +225,127 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
         OptMovingPlayerStack.IsSet() &&
         OptCurrentPot.IsSet())
     {
-        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate - All data aggregated. Updating HUD."));
+        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate - All data aggregated. Updating HUD and Seat Visualizers."));
 
         if (!GameHUDWidgetInstance || !GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
         {
             UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate - HUD not valid or no IGameHUDInterface."));
-            OptMovingPlayerSeatIndex.Reset(); // Сбрасываем, чтобы не вызывать повторно с теми же данными
+            OptMovingPlayerSeatIndex.Reset(); // Сбрасываем, чтобы не пытаться обновить снова без новых данных
             return;
         }
 
-        // Получаем актуальный стек ЛОКАЛЬНОГО игрока (Seat 0)
-        int64 ActualLocalPlayerStack = 0;
-        const int32 LocalPlayerSeatIndex = 0;
+        const int32 LocalPlayerSeatIndex = 0; // Предполагаем локального игрока на месте 0
 
-        UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
-        if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
-        {
-            UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
-            if (GameState->Seats.IsValidIndex(LocalPlayerSeatIndex))
-            {
-                ActualLocalPlayerStack = GameState->Seats[LocalPlayerSeatIndex].Stack;
-            }
-        }
-        else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate - Could not get GameState for LocalPlayerStack.")); }
-
-        // 1. Обновляем основную информацию о ходе и банке
         IGameHUDInterface::Execute_UpdatePlayerTurnInfo(
-            GameHUDWidgetInstance,
+            GameHUDWidgetInstance.Get(),
             OptMovingPlayerName.GetValue(),
             OptCurrentPot.GetValue(),
             OptBetToCall.GetValue(),
             OptMinRaiseAmount.GetValue(),
-            ActualLocalPlayerStack // Стек локального игрока
+            OptMovingPlayerStack.GetValue()
         );
 
-        // 2. Обновляем кнопки действий
-        if (OptMovingPlayerSeatIndex.GetValue() == LocalPlayerSeatIndex) // Ход локального игрока
+        if (OptMovingPlayerSeatIndex.GetValue() == LocalPlayerSeatIndex)
         {
-            IGameHUDInterface::Execute_UpdateActionButtons(GameHUDWidgetInstance, OptAllowedActions.GetValue());
-
-            // Показ карт локального игрока (если они были только что розданы на префлопе)
-            // Эту логику можно вызывать и в другом месте, если карты обновляются независимо
-            if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
+            IGameHUDInterface::Execute_UpdateActionButtons(GameHUDWidgetInstance.Get(), OptAllowedActions.GetValue());
+            // Только если мы не в UI режиме УЖЕ, переключаемся.
+            // Это предотвращает "зацикливание" или ненужные переключения, если игрок уже кликнул и в UI.
+            if (!bIsInUIMode)
             {
-                UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
-                if (GameState->GetCurrentGameStage() == EGameStage::Preflop && GameState->Seats.IsValidIndex(LocalPlayerSeatIndex))
+                SwitchToUIInputMode(GameHUDWidgetInstance.Get());
+            }
+        }
+        else
+        {
+            IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
+            if (bIsInUIMode) // Если это ход бота, а мы были в UI, возвращаемся в игровой
+            {
+                SwitchToGameInputMode();
+            }
+        }
+
+        UpdateAllSeatVisualizersFromGameState(); // <--- НОВЫЙ ВЫЗОВ ЗДЕСЬ
+
+        // Сброс Optional переменных происходит в HandlePlayerTurnStarted
+    }
+}
+
+void APokerPlayerController::UpdateAllSeatVisualizersFromGameState()
+{
+    UOfflinePokerGameState* GameState = GetCurrentGameState();
+    if (!GameState)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::UpdateAllSeatVisualizersFromGameState: GameState is null."));
+        return;
+    }
+
+    TArray<AActor*> SeatVisualizerActors;
+    // Ищем акторы, которые реализуют интерфейс
+    UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UPlayerSeatVisualizerInterface::StaticClass(), SeatVisualizerActors);
+
+    if (SeatVisualizerActors.Num() == 0 && GameState->GetNumSeats() > 0) // Добавил проверку на GetNumSeats > 0, чтобы не спамить лог если игроков нет
+    {
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::UpdateAllSeatVisualizersFromGameState: No actors found implementing IPlayerSeatVisualizerInterface, but GameState has seats."));
+        // return; // Можно раскомментировать, если это критично, но лучше пусть HUD обновится
+    }
+
+    // Сначала можно скрыть все, чтобы потом показать только активные
+    // Это полезно, если количество игроков может меняться от руки к руке (редко в простом покере)
+    // или если вы хотите быть уверены, что старые данные неактивных мест не видны.
+    // Для MVP можно и без этого, если BP_PokerGameMode корректно скрывает лишние при инициализации.
+    /*
+    for (AActor* VisualizerActor : SeatVisualizerActors)
+    {
+        if (VisualizerActor)
+        {
+            IPlayerSeatVisualizerInterface::Execute_SetSeatVisibility(VisualizerActor, false);
+            IPlayerSeatVisualizerInterface::Execute_HideHoleCards(VisualizerActor);
+        }
+    }
+    */
+
+    const int32 LocalPlayerSeatIndex = 0;
+
+    for (const FPlayerSeatData& SeatData : GameState->GetSeatsArray())
+    {
+        // Ищем визуализатор для текущего SeatData.SeatIndex
+        AActor* FoundVisualizer = nullptr;
+        for (AActor* VisualizerActor : SeatVisualizerActors)
+        {
+            if (VisualizerActor) // Добавил проверку на валидность VisualizerActor
+            {
+                if (IPlayerSeatVisualizerInterface::Execute_GetSeatIndexRepresentation(VisualizerActor) == SeatData.SeatIndex)
                 {
-                    // Проверяем, что это первый вызов HandleActionRequested для префлопа (карты только что розданы)
-                    // Можно добавить флаг в GameState или PlayerState, чтобы не вызывать это каждый раз
-                    const FPlayerSeatData& LocalPlayerData = GameState->Seats[LocalPlayerSeatIndex];
-                    if (LocalPlayerData.HoleCards.Num() == 2) { OnLocalPlayerCardsDealt_BP(LocalPlayerData.HoleCards); }
+                    FoundVisualizer = VisualizerActor;
+                    break;
                 }
             }
         }
-        else // Ход другого игрока (бота)
-        {
-            IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance);
-        }
 
-        // 3. Обновляем ВСЕ PlayerSeatVisualizers через GameMode (как и раньше)
-        AGameModeBase* CurrentGameModeBase = GetWorld()->GetAuthGameMode();
-        if (CurrentGameModeBase)
+        if (FoundVisualizer)
         {
-            FOutputDeviceNull Ar;
-            CurrentGameModeBase->CallFunctionByNameWithArguments(TEXT("RefreshAllSeatVisualizersUI_Event"), Ar, nullptr, true);
-        }
+            // Устанавливаем видимость в зависимости от того, "сидит" ли игрок за столом
+            // (bIsSittingIn), и есть ли он вообще в GameStateData->Seats (что уже подразумевается циклом).
+            // Логика скрытия неактивных мест уже должна быть в BP_PokerGameMode::BeginPlay при первоначальной настройке.
+            // Здесь мы просто обновляем данные для тех, кто в игре.
+            IPlayerSeatVisualizerInterface::Execute_SetSeatVisibility(FoundVisualizer, SeatData.bIsSittingIn && (SeatData.Status != EPlayerStatus::SittingOut && SeatData.Status != EPlayerStatus::Waiting));
 
-        // Сбрасываем TOptional переменные, чтобы следующее обновление HUD ожидало новых данных
-        OptMovingPlayerSeatIndex.Reset();
-        OptMovingPlayerName.Reset();
-        OptAllowedActions.Reset();
-        OptBetToCall.Reset();
-        OptMinRaiseAmount.Reset();
-        OptMovingPlayerStack.Reset();
-        OptCurrentPot.Reset();
+
+            IPlayerSeatVisualizerInterface::Execute_UpdatePlayerInfo(FoundVisualizer, SeatData.PlayerName, SeatData.Stack);
+
+            bool bShowFace = (SeatData.SeatIndex == LocalPlayerSeatIndex && SeatData.Status != EPlayerStatus::Folded);
+            if (SeatData.HoleCards.Num() > 0 && SeatData.Status != EPlayerStatus::Folded)
+            {
+                IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, SeatData.HoleCards, bShowFace);
+            }
+            else
+            {
+                IPlayerSeatVisualizerInterface::Execute_HideHoleCards(FoundVisualizer);
+            }
+        }
+        // else { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::UpdateAllSeatVisualizersFromGameState: No visualizer found for SeatIndex %d"), SeatData.SeatIndex); }
     }
-    else
-    {
-        // Не все данные еще пришли, ждем следующего вызова делегата
-        // UE_LOG(LogTemp, Verbose, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate - Not all data available yet."));
-    }
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Updated all seat visualizers via C++."));
 }
 
 
@@ -283,169 +354,164 @@ void APokerPlayerController::HandleGameHistoryEvent(const FString& HistoryMessag
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleGameHistoryEvent received: %s"), *HistoryMessage);
     if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
     {
-        IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance, HistoryMessage);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController::HandleGameHistoryEvent - HUD not valid or no IGameHUDInterface to add message."));
+        IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance.Get(), HistoryMessage);
     }
 }
 
-// --- Функции-обработчики действий игрока (HandleFoldAction и т.д. остаются такими же) ---
-// ... (ваш существующий код для HandleFoldAction, HandleCheckCallAction, HandleBetRaiseAction, HandlePostBlindAction) ...
+void APokerPlayerController::HandleCommunityCardsUpdated(const TArray<FCard>& CommunityCards)
+{
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleCommunityCardsUpdated received. Num cards: %d"), CommunityCards.Num());
+    if (CommunityCardDisplayActor && CommunityCardDisplayActor->GetClass()->ImplementsInterface(UCommunityCardDisplayInterface::StaticClass()))
+    {
+        ICommunityCardDisplayInterface::Execute_UpdateCommunityCards(CommunityCardDisplayActor.Get(), CommunityCards);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: CommunityCardDisplayActor is null or does not implement interface."));
+    }
+    // После обновления общих карт, состояние игроков (стеки) обычно не меняется до следующего раунда ставок.
+    // Но если вдруг ваша логика это предполагает, или просто для консистентности:
+    // UpdateAllSeatVisualizersFromGameState(); // Это обновит стеки и имена, но карты игроков останутся те же.
+}
+
+void APokerPlayerController::HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices)
+{
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleShowdown received for %d players."), ShowdownPlayerSeatIndices.Num());
+
+    UOfflinePokerGameState* GameState = GetCurrentGameState();
+    if (!GameState)
+    {
+        UE_LOG(LogTemp, Error, TEXT("HandleShowdown: GameState is null. Cannot proceed."));
+        return;
+    }
+
+    if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+    {
+        IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance.Get(), TEXT("--- SHOWDOWN ---"));
+        IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
+    }
+
+    TArray<AActor*> AllSeatVisualizerActors;
+    UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UPlayerSeatVisualizerInterface::StaticClass(), AllSeatVisualizerActors);
+
+    for (int32 PlayerSeatIdxInShowdown : ShowdownPlayerSeatIndices)
+    {
+        if (GameState->Seats.IsValidIndex(PlayerSeatIdxInShowdown))
+        {
+            const FPlayerSeatData& PlayerData = GameState->Seats[PlayerSeatIdxInShowdown];
+            AActor* FoundVisualizer = nullptr;
+            for (AActor* VisualizerActor : AllSeatVisualizerActors)
+            {
+                if (VisualizerActor && IPlayerSeatVisualizerInterface::Execute_GetSeatIndexRepresentation(VisualizerActor) == PlayerSeatIdxInShowdown)
+                {
+                    FoundVisualizer = VisualizerActor;
+                    break;
+                }
+            }
+
+            if (FoundVisualizer)
+            {
+                // На шоудауне показываем карты лицом, если они есть и игрок не сфолдил (хотя в ShowdownPlayerSeatIndices обычно только активные)
+                if (PlayerData.HoleCards.Num() > 0 && PlayerData.Status != EPlayerStatus::Folded)
+                {
+                    IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerData.HoleCards, true);
+                }
+                else
+                {
+                    IPlayerSeatVisualizerInterface::Execute_HideHoleCards(FoundVisualizer);
+                }
+            }
+        }
+    }
+    // Обновление стеков после AwardPot будет инициировано через следующий вызов TryAggregateAndTriggerHUDUpdate,
+    // который, в свою очередь, вызовет UpdateAllSeatVisualizersFromGameState.
+}
+
+// --- Функции-обработчики действий игрока ---
 void APokerPlayerController::HandleFoldAction()
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleFoldAction called by UI."));
     UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
-    if (GI)
+    if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
     {
-        UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
-        if (OfflineManager && OfflineManager->GetGameState())
+        UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
+        int32 ActingPlayerSeat = GameState->GetCurrentTurnSeatIndex();
+        if (ActingPlayerSeat != -1)
         {
-            UOfflinePokerGameState* GameState = OfflineManager->GetGameState();
-            // Проверяем, что это ход локального игрока (предполагаем, что локальный игрок всегда SeatIndex 0)
-            // и что игра не в состоянии, когда действия не принимаются (хотя это больше забота OfflineManager)
-            if (GameState->GetCurrentTurnSeatIndex() == 0)
-            {
-                // UI должен был быть обновлен так, что кнопка Fold активна только если Fold есть в AllowedActions.
-                // Дополнительная проверка на AllowedActions здесь избыточна, если UI работает правильно.
-                OfflineManager->ProcessPlayerAction(EPlayerAction::Fold, 0);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: Not local player's (Seat 0) turn. CurrentTurnSeat: %d"), GameState->GetCurrentTurnSeatIndex());
-            }
+            GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, EPlayerAction::Fold, 0);
+            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode(); // Если локальный игрок сделал ход, возвращаем игровой режим
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: OfflineManager or GameState is null.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: CurrentTurnSeat is -1.")); }
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: GameInstance is null.")); }
+    else { UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: Critical component is null.")); }
 }
 
 void APokerPlayerController::HandleCheckCallAction()
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleCheckCallAction called by UI."));
     UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
-    if (GI)
+    if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
     {
-        UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
-        if (OfflineManager && OfflineManager->GetGameState())
+        UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
+        int32 ActingPlayerSeat = GameState->GetCurrentTurnSeatIndex();
+        if (ActingPlayerSeat != -1 && GameState->Seats.IsValidIndex(ActingPlayerSeat))
         {
-            UOfflinePokerGameState* GameState = OfflineManager->GetGameState();
-            if (GameState->GetCurrentTurnSeatIndex() == 0) // Ход локального игрока
-            {
-                if (GameState->Seats.IsValidIndex(0))
-                {
-                    const FPlayerSeatData& PlayerSeat = GameState->Seats[0]; // Получаем данные локального игрока
-                    EPlayerAction ActionToTake;
-
-                    // Определяем, это Check или Call, на основе текущего состояния ставок
-                    // Это должно совпадать с логикой, по которой UI активировал кнопку Check или Call
-                    if (GameState->GetCurrentBetToCall() > PlayerSeat.CurrentBet)
-                    {
-                        ActionToTake = EPlayerAction::Call;
-                    }
-                    else
-                    {
-                        ActionToTake = EPlayerAction::Check;
-                    }
-                    // Сумма для Call будет вычислена в ProcessPlayerAction. Для Check сумма 0.
-                    OfflineManager->ProcessPlayerAction(ActionToTake, 0);
-                }
-                else { UE_LOG(LogTemp, Error, TEXT("HandleCheckCallAction: Local player (Seat 0) data is invalid.")); }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("HandleCheckCallAction: Not local player's (Seat 0) turn. CurrentTurnSeat: %d"), GameState->GetCurrentTurnSeatIndex());
-            }
+            const FPlayerSeatData& PlayerSeat = GameState->Seats[ActingPlayerSeat];
+            EPlayerAction ActionToTake = (GameState->GetCurrentBetToCall() > PlayerSeat.CurrentBet) ? EPlayerAction::Call : EPlayerAction::Check;
+            GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, ActionToTake, 0); // Сумма для Call вычисляется в ProcessPlayerAction
+            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode();
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("HandleCheckCallAction: OfflineManager or GameState is null.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("HandleCheckCallAction: CurrentTurnSeat %d is invalid or GameState/OfflineManager null."), ActingPlayerSeat); }
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("HandleCheckCallAction: GameInstance is null.")); }
 }
 
 void APokerPlayerController::HandleBetRaiseAction(int64 Amount)
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleBetRaiseAction called by UI with Amount: %lld"), Amount);
-    if (Amount <= 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: Amount must be positive. Action not sent."));
-        // TODO: Возможно, уведомить HUD об ошибке ввода
-        return;
-    }
+    if (Amount <= 0) { UE_LOG(LogTemp, Warning, TEXT("Bet/Raise Amount should be positive.")); return; }
 
     UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
-    if (GI)
+    if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
     {
-        UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
-        if (OfflineManager && OfflineManager->GetGameState())
+        UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
+        int32 ActingPlayerSeat = GameState->GetCurrentTurnSeatIndex();
+        if (ActingPlayerSeat != -1 && GameState->Seats.IsValidIndex(ActingPlayerSeat))
         {
-            UOfflinePokerGameState* GameState = OfflineManager->GetGameState();
-            if (GameState->GetCurrentTurnSeatIndex() == 0) // Ход локального игрока
-            {
-                if (GameState->Seats.IsValidIndex(0))
-                {
-                    const FPlayerSeatData& PlayerSeat = GameState->Seats[0];
-                    EPlayerAction ActionToTake;
-
-                    // Определяем, это Bet или Raise
-                    // UI должен был активировать кнопку "Bet" или "Raise" на основе AllowedActions
-                    // Здесь мы можем сделать более простую проверку для отправки правильного типа действия
-                    if (GameState->GetCurrentBetToCall() > 0 || PlayerSeat.CurrentBet > 0) // Если уже есть ставка в этом раунде (от нас или от других) или есть что коллировать
-                    {
-                        ActionToTake = EPlayerAction::Raise;
-                    }
-                    else
-                    {
-                        ActionToTake = EPlayerAction::Bet;
-                    }
-                    // Валидация суммы Amount (минимальный бет/рейз, не больше стека) должна быть в ProcessPlayerAction.
-                    OfflineManager->ProcessPlayerAction(ActionToTake, Amount);
-                }
-                else { UE_LOG(LogTemp, Error, TEXT("HandleBetRaiseAction: Local player (Seat 0) data is invalid.")); }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: Not local player's (Seat 0) turn. CurrentTurnSeat: %d"), GameState->GetCurrentTurnSeatIndex());
-            }
+            const FPlayerSeatData& PlayerSeat = GameState->Seats[ActingPlayerSeat];
+            // Определяем, Bet это или Raise. Если CurrentBetToCall == 0 ИЛИ PlayerSeat.CurrentBet == GameState->CurrentBetToCall, то это Bet.
+            // Иначе это Raise.
+            EPlayerAction ActionToTake = (GameState->GetCurrentBetToCall() == 0 || PlayerSeat.CurrentBet == GameState->GetCurrentBetToCall()) ? EPlayerAction::Bet : EPlayerAction::Raise;
+            GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, ActionToTake, Amount);
+            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode();
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: OfflineManager or GameState is null.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: CurrentTurnSeat %d is invalid or GameState/OfflineManager null."), ActingPlayerSeat); }
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: GameInstance is null.")); }
 }
 
 void APokerPlayerController::HandlePostBlindAction()
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandlePostBlindAction called by UI."));
     UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
-    if (GI)
+    if (GI && GI->GetOfflineGameManager() && GI->GetOfflineGameManager()->GetGameState())
     {
-        UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
-        if (OfflineManager && OfflineManager->GetGameState())
+        UOfflinePokerGameState* GameState = GI->GetOfflineGameManager()->GetGameState();
+        int32 ActingPlayerSeat = GameState->GetCurrentTurnSeatIndex();
+        if (ActingPlayerSeat != -1 && GameState->Seats.IsValidIndex(ActingPlayerSeat))
         {
-            UOfflinePokerGameState* GameState = OfflineManager->GetGameState();
-            int32 CurrentTurnSeat = GameState->GetCurrentTurnSeatIndex();
-
-            // Проверяем, что это ход локального игрока (0) и что состояние игры/игрока корректно для постановки блайнда
-            if (CurrentTurnSeat == 0 && GameState->Seats.IsValidIndex(CurrentTurnSeat))
+            const FPlayerSeatData& CurrentPlayerData = GameState->Seats[ActingPlayerSeat];
+            if ((GameState->GetCurrentGameStage() == EGameStage::WaitingForSmallBlind && CurrentPlayerData.Status == EPlayerStatus::MustPostSmallBlind) ||
+                (GameState->GetCurrentGameStage() == EGameStage::WaitingForBigBlind && CurrentPlayerData.Status == EPlayerStatus::MustPostBigBlind))
             {
-                const FPlayerSeatData& CurrentPlayerData = GameState->Seats[CurrentTurnSeat];
-                if ((GameState->GetCurrentGameStage() == EGameStage::WaitingForSmallBlind && CurrentPlayerData.Status == EPlayerStatus::MustPostSmallBlind) ||
-                    (GameState->GetCurrentGameStage() == EGameStage::WaitingForBigBlind && CurrentPlayerData.Status == EPlayerStatus::MustPostBigBlind))
-                {
-                    OfflineManager->ProcessPlayerAction(EPlayerAction::PostBlind, 0);
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: Invalid state for posting blind. CurrentTurn: %d, Stage: %s, Status: %s"),
-                        CurrentTurnSeat, *UEnum::GetValueAsString(GameState->GetCurrentGameStage()), *UEnum::GetValueAsString(CurrentPlayerData.Status));
-                }
+                GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, EPlayerAction::PostBlind, 0);
+                // SwitchToGameInputMode() здесь НЕ нужен, так как ход сразу перейдет к следующему
+                // и TryAggregateAndTriggerHUDUpdate сам решит, переключать ли режим.
             }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: Not local player's (Seat 0) turn or invalid seat index. CurrentTurnSeat: %d"), CurrentTurnSeat);
+            else {
+                UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: Invalid state for posting blind. Current Stage: %s, Player Status: %s"),
+                    *UEnum::GetValueAsString(GameState->GetCurrentGameStage()),
+                    *UEnum::GetValueAsString(CurrentPlayerData.Status));
             }
         }
-        else { UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: OfflineManager or GameState is null.")); }
+        else { UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: CurrentTurnSeat %d is invalid."), ActingPlayerSeat); }
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: GameInstance is null.")); }
 }

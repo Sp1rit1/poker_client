@@ -2,15 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "PokerDataTypes.h" // Для EPlayerAction и FCard
+#include "PokerDataTypes.h" // Для EPlayerAction, FCard, TArray
+#include "Misc/Optional.h" // Для TOptional
 #include "PokerPlayerController.generated.h"
 
 // Прямые объявления
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
-class UGameHUDInterface;
+class IGameHUDInterface; // Используем C++ интерфейс
+class ICommunityCardDisplayInterface; // Интерфейс для общих карт
+class IPlayerSeatVisualizerInterface; // Интерфейс для карманных карт
 class UEnhancedInputLocalPlayerSubsystem;
+class UOfflinePokerGameState; // Для передачи в функции обновления UI
 
 UCLASS()
 class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените POKER_CLIENT_API
@@ -21,24 +25,28 @@ public:
     APokerPlayerController();
 
     // --- Enhanced Input Свойства ---
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Mappings")
-    UInputMappingContext* PlayerInputMappingContext;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Mappings", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UInputMappingContext> PlayerInputMappingContext; // Используем TObjectPtr
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* LookUpAction;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UInputAction> LookUpAction;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* TurnAction;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UInputAction> TurnAction;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions")
-    UInputAction* ToggleToUIAction;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enhanced Input|Actions", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UInputAction> ToggleToUIAction; // Наша клавиша для переключения в UI (бывший ToggleCursorMode)
 
     // --- UI Свойства ---
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UUserWidget> GameHUDClass;
 
     UPROPERTY(BlueprintReadOnly, Category = "UI")
-    UUserWidget* GameHUDWidgetInstance;
+    TObjectPtr<UUserWidget> GameHUDWidgetInstance; // Используем TObjectPtr
+
+    // Ссылка на актора, отображающего общие карты (будет найдена в BeginPlay или передана)
+    UPROPERTY(BlueprintReadOnly, Category = "UI")
+    TObjectPtr<AActor> CommunityCardDisplayActor; // Тип AActor, так как мы будем использовать интерфейс
 
     // --- Функции Управления Режимом Ввода ---
     UFUNCTION(BlueprintCallable, Category = "Input Management")
@@ -47,20 +55,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Input Management")
     void SwitchToUIInputMode(UUserWidget* WidgetToFocus = nullptr);
 
+    // Возвращает текущий GameState для удобства доступа из Blueprint (например, для HUD)
+    UFUNCTION(BlueprintPure, Category = "Game State")
+    UOfflinePokerGameState* GetCurrentGameState() const;
+
 
 protected:
     virtual void BeginPlay() override;
-    virtual void SetupInputComponent() override;
+    virtual void SetupInputComponent() override; // Должна быть public или protected, если вы ее переопределяете
 
     // Функции-обработчики для Input Actions
     void HandleLookUp(const struct FInputActionValue& Value);
     void HandleTurn(const struct FInputActionValue& Value);
-    void HandleToggleToUI(const struct FInputActionValue& Value);
+    void HandleToggleToUI(const struct FInputActionValue& Value); // Обработчик для IA_ToggleToUIAction
 
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Input Management")
     bool bIsInUIMode;
 
-    // --- Функции-обработчики для НОВЫХ делегатов от OfflineGameManager ---
+    // --- Функции-обработчики для делегатов от OfflineGameManager ---
     UFUNCTION()
     void HandlePlayerTurnStarted(int32 MovingPlayerSeatIndex);
 
@@ -74,12 +86,18 @@ protected:
     void HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer);
 
     UFUNCTION()
-    void HandleGameHistoryEvent(const FString& HistoryMessage); // Этот уже был для истории
+    void HandleGameHistoryEvent(const FString& HistoryMessage);
+
+    // НОВЫЕ ОБРАБОТЧИКИ ДЕЛЕГАТОВ
+    UFUNCTION()
+    void HandleCommunityCardsUpdated(const TArray<FCard>& CommunityCards);
+
+    UFUNCTION()
+    void HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices);
+    // TODO: Возможно, сюда нужно будет передавать и результаты рук (TArray<FPokerHandResult>)
 
 private:
     // --- Переменные для агрегации данных от делегатов перед обновлением HUD ---
-    // Эти переменные будут хранить последние полученные данные от каждого делегата.
-    // Мы используем TOptional, чтобы знать, было ли значение уже установлено для текущего запроса действия.
     TOptional<int32> OptMovingPlayerSeatIndex;
     TOptional<FString> OptMovingPlayerName;
     TOptional<TArray<EPlayerAction>> OptAllowedActions;
@@ -90,6 +108,7 @@ private:
 
     // Вспомогательная функция для проверки, все ли данные собраны, и вызова обновления HUD
     void TryAggregateAndTriggerHUDUpdate();
+
 
 public:
     // Функции-обработчики нажатий кнопок HUD
@@ -103,9 +122,8 @@ public:
     void HandleBetRaiseAction(int64 Amount);
 
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
-    void HandlePostBlindAction();
+    void HandlePostBlindAction(); // Вызывается из WBP_GameHUD, когда кнопка "PostBlind" нажата
 
-    // Событие для Blueprint для отображения карт локального игрока
-    UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Player UI|Cards")
-    void OnLocalPlayerCardsDealt_BP(const TArray<FCard>& DealtHoleCards);
+    UFUNCTION(BlueprintCallable, Category = "Player Visualizers")
+    void UpdateAllSeatVisualizersFromGameState();
 };

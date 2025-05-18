@@ -27,6 +27,9 @@ public:
     int32 CurrentTurnSeat = -1;
 
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 PlayerWhoOpenedBettingThisRound = -1;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     EGameStage CurrentStage = EGameStage::WaitingForPlayers;
 
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
@@ -46,6 +49,13 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     int32 PendingBigBlindSeat = -1;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int64 LastBetOrRaiseAmountInCurrentRound = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
+    int32 LastAggressorSeatIndex = -1;
+
+
 
     UOfflinePokerGameState()
     {
@@ -60,6 +70,7 @@ public:
         Pot = 0;
         DealerSeat = -1;
         CurrentTurnSeat = -1;
+        PlayerWhoOpenedBettingThisRound = -1;
         CurrentStage = EGameStage::WaitingForPlayers;
         CurrentBetToCall = 0;
         SmallBlindAmount = 0;
