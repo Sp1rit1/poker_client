@@ -1,36 +1,40 @@
-#pragma once
+п»ї#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PokerDataTypes.h" // Включаем наш файл с типами
+#include "PokerDataTypes.h"     // РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ FCard Р·РґРµСЃСЊ РѕРїСЂРµРґРµР»РµРЅР°
+#include "Misc/Optional.h" // <-- Р’РђР–РќРћ: Р’РєР»СЋС‡РёС‚СЊ РґР»СЏ TOptional
 #include "Deck.generated.h"
 
-/**
- * Класс UObject, представляющий игральную колоду карт.
- */
-UCLASS() // Не Blueprintable, т.к. используется только внутри C++ логики
-class POKER_CLIENT_API UDeck : public UObject // Замени POKER_CLIENT_API
+UCLASS()
+class POKER_CLIENT_API UDeck : public UObject // Р—Р°РјРµРЅРёС‚Рµ POKER_CLIENT_API РЅР° РІР°С€ API РјР°РєСЂРѕСЃ
 {
 	GENERATED_BODY()
 
 private:
-	// Массив карт в колоде
-	TArray<FCard> Cards;
+	UPROPERTY() // Р”РѕР±Р°РІРёРј UPROPERTY РґР»СЏ РєРѕСЂСЂРµРєС‚РЅРѕР№ СЂР°Р±РѕС‚С‹ СЃ GC, С…РѕС‚СЏ РґР»СЏ TArray<FCard> СЌС‚Рѕ РјРѕР¶РµС‚ Р±С‹С‚СЊ РёР·Р±С‹С‚РѕС‡РЅРѕ, РЅРѕ РЅРµ РїРѕРІСЂРµРґРёС‚
+		TArray<FCard> Cards;
 
 public:
-	// Инициализирует колоду стандартными 52 картами
+	UDeck(); // Р”РѕР±Р°РІРёРј РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РґР»СЏ РІРѕР·РјРѕР¶РЅРѕР№ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё
+
+	// РРЅРёС†РёР°Р»РёР·РёСЂСѓРµС‚ РєРѕР»РѕРґСѓ СЃС‚Р°РЅРґР°СЂС‚РЅС‹РјРё 52 РєР°СЂС‚Р°РјРё
+	UFUNCTION(BlueprintCallable, Category = "Poker Deck")
 	void Initialize();
 
-	// Перемешивает карты в колоде
+	// РџРµСЂРµРјРµС€РёРІР°РµС‚ РєР°СЂС‚С‹ РІ РєРѕР»РѕРґРµ
+	UFUNCTION(BlueprintCallable, Category = "Poker Deck")
 	void Shuffle();
 
-	// Раздает (возвращает и удаляет) одну карту с верха колоды
-	// Возвращает невалидную карту (можно проверить через доп. метод), если колода пуста
-	FCard DealCard();
+	// Р Р°Р·РґР°РµС‚ (РІРѕР·РІСЂР°С‰Р°РµС‚ Рё СѓРґР°Р»СЏРµС‚) РѕРґРЅСѓ РєР°СЂС‚Сѓ СЃ РІРµСЂС…Р° РєРѕР»РѕРґС‹.
+	// Р’РѕР·РІСЂР°С‰Р°РµС‚ TOptional<FCard>, РєРѕС‚РѕСЂС‹Р№ Р±СѓРґРµС‚ РїСѓСЃС‚, РµСЃР»Рё РєРѕР»РѕРґР° РїСѓСЃС‚Р°.
+	TOptional<FCard> DealCard(); // <-- РўРёРї РІРѕР·РІСЂР°С‰Р°РµРјРѕРіРѕ Р·РЅР°С‡РµРЅРёСЏ РёР·РјРµРЅРµРЅ
 
-	// Проверяет, пуста ли колода
+	// РџСЂРѕРІРµСЂСЏРµС‚, РїСѓСЃС‚Р° Р»Рё РєРѕР»РѕРґР°
+	UFUNCTION(BlueprintPure, Category = "Poker Deck")
 	bool IsEmpty() const;
 
-	// Возвращает количество оставшихся карт
+	// Р’РѕР·РІСЂР°С‰Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РѕСЃС‚Р°РІС€РёС…СЃСЏ РєР°СЂС‚
+	UFUNCTION(BlueprintPure, Category = "Poker Deck")
 	int32 NumCardsLeft() const;
 };
