@@ -62,7 +62,8 @@ enum class EPlayerStatus : uint8
 	Called			UMETA(DisplayName = "Called"),
 	Bet				UMETA(DisplayName = "Bet"),
 	Raised			UMETA(DisplayName = "Raised"),
-	AllIn			UMETA(DisplayName = "All-In")
+	AllIn			UMETA(DisplayName = "All-In"),
+	MAX_None        UMETA(Hidden)
 };
 
 UENUM(BlueprintType)

@@ -93,7 +93,13 @@ protected:
     void HandleCommunityCardsUpdated(const TArray<FCard>& CommunityCards);
 
     UFUNCTION()
+    void HandleActualHoleCardsDealt();
+
+    UFUNCTION()
     void HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices);
+
+    UFUNCTION() 
+    void HandleNewHandAboutToStart();
     // TODO: Возможно, сюда нужно будет передавать и результаты рук (TArray<FPokerHandResult>)
 
 private:

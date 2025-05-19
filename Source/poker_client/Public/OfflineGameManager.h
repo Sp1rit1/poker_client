@@ -31,6 +31,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommunityCardsUpdatedSignature, c
 // Пока просто сигнализирует о начале шоудауна и кто участвует.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShowdownSignature, const TArray<int32>&, ShowdownPlayerSeatIndices);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActualHoleCardsDealtSignature);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNewHandAboutToStartSignature);
 
 UCLASS(BlueprintType)
 class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените POKER_CLIENT_API на ваш YOURPROJECT_API
@@ -68,6 +71,12 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
 	FOnShowdownSignature OnShowdownDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnActualHoleCardsDealtSignature OnActualHoleCardsDealtDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+	FOnNewHandAboutToStartSignature OnNewHandAboutToStartDelegate;
 
 
 	// Конструктор по умолчанию
@@ -160,7 +169,7 @@ private:
 	 * @param bExcludeStartSeat Если true, то StartSeatIndex не проверяется как первый кандидат.
 	 * @return Индекс следующего активного игрока или -1, если не найден.
 	 */
-	int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true) const;
+	int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true, EPlayerStatus RequiredStatus = EPlayerStatus::MAX_None) const;
 	// Переименовал из GetNextActivePlayerSeat для большей ясности, что ищем именно для хода
 
 	/**
