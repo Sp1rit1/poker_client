@@ -129,6 +129,7 @@ void UOfflineGameManager::StartNewHand()
         Seat.bIsTurn = false;
         Seat.bIsSmallBlind = false;
         Seat.bIsBigBlind = false;
+        Seat.bHasActedThisSubRound = false;
         // Seat.bIsDealer будет сброшен и установлен ниже
 
         if (Seat.bIsSittingIn && Seat.Stack > 0) {
@@ -430,49 +431,52 @@ void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
 }
 
 
-// --- ОБРАБОТКА ДЕЙСТВИЙ ИГРОКА ---
 void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount)
 {
     if (!GameStateData || !GameStateData->Seats.IsValidIndex(ActingPlayerSeatIndex))
     {
-        UE_LOG(LogTemp, Error, TEXT("ProcessPlayerAction: Invalid GameState or ActingPlayerSeatIndex %d"), ActingPlayerSeatIndex);
+        UE_LOG(LogTemp, Error, TEXT("ProcessPlayerAction: Invalid GameState or ActingPlayerSeatIndex %d. Cannot process action."), ActingPlayerSeatIndex);
+        if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(GameStateData ? GameStateData->CurrentTurnSeat : -1);
         return;
     }
 
     if (GameStateData->CurrentTurnSeat != ActingPlayerSeatIndex)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Received action from Seat %d, but current turn is Seat %d. Requesting action again from correct player."), ActingPlayerSeatIndex, GameStateData->CurrentTurnSeat);
-        RequestPlayerAction(GameStateData->CurrentTurnSeat); // Повторно запросим действие у правильного игрока
+        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Action received from Seat %d, but current turn is Seat %d. Re-requesting action from correct player."), ActingPlayerSeatIndex, GameStateData->CurrentTurnSeat);
+        RequestPlayerAction(GameStateData->CurrentTurnSeat);
         return;
     }
 
     FPlayerSeatData& Player = GameStateData->Seats[ActingPlayerSeatIndex];
     FString PlayerName = Player.PlayerName;
 
-    UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Seat %d (%s) attempts Action: %s, Amount: %lld. Stage: %s. Stack: %lld, PlayerBet: %lld, ToCall: %lld"),
+    UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Seat %d (%s) attempts Action: %s, Amount: %lld. Stage: %s. Stack Before: %lld, PlayerBetBefore: %lld, ToCall: %lld, LastAggressor: %d, Opener: %d, HasActedBefore: %s"),
         ActingPlayerSeatIndex, *PlayerName, *UEnum::GetValueAsString(PlayerAction), Amount,
-        *UEnum::GetValueAsString(GameStateData->CurrentStage), Player.Stack, Player.CurrentBet, GameStateData->CurrentBetToCall);
+        *UEnum::GetValueAsString(GameStateData->CurrentStage), Player.Stack, Player.CurrentBet, GameStateData->CurrentBetToCall,
+        GameStateData->LastAggressorSeatIndex, GameStateData->PlayerWhoOpenedBettingThisRound, Player.bHasActedThisSubRound ? TEXT("true") : TEXT("false"));
 
-    // Обработка Постановки Блайндов (остается такой же, как у вас)
+    // Обработка Постановки Блайндов
     if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind) {
         if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingSmallBlindSeat) {
-            PostBlinds(); // Ставит SB, обновляет Pot, Player.CurrentBet, Player.Stack
+            PostBlinds(); // Обновляет стек SB, банк, CurrentBet SB, статус SB на Playing
+            // Player.bHasActedThisSubRound не устанавливаем здесь, будет сброшено в DealHoleCards
             RequestBigBlind();
         }
         else {
-            UE_LOG(LogTemp, Warning, TEXT("Invalid action/player for SB. Expected PostBlind from %d. Got %s from %d."), GameStateData->PendingSmallBlindSeat, *UEnum::GetValueAsString(PlayerAction), ActingPlayerSeatIndex);
+            UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid action/player for SB. Expected PostBlind from Seat %d. Re-requesting."), GameStateData->PendingSmallBlindSeat);
             RequestPlayerAction(ActingPlayerSeatIndex);
         }
         return;
     }
     else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind) {
         if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingBigBlindSeat) {
-            PostBlinds(); // Ставит BB, обновляет Pot, Player.CurrentBet, Player.Stack, CurrentBetToCall, LastAggressor/LastBetOrRaise
+            PostBlinds(); // Обновляет стек BB, банк, CurrentBet BB, статус BB на Playing, CurrentBetToCall, LastAggressor, LastBetOrRaise
+            // Player.bHasActedThisSubRound не устанавливаем.
             if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Blinds posted. Current Pot: %lld"), GameStateData->Pot));
-            DealHoleCardsAndStartPreflop();
+            DealHoleCardsAndStartPreflop(); // Здесь начнется префлоп, и bHasActedThisSubRound сбросится для всех
         }
         else {
-            UE_LOG(LogTemp, Warning, TEXT("Invalid action/player for BB. Expected PostBlind from %d. Got %s from %d."), GameStateData->PendingBigBlindSeat, *UEnum::GetValueAsString(PlayerAction), ActingPlayerSeatIndex);
+            UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid action/player for BB. Expected PostBlind from Seat %d. Re-requesting."), GameStateData->PendingBigBlindSeat);
             RequestPlayerAction(ActingPlayerSeatIndex);
         }
         return;
@@ -481,202 +485,219 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
     // --- Обработка Игровых Действий (Preflop, Flop, Turn, River) ---
     if (GameStateData->CurrentStage >= EGameStage::Preflop && GameStateData->CurrentStage <= EGameStage::River)
     {
-        // Проверяем, может ли игрок вообще действовать
-        if (Player.Status == EPlayerStatus::Folded || (Player.Status == EPlayerStatus::AllIn && Player.CurrentBet >= GameStateData->CurrentBetToCall && GameStateData->PlayerWhoOpenedBettingThisRound != -1))
+        bool bActionCausedAggression = false;
+        bool bActionValidAndPerformed = true;
+
+        // Проверяем, может ли игрок вообще действовать (не Folded, не All-In который уже не может повлиять)
+        if (Player.Status == EPlayerStatus::Folded || (Player.Status == EPlayerStatus::AllIn && Player.Stack == 0))
         {
-            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Player %s at Seat %d cannot act (Folded or All-In satisfied action). Finding next player."), *PlayerName, ActingPlayerSeatIndex);
-            Player.bIsTurn = false; // Снимаем флаг хода
-            // Сразу ищем следующего, так как этот игрок не может действовать.
-            // IsBettingRoundOver() будет вызван перед переходом к следующему игроку.
+            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Player %s (Seat %d) cannot act (Folded or All-In with 0 stack). This action will be skipped by IsBettingRoundOver."), *PlayerName, ActingPlayerSeatIndex);
+            Player.bIsTurn = false;
+            // Не устанавливаем bHasActedThisSubRound = true, так как он не совершал добровольного действия в этом под-раунде.
+            // IsBettingRoundOver должна корректно обработать таких игроков (пропустить их при проверке !bHasActedThisSubRound).
         }
         else // Игрок может действовать
         {
-            Player.bIsTurn = false; // Снимаем флаг хода после действия
+            Player.bIsTurn = false; // Снимаем флаг хода СРАЗУ, так как действие сейчас будет обработано
 
             switch (PlayerAction)
             {
             case EPlayerAction::Fold:
                 Player.Status = EPlayerStatus::Folded;
                 if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s folds."), *PlayerName));
-                break;
+                break; // bHasActedThisSubRound будет установлен ниже для всех валидных действий
 
             case EPlayerAction::Check:
-                // Валидация: можно ли чекать? (CurrentBetToCall должен быть равен текущей ставке игрока)
-                if (Player.CurrentBet == GameStateData->CurrentBetToCall)
-                {
-                    Player.Status = EPlayerStatus::Playing; // Или EPlayerStatus::Checked
+                if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
                     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s checks."), *PlayerName));
                 }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s tried to Check, but BetToCall is %lld and player's bet is %lld. Invalid action."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
-                    RequestPlayerAction(ActingPlayerSeatIndex); // Повторно запросить действие
-                    return;
+                else {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Check by %s. BetToCall: %lld, PlayerBet: %lld. Re-requesting action."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
+                    RequestPlayerAction(ActingPlayerSeatIndex);
+                    bActionValidAndPerformed = false;
                 }
                 break;
 
             case EPlayerAction::Call:
             {
-                int64 AmountNeededToCall = GameStateData->CurrentBetToCall - Player.CurrentBet;
-                if (AmountNeededToCall <= 0) // Нечего коллировать или уже заколлировал
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s tried to Call, but nothing to call or already called. BetToCall: %lld, PlayerBet: %lld. Treating as Check if possible."),
-                        *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
-                    // Если это произошло, это может быть ошибка в AllowedActions или UI
-                    // Попробуем обработать как Check, если возможно
-                    if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
+                int64 AmountNeededToCallAbsolute = GameStateData->CurrentBetToCall - Player.CurrentBet;
+                if (AmountNeededToCallAbsolute <= 0) {
+                    if (Player.CurrentBet == GameStateData->CurrentBetToCall) { // Уже заколлировал или может чекнуть
                         if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s effectively checks (attempted invalid call)."), *PlayerName));
+                        // bHasActedThisSubRound будет установлен ниже
                     }
                     else {
-                        RequestPlayerAction(ActingPlayerSeatIndex); return;
+                        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s Call error. BetToCall: %lld, PlayerBet: %lld. Re-requesting."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
+                        RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false;
                     }
                     break;
                 }
-
-                int64 ActualCallAmount = FMath::Min(AmountNeededToCall, Player.Stack);
-                Player.Stack -= ActualCallAmount;
-                Player.CurrentBet += ActualCallAmount;
-                GameStateData->Pot += ActualCallAmount;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s calls %lld. Stack: %lld"), *PlayerName, ActualCallAmount, Player.Stack));
-
-                if (Player.Stack == 0)
-                {
+                int64 ActualAmountPlayerPutsInPot = FMath::Min(AmountNeededToCallAbsolute, Player.Stack);
+                Player.Stack -= ActualAmountPlayerPutsInPot;
+                Player.CurrentBet += ActualAmountPlayerPutsInPot;
+                GameStateData->Pot += ActualAmountPlayerPutsInPot;
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s calls %lld. Stack: %lld"), *PlayerName, ActualAmountPlayerPutsInPot, Player.Stack));
+                if (Player.Stack == 0) {
                     Player.Status = EPlayerStatus::AllIn;
                     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName));
-                }
-                else
-                {
-                    Player.Status = EPlayerStatus::Playing; // Или EPlayerStatus::Called
                 }
             }
             break;
 
             case EPlayerAction::Bet:
-                // Валидация: можно ли бетить? (CurrentBetToCall должен быть 0 или равен ставке игрока)
-                if (Player.CurrentBet == GameStateData->CurrentBetToCall)
-                {
-                    int64 MinBet = GameStateData->BigBlindAmount;
-                    if (Amount < MinBet && Amount < Player.Stack) // Нельзя ставить меньше минимума, кроме олл-ина
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s Bet amount %lld is less than MinBet %lld. Invalid action."), *PlayerName, Amount, MinBet);
-                        RequestPlayerAction(ActingPlayerSeatIndex); return;
+                if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
+                    int64 MinBetSize = GameStateData->BigBlindAmount;
+                    if (Amount < MinBetSize && Amount < Player.Stack) {
+                        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Amount %lld < MinBet %lld and not All-In). Re-requesting."), *PlayerName, Amount, MinBetSize);
+                        RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                     }
-                    if (Amount > Player.Stack) { Amount = Player.Stack; } // Ставка не может быть больше стека (это All-In)
+                    if (Amount > Player.Stack) Amount = Player.Stack;
 
                     Player.Stack -= Amount;
-                    Player.CurrentBet += Amount; // Теперь CurrentBet игрока равен Amount
+                    Player.CurrentBet += Amount;
                     GameStateData->Pot += Amount;
-                    GameStateData->CurrentBetToCall = Player.CurrentBet; // Новая сумма для колла для других
-                    GameStateData->LastBetOrRaiseAmountInCurrentRound = Amount; // Это сумма самого бета
+                    GameStateData->CurrentBetToCall = Player.CurrentBet;
+                    GameStateData->LastBetOrRaiseAmountInCurrentRound = Amount;
                     GameStateData->LastAggressorSeatIndex = ActingPlayerSeatIndex;
-                    GameStateData->PlayerWhoOpenedBettingThisRound = ActingPlayerSeatIndex; // Этот игрок открыл торги (или сделал первую агрессию)
-
+                    if (GameStateData->PlayerWhoOpenedBettingThisRound == -1) {
+                        GameStateData->PlayerWhoOpenedBettingThisRound = ActingPlayerSeatIndex;
+                    }
+                    bActionCausedAggression = true;
                     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s bets %lld. Stack: %lld"), *PlayerName, Amount, Player.Stack));
-                    if (Player.Stack == 0)
-                    {
+                    if (Player.Stack == 0) {
                         Player.Status = EPlayerStatus::AllIn;
                         if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName));
                     }
-                    else { Player.Status = EPlayerStatus::Playing; } // Или EPlayerStatus::Bet
                 }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s tried to Bet, but there's an uncalled bet on the table. Invalid action."), *PlayerName);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                else {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Cannot bet, CurrentBetToCall %lld > PlayerBet %lld). Re-requesting."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false;
                 }
                 break;
 
             case EPlayerAction::Raise:
             {
+                // Проверяем, можно ли вообще рейзить (должна быть ставка для колла, если это не первый бет)
+                if (GameStateData->CurrentBetToCall == 0) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (Cannot raise if CurrentBetToCall is 0, should be Bet). Re-requesting."), *PlayerName);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
+                }
+                if (GameStateData->CurrentBetToCall <= Player.CurrentBet) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (CurrentBetToCall %lld <= PlayerBet %lld or no valid bet to raise over). Re-requesting."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
+                }
+
+                // Amount от UI - это ОБЩАЯ сумма ставки, до которой игрок рейзит
+                int64 TotalBetByPlayerThisAction = Amount;
+
+                // Сколько нужно было бы доколлировать до этой общей ставки
                 int64 AmountToCallFirst = GameStateData->CurrentBetToCall - Player.CurrentBet;
-                if (AmountToCallFirst < 0) AmountToCallFirst = 0; // На случай, если CurrentBet уже > CurrentBetToCall (ошибка логики)
+                if (AmountToCallFirst < 0) AmountToCallFirst = 0; // Не может быть отрицательным
 
-                int64 PureRaiseAmount = Amount - AmountToCallFirst; // Чистая сумма рейза сверх колла
+                // Сколько реально фишек игрок добавляет в банк в этом действии
+                // Это общая сумма его новой ставки минус то, что он уже поставил в этом раунде
+                int64 AmountPlayerActuallyAddsToPotNow = TotalBetByPlayerThisAction - Player.CurrentBet;
 
-                // Минимальный чистый рейз должен быть не меньше предыдущего бета/рейза в этом раунде, или ББ если это первый рейз
+                // Чистая сумма рейза СВЕРХ предыдущей максимальной ставки на столе
+                int64 PureRaiseAmountOverPreviousHighestBet = TotalBetByPlayerThisAction - GameStateData->CurrentBetToCall;
+
+                // Минимальный допустимый чистый рейз
                 int64 MinValidPureRaise = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
 
-                if (PureRaiseAmount < MinValidPureRaise && (AmountToCallFirst + PureRaiseAmount) < Player.Stack) // Нельзя рейзить меньше минимума, кроме олл-ина
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s Raise amount %lld (pure %lld) is less than MinValidPureRaise %lld. Invalid action."), *PlayerName, Amount, PureRaiseAmount, MinValidPureRaise);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
-                }
-                if ((AmountToCallFirst + PureRaiseAmount) > Player.Stack) // Если общая сумма для рейза больше стека
-                {
-                    PureRaiseAmount = Player.Stack - AmountToCallFirst; // Игрок идет олл-ин, рейз на остаток стека
-                    Amount = Player.Stack; // Общая сумма ставки = весь стек
-                    if (PureRaiseAmount < 0) PureRaiseAmount = 0; // На случай если стек меньше суммы колла
-                }
-                else {
-                    Amount = AmountToCallFirst + PureRaiseAmount; // Полная сумма, которую игрок поставит в банк
+                // Валидация: чистый рейз должен быть не меньше минимального, ЕСЛИ это не олл-ин
+                if (PureRaiseAmountOverPreviousHighestBet < MinValidPureRaise && TotalBetByPlayerThisAction < (Player.Stack + Player.CurrentBet)) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (PureRaise %lld < MinValidPureRaise %lld and not All-In). Re-requesting."), *PlayerName, PureRaiseAmountOverPreviousHighestBet, MinValidPureRaise);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
 
-
-                if (Amount <= AmountToCallFirst && Amount < Player.Stack) // Если итоговая ставка не больше колла (и не олл-ин)
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: %s Raise total amount %lld is not greater than amount to call %lld. Invalid raise."), *PlayerName, Amount, AmountToCallFirst);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                // Если запрашиваемая общая ставка больше, чем есть у игрока (с учетом уже поставленного) -> это олл-ин
+                if (TotalBetByPlayerThisAction > Player.Stack + Player.CurrentBet) {
+                    TotalBetByPlayerThisAction = Player.Stack + Player.CurrentBet; // Новая общая ставка = весь его стек + то что уже в поте от него
+                    AmountPlayerActuallyAddsToPotNow = Player.Stack; // Он добавляет весь свой оставшийся стек
+                    PureRaiseAmountOverPreviousHighestBet = TotalBetByPlayerThisAction - GameStateData->CurrentBetToCall;
+                    if (PureRaiseAmountOverPreviousHighestBet < 0) PureRaiseAmountOverPreviousHighestBet = 0; // На случай, если олл-ин меньше колла
                 }
 
+                // Проверка, что итоговая ставка действительно является рейзом (больше CurrentBetToCall), если это не олл-ин на меньшую сумму
+                if (TotalBetByPlayerThisAction <= GameStateData->CurrentBetToCall && AmountPlayerActuallyAddsToPotNow < Player.Stack) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (TotalBetAmount %lld not > CurrentBetToCall %lld and not All-In to cover). Re-requesting."), *PlayerName, TotalBetByPlayerThisAction, GameStateData->CurrentBetToCall);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
+                }
 
-                Player.Stack -= Amount; // Снимаем полную сумму, которую он добавляет в банк в этом действии
-                GameStateData->Pot += Amount;
-                Player.CurrentBet += Amount; // Обновляем общую ставку игрока в этом раунде
+                Player.Stack -= AmountPlayerActuallyAddsToPotNow;
+                Player.CurrentBet = TotalBetByPlayerThisAction;
+                GameStateData->Pot += AmountPlayerActuallyAddsToPotNow;
 
-                GameStateData->CurrentBetToCall = Player.CurrentBet; // Новая сумма для колла
-                GameStateData->LastBetOrRaiseAmountInCurrentRound = Player.CurrentBet - (GameStateData->CurrentBetToCall - Amount); // Сумма этого конкретного рейза (новая ставка - старая ставка для колла)
-                // или просто PureRaiseAmount, если он валиден
-                GameStateData->LastBetOrRaiseAmountInCurrentRound = PureRaiseAmount > 0 ? PureRaiseAmount : GameStateData->BigBlindAmount; // Убедимся, что это валидная сумма
+                GameStateData->CurrentBetToCall = Player.CurrentBet;
+                // Сумма чистого рейза для определения следующего мин. рейза
+                GameStateData->LastBetOrRaiseAmountInCurrentRound = PureRaiseAmountOverPreviousHighestBet > 0 ? PureRaiseAmountOverPreviousHighestBet : GameStateData->BigBlindAmount;
                 GameStateData->LastAggressorSeatIndex = ActingPlayerSeatIndex;
-                // PlayerWhoOpenedBettingThisRound не меняется при рейзе, он остается тем, кто сделал первый бет или BB
+                bActionCausedAggression = true;
 
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s raises to %lld (total bet: %lld). Stack: %lld"),
-                    *PlayerName, Player.CurrentBet, Player.CurrentBet, Player.Stack)); // Сообщаем общую ставку, до которой дорейзил
-
-                if (Player.Stack == 0)
-                {
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s raises to %lld (added %lld). Stack: %lld"),
+                    *PlayerName, Player.CurrentBet, AmountPlayerActuallyAddsToPotNow, Player.Stack));
+                if (Player.Stack == 0) {
                     Player.Status = EPlayerStatus::AllIn;
                     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName));
                 }
-                else { Player.Status = EPlayerStatus::Playing; } // Или EPlayerStatus::Raised
             }
             break;
-
             default:
                 UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Unknown action %s received."), *UEnum::GetValueAsString(PlayerAction));
-                RequestPlayerAction(ActingPlayerSeatIndex); // Запросить снова, если действие непонятно
-                return;
+                RequestPlayerAction(ActingPlayerSeatIndex);
+                bActionValidAndPerformed = false;
             }
-        } // конец if (bCanPlayerAct)
+
+            if (!bActionValidAndPerformed) return;
+
+            Player.bHasActedThisSubRound = true; // Устанавливаем флаг ПОСЛЕ успешного выполнения действия
+
+        } // конец if (Player can act)
+
+        // Если было совершено агрессивное действие (Bet или Raise),
+        // сбрасываем флаг bHasActedThisSubRound для всех ДРУГИХ активных игроков.
+        if (bActionCausedAggression) {
+            for (FPlayerSeatData& SeatToReset : GameStateData->Seats) {
+                if (SeatToReset.SeatIndex != ActingPlayerSeatIndex && // Не сам агрессор
+                    SeatToReset.bIsSittingIn &&
+                    SeatToReset.Status == EPlayerStatus::Playing && // Только для тех, кто еще может ходить
+                    SeatToReset.Stack > 0) {                       // И у кого есть фишки
+                    SeatToReset.bHasActedThisSubRound = false;
+                    UE_LOG(LogTemp, Verbose, TEXT("ProcessPlayerAction: Reset bHasActedThisSubRound for Seat %d due to aggression from Seat %d."), SeatToReset.SeatIndex, ActingPlayerSeatIndex);
+                }
+            }
+        }
 
         // --- Логика после действия игрока ---
-        if (IsBettingRoundOver())
-        {
+        if (IsBettingRoundOver()) {
+            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Betting round IS over. Proceeding to next stage."));
             ProceedToNextGameStage();
         }
-        else
-        {
-            int32 NextPlayerToAct = GetNextPlayerToAct(ActingPlayerSeatIndex, false, EPlayerStatus::MAX_None);
-            if (NextPlayerToAct != -1)
-            {
+        else {
+            // Раунд ставок НЕ окончен, нужно найти следующего игрока для хода.
+            // ActingPlayerSeatIndex - это тот, кто ТОЛЬКО ЧТО сделал ход.
+            // Мы ищем следующего ПОСЛЕ него, поэтому bExcludeStartSeat = true.
+            int32 NextPlayerToAct = GetNextPlayerToAct(ActingPlayerSeatIndex, true, EPlayerStatus::MAX_None);
+
+            if (NextPlayerToAct != -1) {
+                UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Betting round NOT over. Next player to act is Seat %d."), NextPlayerToAct);
                 RequestPlayerAction(NextPlayerToAct);
             }
-            else
-            {
-                // Это может произойти, если все остальные сфолдили или олл-ин, и IsBettingRoundOver() это не поймало
-                // (например, если остался один не-оллиновый игрок, а остальные олл-ин с меньшими ставками)
-                // Или если GetNextPlayerToAct вернул -1 из-за ошибки.
-                UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: No next player to act, but betting round not flagged as over by IsBettingRoundOver. Forcing ProceedToNextGameStage. Stage: %s"), *UEnum::GetValueAsString(GameStateData->CurrentStage));
-                ProceedToNextGameStage();
+            else {
+                UE_LOG(LogTemp, Error, TEXT("ProcessPlayerAction CRITICAL: IsBettingRoundOver() is FALSE, but GetNextPlayerToAct(excluding current) returned -1! This indicates a flaw in game state or player eligibility logic. Stage: %s. Last Actor: %d."),
+                    *UEnum::GetValueAsString(GameStateData->CurrentStage), ActingPlayerSeatIndex);
+                // TODO: Аварийное завершение руки или игры, так как логика зашла в тупик.
+                // Для отладки можно попробовать перейти к следующей стадии, но это скроет баг.
+                // ProceedToNextGameStage(); 
             }
         }
         return;
     }
-    else
+    else // Неизвестная или необрабатываемая стадия игры
     {
-        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Action %s received in unhandled game stage %s."), *UEnum::GetValueAsString(PlayerAction), *UEnum::GetValueAsString(GameStateData->CurrentStage));
-        // Возможно, просто запросить действие у текущего игрока снова, если стадия неизвестна
-        RequestPlayerAction(ActingPlayerSeatIndex);
+        UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Action %s received in unhandled game stage %s."),
+            *UEnum::GetValueAsString(PlayerAction), *UEnum::GetValueAsString(GameStateData->CurrentStage));
+        RequestPlayerAction(ActingPlayerSeatIndex); // Запросить действие у текущего игрока снова
     }
 }
 
@@ -703,25 +724,25 @@ void UOfflineGameManager::RequestBigBlind()
 void UOfflineGameManager::DealHoleCardsAndStartPreflop()
 {
     if (!GameStateData || !Deck) {
-        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Null GameState/Deck"));
+        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: GameStateData or Deck is null!"));
         return;
     }
-    UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Dealing hole cards..."));
+
+    UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Initiating card dealing and preflop setup..."));
     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("Dealing hole cards..."));
 
-    // 1. Собираем индексы всех игроков, которые в данный момент имеют статус 'Playing' и должны получить карты
+    // 1. Собираем индексы всех игроков, которые находятся в статусе 'Playing' 
+    //    (этот статус должен быть установлен для SB и BB в ProcessPlayerAction -> PostBlinds).
     TArray<int32> PlayersInPlayingStatusIndices;
-    for (const FPlayerSeatData& Seat : GameStateData->Seats)
-    {
-        if (Seat.bIsSittingIn && Seat.Status == EPlayerStatus::Playing)
-        {
+    for (const FPlayerSeatData& Seat : GameStateData->Seats) {
+        if (Seat.bIsSittingIn && Seat.Status == EPlayerStatus::Playing) {
             PlayersInPlayingStatusIndices.Add(Seat.SeatIndex);
         }
     }
     int32 NumPlayersToReceiveCards = PlayersInPlayingStatusIndices.Num();
 
-    if (NumPlayersToReceiveCards < 1) {
-        UE_LOG(LogTemp, Warning, TEXT("DealHoleCardsAndStartPreflop: Not enough players (%d) in Playing status to deal hole cards."), NumPlayersToReceiveCards);
+    if (NumPlayersToReceiveCards < 1) { // Обычно для игры нужно >= 2
+        UE_LOG(LogTemp, Warning, TEXT("DealHoleCardsAndStartPreflop: Not enough players (%d) in 'Playing' status to deal cards."), NumPlayersToReceiveCards);
         GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Error: Not enough players for deal"), GameStateData->Pot);
@@ -733,65 +754,68 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
     // 2. Определяем, с кого начинать раздачу карт
     int32 DealerSeatIndex = GameStateData->DealerSeat;
     if (!GameStateData->Seats.IsValidIndex(DealerSeatIndex)) {
-        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Invalid DealerSeatIndex %d!"), DealerSeatIndex);
+        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Invalid DealerSeatIndex %d! Cannot proceed."), DealerSeatIndex);
         return;
     }
 
     int32 StartDealingFromSeat;
-    if (NumPlayersToReceiveCards == 2) { // Хедз-ап: дилер (который был SB) получает карту первым
+    // В хедз-апе (2 игрока) дилер (который является SB) получает карту первым.
+    // В 3+ игроков, первый слева от дилера (SB) получает карту первым.
+    if (NumPlayersToReceiveCards == 2) {
         StartDealingFromSeat = DealerSeatIndex;
     }
-    else { // 3+ игроков: следующий активный после дилера (обычно SB)
+    else {
         StartDealingFromSeat = GetNextPlayerToAct(DealerSeatIndex, false, EPlayerStatus::Playing);
     }
 
+    // Проверка, что StartDealingFromSeat валиден и находится среди тех, кто должен получить карты
     if (StartDealingFromSeat == -1 || !PlayersInPlayingStatusIndices.Contains(StartDealingFromSeat)) {
-        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: CRITICAL - Could not determine valid StartDealingFromSeat (%d). NumPlayersToReceive: %d, Dealer: %d"), StartDealingFromSeat, NumPlayersToReceiveCards, DealerSeatIndex);
-        // Попытка найти первого из списка Playing как fallback, если StartDealingFromSeat оказался не в списке Playing
+        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: CRITICAL - Could not determine a valid StartDealingFromSeat (%d) from 'Playing' players. NumPlayersToReceive: %d, Dealer: %d."),
+            StartDealingFromSeat, NumPlayersToReceiveCards, DealerSeatIndex);
+        // Пытаемся взять первого из списка Playing как аварийный вариант, но это указывает на проблему
         if (PlayersInPlayingStatusIndices.Num() > 0) {
             StartDealingFromSeat = PlayersInPlayingStatusIndices[0];
-            UE_LOG(LogTemp, Warning, TEXT("DealHoleCards: Fallback for StartDealingFromSeat, using first playing player: %d"), StartDealingFromSeat);
+            UE_LOG(LogTemp, Warning, TEXT("DealHoleCardsAndStartPreflop: Fallback applied for StartDealingFromSeat, using first available playing player: Seat %d."), StartDealingFromSeat);
         }
-        else { return; } // Некого раздавать
+        else {
+            UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Fallback failed, no players in playing status. Aborting deal."));
+            return;
+        }
     }
-    UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Dealer: %d. StartDealingFrom: %d. NumToReceive: %d"), DealerSeatIndex, StartDealingFromSeat, NumPlayersToReceiveCards);
+    UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Dealer: Seat %d. StartDealingFrom: Seat %d. NumPlayersToReceiveCards: %d"),
+        DealerSeatIndex, StartDealingFromSeat, NumPlayersToReceiveCards);
 
     // 3. Формируем точный порядок раздачи (DealOrderResolved)
     TArray<int32> DealOrderResolved;
     DealOrderResolved.Reserve(NumPlayersToReceiveCards);
     int32 CurrentSeatForOrderLoop = StartDealingFromSeat;
 
-    for (int32 i = 0; i < NumPlayersToReceiveCards; ++i)
-    {
+    for (int32 i = 0; i < NumPlayersToReceiveCards; ++i) {
+        // Проверяем, что текущий выбранный для добавления в порядок все еще валиден и должен получить карты
         if (GameStateData->Seats.IsValidIndex(CurrentSeatForOrderLoop) &&
-            PlayersInPlayingStatusIndices.Contains(CurrentSeatForOrderLoop)) // Убедимся, что он все еще в списке тех, кто должен получить
-        {
+            PlayersInPlayingStatusIndices.Contains(CurrentSeatForOrderLoop)) {
             DealOrderResolved.Add(CurrentSeatForOrderLoop);
-            // Ищем следующего ТОЛЬКО ПОСЛЕ того, как добавили текущего, и только если это не последняя итерация
-            if (i < NumPlayersToReceiveCards - 1)
-            {
-                // ИСПОЛЬЗУЕМ bExcludeStartSeat = true, чтобы найти следующего уникального игрока
+            if (i < NumPlayersToReceiveCards - 1) { // Ищем следующего, только если это не последний игрок в порядке раздачи
+                // ИСПОЛЬЗУЕМ bExcludeStartSeat = true, чтобы найти СЛЕДУЮЩЕГО УНИКАЛЬНОГО игрока
                 CurrentSeatForOrderLoop = GetNextPlayerToAct(CurrentSeatForOrderLoop, true, EPlayerStatus::Playing);
                 if (CurrentSeatForOrderLoop == -1) {
-                    UE_LOG(LogTemp, Error, TEXT("DealHoleCards: CRITICAL - Next player not found while building DealOrder after Seat (excluded). Iteration %d."), i);
+                    UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: CRITICAL - Next player not found while building DealOrder. Iteration %d. Order so far has %d players."), i, DealOrderResolved.Num());
                     return;
                 }
-                // Дополнительная проверка на зацикливание (маловероятно с bExcludeStartSeat=true, но для безопасности)
-                if (DealOrderResolved.Contains(CurrentSeatForOrderLoop) && DealOrderResolved.Num() < NumPlayersToReceiveCards) {
-                    UE_LOG(LogTemp, Error, TEXT("DealHoleCards: CRITICAL - About to add duplicate player %d to DealOrder. Logic error. Order so far:"), CurrentSeatForOrderLoop);
-                    for (int32 id : DealOrderResolved) UE_LOG(LogTemp, Error, TEXT(" -> %d"), id);
+                if (DealOrderResolved.Contains(CurrentSeatForOrderLoop)) { // Защита от зацикливания
+                    UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: CRITICAL - Duplicate player %d detected in DealOrder. This should not happen with bExcludeStartSeat=true. Logic error."), CurrentSeatForOrderLoop);
                     return;
                 }
             }
         }
         else {
-            UE_LOG(LogTemp, Error, TEXT("DealHoleCards: CRITICAL - CurrentSeatForOrderLoop %d is invalid or not in Playing list. Iteration %d."), CurrentSeatForOrderLoop, i);
+            UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: CRITICAL - CurrentSeatForOrderLoop %d is invalid or not in Playing list during DealOrder construction. Iteration %d."), CurrentSeatForOrderLoop, i);
             return;
         }
     }
 
     if (DealOrderResolved.Num() != NumPlayersToReceiveCards) {
-        UE_LOG(LogTemp, Error, TEXT("DealHoleCards: Mismatch DealOrderResolved.Num() (%d) vs NumPlayersToReceiveCards (%d). THIS IS A CRITICAL LOGIC FLAW."), DealOrderResolved.Num(), NumPlayersToReceiveCards);
+        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Mismatch DealOrderResolved.Num() (%d) vs NumPlayersToReceiveCards (%d). THIS IS A CRITICAL LOGIC FLAW IN DEAL ORDERING."), DealOrderResolved.Num(), NumPlayersToReceiveCards);
         return;
     }
     UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Deal order determined (%d players):"), DealOrderResolved.Num());
@@ -801,10 +825,10 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
     for (int32 CardPass = 0; CardPass < 2; ++CardPass) {
         UE_LOG(LogTemp, Log, TEXT("Dealing Card Pass #%d"), CardPass + 1);
         for (int32 SeatIndexToDeal : DealOrderResolved) {
+            // Дополнительно проверяем, что игрок все еще в статусе Playing и у него меньше 2 карт
             if (GameStateData->Seats.IsValidIndex(SeatIndexToDeal) &&
                 GameStateData->Seats[SeatIndexToDeal].Status == EPlayerStatus::Playing &&
-                GameStateData->Seats[SeatIndexToDeal].HoleCards.Num() < 2)
-            {
+                GameStateData->Seats[SeatIndexToDeal].HoleCards.Num() < 2) {
                 TOptional<FCard> DealtCardOptional = Deck->DealCard();
                 if (DealtCardOptional.IsSet()) {
                     FCard DealtCard = DealtCardOptional.GetValue();
@@ -815,12 +839,14 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
                         GameStateData->Seats[SeatIndexToDeal].HoleCards.Num());
                 }
                 else {
-                    UE_LOG(LogTemp, Error, TEXT("DealHoleCards: Deck ran out of cards on pass %d for seat %d!"), CardPass + 1, SeatIndexToDeal);
+                    UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Deck ran out of cards on pass %d for seat %d!"), CardPass + 1, SeatIndexToDeal);
                     GameStateData->CurrentStage = EGameStage::WaitingForPlayers; return;
                 }
             }
             else {
-                UE_LOG(LogTemp, Warning, TEXT("DealHoleCards: Skipped dealing card (pass %d) to Seat %d (%s). Status: %s, NumCards: %d, SittingIn: %d"),
+                // Этот лог может сработать для второго круга раздачи, если игрок уже получил 2 карты (что не должно быть)
+                // или если его статус изменился (что тоже не должно быть на этом этапе).
+                UE_LOG(LogTemp, Warning, TEXT("DealHoleCardsAndStartPreflop: Skipped dealing card (pass %d) to Seat %d (%s). Status: %s, NumCards: %d, SittingIn: %d"),
                     CardPass + 1, SeatIndexToDeal, *GameStateData->Seats[SeatIndexToDeal].PlayerName,
                     *UEnum::GetValueAsString(GameStateData->Seats[SeatIndexToDeal].Status), GameStateData->Seats[SeatIndexToDeal].HoleCards.Num(),
                     GameStateData->Seats[SeatIndexToDeal].bIsSittingIn);
@@ -830,7 +856,7 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
 
     // 5. Финальная проверка и логирование розданных карт
     for (const FPlayerSeatData& Seat : GameStateData->Seats) {
-        if (PlayersInPlayingStatusIndices.Contains(Seat.SeatIndex)) {
+        if (PlayersInPlayingStatusIndices.Contains(Seat.SeatIndex)) { // Логируем только для тех, кто должен был получить карты
             if (Seat.HoleCards.Num() == 2) {
                 UE_LOG(LogTemp, Log, TEXT("Seat %d (%s) FINAL cards: %s, %s. Status: %s"),
                     Seat.SeatIndex, *Seat.PlayerName,
@@ -851,21 +877,38 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
         OnActualHoleCardsDealtDelegate.Broadcast();
     }
 
-    // 7. Установка стадии Preflop и определение первого ходящего
-    GameStateData->CurrentStage = EGameStage::Preflop;
-    GameStateData->PlayerWhoOpenedBettingThisRound = DetermineFirstPlayerToActAtPreflop();
-    GameStateData->LastAggressorSeatIndex = GameStateData->PendingBigBlindSeat;
-    GameStateData->LastBetOrRaiseAmountInCurrentRound = GameStateData->BigBlindAmount;
+    // 7. СБРОС ФЛАГОВ bHasActedThisSubRound ДЛЯ НАЧАЛА ПРЕФЛОП-ТОРГОВ
+    for (FPlayerSeatData& Seat : GameStateData->Seats) {
+        // Сбрасываем для всех, кто не сфолдил и не сидит аут.
+        // Игроки All-In тоже должны иметь этот флаг сброшенным, если они еще могут быть частью определения конца раунда.
+        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded && Seat.Status != EPlayerStatus::SittingOut) {
+            Seat.bHasActedThisSubRound = false;
+            UE_LOG(LogTemp, Verbose, TEXT("DealHoleCardsAndStartPreflop: Reset bHasActedThisSubRound for Seat %d (%s) to false."), Seat.SeatIndex, *Seat.PlayerName);
+        }
+    }
 
-    int32 FirstToActSeat = GameStateData->PlayerWhoOpenedBettingThisRound;
-    if (FirstToActSeat == -1) {
-        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Could not determine first to act for Preflop!"));
+    // 8. Установка стадии Preflop и определение ключевых игроков для раунда ставок
+    GameStateData->CurrentStage = EGameStage::Preflop;
+
+    // Игрок, который "открыл" торги на префлопе (на ком должно замкнуться действие, если не было рейзов) - это BB.
+    GameStateData->PlayerWhoOpenedBettingThisRound = GameStateData->PendingBigBlindSeat;
+    // Последний "агрессор" на начало префлопа - это BB (его обязательная ставка).
+    GameStateData->LastAggressorSeatIndex = GameStateData->PendingBigBlindSeat;
+    GameStateData->LastBetOrRaiseAmountInCurrentRound = GameStateData->BigBlindAmount; // Сумма этой "агрессии".
+    // CurrentBetToCall уже должен быть равен BigBlindAmount (установлен в ProcessPlayerAction при постановке BB).
+
+    // Определяем, кто делает первое ДОБРОВОЛЬНОЕ действие на префлопе
+    int32 FirstToMakeVoluntaryActionSeat = DetermineFirstPlayerToActAtPreflop();
+    if (FirstToMakeVoluntaryActionSeat == -1) {
+        UE_LOG(LogTemp, Error, TEXT("DealHoleCardsAndStartPreflop: Could not determine first player to make a voluntary action for Preflop!"));
         GameStateData->CurrentStage = EGameStage::WaitingForPlayers; return;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Preflop round. First to act: Seat %d (%s). CurrentBetToCall: %lld"),
-        FirstToActSeat, *GameStateData->Seats[FirstToActSeat].PlayerName, GameStateData->CurrentBetToCall);
-    RequestPlayerAction(FirstToActSeat);
+    UE_LOG(LogTemp, Log, TEXT("Preflop round. First to make voluntary action: Seat %d (%s). CurrentBetToCall: %lld. OpenerThisRound (BB): %d, LastAggressor (BB): %d"),
+        FirstToMakeVoluntaryActionSeat, *GameStateData->Seats[FirstToMakeVoluntaryActionSeat].PlayerName, GameStateData->CurrentBetToCall,
+        GameStateData->PlayerWhoOpenedBettingThisRound, GameStateData->LastAggressorSeatIndex);
+
+    RequestPlayerAction(FirstToMakeVoluntaryActionSeat);
 }
 
 
@@ -894,67 +937,114 @@ int32 UOfflineGameManager::DetermineFirstPlayerToActAtPreflop() const
 
 int32 UOfflineGameManager::GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat, EPlayerStatus RequiredStatus) const
 {
-    if (!GameStateData || GameStateData->Seats.IsEmpty()) { // Проверка на пустой массив Seats
-        UE_LOG(LogTemp, Error, TEXT("GetNextPlayerToAct: GameStateData is null or Seats array is empty."));
+    if (!GameStateData || GameStateData->Seats.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("GetNextPlayerToAct: GameStateData is null or Seats array is empty. Cannot find next player."));
         return -1;
     }
 
     const int32 NumSeats = GameStateData->Seats.Num();
-    int32 CurrentStartIndex = StartSeatIndex;
+    int32 CurrentIndexToTest = StartSeatIndex;
 
-    // Обработка невалидного StartSeatIndex
-    if (!GameStateData->Seats.IsValidIndex(StartSeatIndex)) {
-        if (StartSeatIndex == -1 && !bExcludeStartSeat) { // Часто используется для поиска первого доступного
-            CurrentStartIndex = 0; // Начинаем с 0, не исключая его
-            // bExcludeStartSeat остается false
+    // 1. Обработка начального индекса и флага исключения
+    if (!GameStateData->Seats.IsValidIndex(StartSeatIndex))
+    {
+        // Если StartSeatIndex невалиден (например, -1), и мы НЕ исключаем его,
+        // то это обычно означает, что мы ищем первого подходящего с самого начала (с индекса 0).
+        if (StartSeatIndex == -1 && !bExcludeStartSeat) {
+            CurrentIndexToTest = 0;
+            // bExcludeStartSeat уже false, так что мы проверим и место 0
+            UE_LOG(LogTemp, Verbose, TEXT("GetNextPlayerToAct: StartSeatIndex was -1 and not excluded, starting search from Seat 0 including Seat 0."));
         }
-        else if (StartSeatIndex == -1 && bExcludeStartSeat) { // Исключить невалидный -1, начать с 0
-            CurrentStartIndex = 0;
-            bExcludeStartSeat = false; // уже учли "исключение" -1
+        // Если StartSeatIndex невалиден, и мы ДОЛЖНЫ его исключить (что странно для невалидного индекса),
+        // то все равно начнем с 0, но технически "исключение" уже произошло.
+        else if (StartSeatIndex == -1 && bExcludeStartSeat) {
+            CurrentIndexToTest = 0;
+            // bExcludeStartSeat можно оставить true, но это не будет иметь эффекта, если мы и так начинаем с 0.
+            // Логичнее, если StartSeatIndex = -1, то bExcludeStartSeat игнорируется, и мы всегда проверяем с 0.
+            // Для большей ясности:
+            bExcludeStartSeat = false; // Если начинаем с 0 из-за плохого StartSeatIndex, то 0 не исключаем.
+            UE_LOG(LogTemp, Verbose, TEXT("GetNextPlayerToAct: StartSeatIndex was -1 and was to be excluded, starting search from Seat 0 including Seat 0."));
         }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("GetNextPlayerToAct: Invalid StartSeatIndex: %d. Defaulting to search from 0."), StartSeatIndex);
-            CurrentStartIndex = 0;
-            bExcludeStartSeat = false; // Начинаем с 0, включая его
+        else // StartSeatIndex не -1, но невалидный (например, > NumSeats)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GetNextPlayerToAct: Invalid StartSeatIndex: %d. Defaulting to search from Seat 0, including Seat 0."), StartSeatIndex);
+            CurrentIndexToTest = 0;
+            bExcludeStartSeat = false;
         }
     }
 
-    int32 IndexToTest = CurrentStartIndex;
-    if (bExcludeStartSeat) {
-        IndexToTest = (CurrentStartIndex + 1) % NumSeats;
+    // Если StartSeatIndex валиден и его нужно исключить, переходим к следующему
+    if (bExcludeStartSeat && GameStateData->Seats.IsValidIndex(CurrentIndexToTest))
+    {
+        CurrentIndexToTest = (CurrentIndexToTest + 1) % NumSeats;
     }
+    // Если StartSeatIndex был невалиден, bExcludeStartSeat уже должен быть false по логике выше.
 
-    for (int32 i = 0; i < NumSeats; ++i) { // Проходим не более одного полного круга
-        // IsValidIndex здесь уже не так критичен, так как IndexToTest всегда будет в диапазоне [0, NumSeats-1]
-        const FPlayerSeatData& Seat = GameStateData->Seats[IndexToTest];
+    // 2. Цикл поиска следующего подходящего игрока
+    // Проходим не более NumSeats раз, чтобы гарантированно обойти всех один раз
+    for (int32 i = 0; i < NumSeats; ++i)
+    {
+        // CurrentIndexToTest всегда будет в диапазоне [0, NumSeats-1] из-за операции %
+        const FPlayerSeatData& Seat = GameStateData->Seats[CurrentIndexToTest];
 
         bool bIsEligible = false;
-        if (Seat.bIsSittingIn) {
-            bool bStatusCriteriaMet = false;
-            if (RequiredStatus == EPlayerStatus::MAX_None) { // PlayerStatus_MAX - наш флаг "любой играющий"
-                // Игрок может ходить, если он Playing И у него есть фишки, ИЛИ он AllIn
-                bStatusCriteriaMet = (Seat.Status == EPlayerStatus::Playing && Seat.Stack > 0) || (Seat.Status == EPlayerStatus::AllIn);
-            }
-            else {
-                // Ищем игрока с конкретным статусом
-                bStatusCriteriaMet = (Seat.Status == RequiredStatus);
-                // Если ищем Playing, он должен иметь фишки, чтобы быть активным
-                if (RequiredStatus == EPlayerStatus::Playing && Seat.Stack <= 0) {
-                    bStatusCriteriaMet = false;
+        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded)
+        {
+            // Проверяем соответствие требуемому статусу
+            if (RequiredStatus == EPlayerStatus::MAX_None) // PlayerStatus_MAX - флаг "любой, кто может продолжать игру"
+            {
+                // Игрок может продолжать игру/быть следующим для хода, если он:
+                // - Playing И имеет стек > 0 (может делать ставки)
+                // - ИЛИ AllIn (уже не может делать ставки, но его карты играют, и другие могут ставить в побочный банк)
+                if ((Seat.Status == EPlayerStatus::Playing && Seat.Stack > 0) || Seat.Status == EPlayerStatus::AllIn)
+                {
+                    bIsEligible = true;
                 }
             }
-            bIsEligible = bStatusCriteriaMet;
+            else // Ищем игрока с конкретным RequiredStatus
+            {
+                if (Seat.Status == RequiredStatus)
+                {
+                    // Если ищем игрока для активного действия (например, Playing, MustPost...), он должен иметь стек, если он не AllIn.
+                    // Если RequiredStatus == EPlayerStatus::AllIn, проверка стека не нужна, он уже AllIn.
+                    if (RequiredStatus == EPlayerStatus::Playing ||
+                        RequiredStatus == EPlayerStatus::MustPostSmallBlind ||
+                        RequiredStatus == EPlayerStatus::MustPostBigBlind)
+                    {
+                        if (Seat.Stack > 0) // Для этих статусов нужен стек, чтобы действовать
+                        {
+                            bIsEligible = true;
+                        }
+                        // Если Stack == 0, но статус Playing - это ошибка состояния, он должен быть AllIn или Folded/SittingOut.
+                        // Если статус MustPost... и стек 0, он все равно должен попытаться поставить (и пойдет AllIn).
+                        // Поэтому, если статус MustPost..., разрешаем, PostBlinds разберется с AllIn.
+                        else if (RequiredStatus == EPlayerStatus::MustPostSmallBlind || RequiredStatus == EPlayerStatus::MustPostBigBlind)
+                        {
+                            bIsEligible = true; // Позволяем ему попытаться поставить блайнд, даже если стек 0 (это будет AllIn)
+                        }
+
+                    }
+                    else { // Для других статусов (например, Waiting, если мы его ищем) проверка стека может быть не нужна
+                        bIsEligible = true;
+                    }
+                }
+            }
         }
 
-        if (bIsEligible) {
-            return IndexToTest;
+        if (bIsEligible)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("GetNextPlayerToAct: Found eligible player at Seat %d (%s). OriginalStartIdx: %d, ExcludedStart: %s, ReqStatus: %s"),
+                CurrentIndexToTest, *Seat.PlayerName, StartSeatIndex, bExcludeStartSeat ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(RequiredStatus));
+            return CurrentIndexToTest;
         }
-        IndexToTest = (IndexToTest + 1) % NumSeats;
+
+        CurrentIndexToTest = (CurrentIndexToTest + 1) % NumSeats; // Переходим к следующему месту
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("GetNextPlayerToAct: No eligible player found. OriginalStartIdx: %d, ExcludeStart: %s, ReqStatus: %s"),
+    UE_LOG(LogTemp, Warning, TEXT("GetNextPlayerToAct: No eligible player found after full circle. OriginalStartIdx: %d, ExcludedStart: %s, ReqStatus: %s"),
         StartSeatIndex, bExcludeStartSeat ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(RequiredStatus));
-    return -1;
+    return -1; // Не найдено подходящих игроков после полного круга
 }
 
 
@@ -967,229 +1057,243 @@ int32 UOfflineGameManager::DetermineFirstPlayerToActPostflop() const
 
 bool UOfflineGameManager::IsBettingRoundOver() const
 {
-    if (!GameStateData|| GameStateData->Seats.Num() < 2) return true; // Недостаточно игроков
+    if (!GameStateData || GameStateData->Seats.IsEmpty()) { return true; }
+    if (GameStateData->CurrentStage < EGameStage::Preflop || GameStateData->CurrentStage > EGameStage::River) { return false; }
 
-    // Если это этап постановки блайндов, раунд не закончен, пока они не поставлены
-    if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind || GameStateData->CurrentStage == EGameStage::WaitingForBigBlind)
-    {
-        return false;
+    UE_LOG(LogTemp, Log, TEXT("--- IsBettingRoundOver CHECK --- Stage: %s, PlayerWhoJustActed (CurrentTurnSeat): %d, ToCall: %lld, LastAggressor: %d, OpenerThisRound: %d"),
+        *UEnum::GetValueAsString(GameStateData->CurrentStage), GameStateData->CurrentTurnSeat,
+        GameStateData->CurrentBetToCall, GameStateData->LastAggressorSeatIndex, GameStateData->PlayerWhoOpenedBettingThisRound);
+
+    TArray<int32> PlayersStillInHandIndices; // Игроки, которые не сфолдили и сидят в игре
+    int32 NumPlayersWithChipsAndNotFolded = 0; // Игроки, которые не сфолдили, сидят И имеют фишки (не All-In с 0 стеком)
+
+    for (const FPlayerSeatData& Seat : GameStateData->Seats) {
+        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded) {
+            PlayersStillInHandIndices.Add(Seat.SeatIndex);
+            if (Seat.Stack > 0 || Seat.Status == EPlayerStatus::AllIn) { // Считаем и тех, кто AllIn, но еще в игре
+                // Точнее, тех, кто не Folded и имеет право на часть банка
+            }
+            if (Seat.Stack > 0 && Seat.Status == EPlayerStatus::Playing) { // Те, кто еще может активно ставить
+                NumPlayersWithChipsAndNotFolded++;
+            }
+        }
     }
 
-    int32 NumPlayersStillInHand = 0; // Игроки, которые не сфолдили
-    int32 NumPlayersWhoCanStillAct = 0; // Игроки, которые не сфолдили и не олл-ин (или олл-ин на меньшую сумму)
-    int32 HighestBetThisRound = GameStateData->CurrentBetToCall; // Текущая максимальная ставка для колла в этом раунде
+    if (PlayersStillInHandIndices.Num() <= 1) {
+        UE_LOG(LogTemp, Log, TEXT("IsBettingRoundOver: True (<=1 player left not folded)."));
+        return true;
+    }
 
-    TArray<int32> PlayerIndicesInHand;
-    for (int32 i = 0; i < GameStateData->Seats.Num(); ++i)
-    {
-        const FPlayerSeatData& Seat = GameStateData->Seats[i];
-        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded)
-        {
-            NumPlayersStillInHand++;
-            PlayerIndicesInHand.Add(i);
-
-            // Игрок может действовать, если он не олл-ин ИЛИ его олл-ин меньше текущей ставки для колла
-            // (т.е. другие еще могут ставить поверх него) И у него есть фишки для ставки (если не олл-ин).
-            // Исключаем тех, кто уже AllIn и их ставка равна CurrentBetToCall, или они просто Playing/Waiting
-            // и их CurrentBet равен CurrentBetToCall, но это НЕ тот игрок, который открыл торги (или сделал последнюю агрессию)
-            // и еще не все сделали ход.
-            if (Seat.Status == EPlayerStatus::Playing && Seat.Stack > 0)
-            {
-                // Если игрок еще не уравнял текущую ставку, он может действовать
-                if (Seat.CurrentBet < HighestBetThisRound)
-                {
-                    NumPlayersWhoCanStillAct++;
+    // Если никто не делал агрессивных действий (бет/рейз) в этом раунде,
+    // то раунд заканчивается, когда все, кто мог, прочекали, и ход вернулся к открывшему торги.
+    if (GameStateData->LastAggressorSeatIndex == -1) {
+        // Проверяем, все ли активные игроки (не AllIn с 0 стеком) уже походили (bHasActedThisSubRound == true)
+        // И их ставка равна CurrentBetToCall (которая должна быть 0 на постфлопе или BB на префлопе)
+        for (int32 SeatIndex : PlayersStillInHandIndices) {
+            const FPlayerSeatData& Seat = GameStateData->Seats[SeatIndex];
+            if (Seat.Status == EPlayerStatus::Playing && Seat.Stack > 0) { // Только те, кто мог бы ходить
+                if (!Seat.bHasActedThisSubRound) {
+                    // Если это BB на префлопе, и CurrentBetToCall = BB, и это его ход - он еще не действовал (опция)
+                    if (GameStateData->CurrentStage == EGameStage::Preflop &&
+                        SeatIndex == GameStateData->PendingBigBlindSeat &&
+                        GameStateData->CurrentBetToCall == GameStateData->BigBlindAmount) {
+                        UE_LOG(LogTemp, Verbose, TEXT("  IsBettingRoundOver: False (BB Option: Seat %d hasn't acted post-blinds)."), SeatIndex);
+                        return false;
+                    }
+                    // Если это постфлоп, CurrentBetToCall=0, и это первый игрок, он еще не чекнул
+                    if (GameStateData->CurrentStage > EGameStage::Preflop &&
+                        GameStateData->CurrentBetToCall == 0 &&
+                        SeatIndex == GameStateData->PlayerWhoOpenedBettingThisRound) {
+                        UE_LOG(LogTemp, Verbose, TEXT("  IsBettingRoundOver: False (Postflop Opener %d hasn't acted in check round)."), SeatIndex);
+                        return false;
+                    }
+                    // Если просто кто-то еще не походил в круге чеков/коллов
+                    UE_LOG(LogTemp, Verbose, TEXT("  IsBettingRoundOver: False (No aggression, but Seat %d has not acted this sub-round)."), SeatIndex);
+                    return false;
                 }
-                // Если игрок уравнял И это НЕ тот, кто открыл торги в этом раунде (PlayerWhoOpenedBettingThisRound)
-                // ИЛИ если он LastAggressor и круг еще не дошел до него снова.
-                // Это сложная часть.
-                // Упрощенно: если все активные игроки имеют CurrentBet == HighestBetThisRound, и круг прошел.
             }
         }
+        // Если все походили и не было агрессии, раунд окончен
+        UE_LOG(LogTemp, Log, TEXT("IsBettingRoundOver: True (No aggression, and all eligible players have acted)."));
+        return true;
     }
 
-    if (NumPlayersStillInHand <= 1)
-    {
-        UE_LOG(LogTemp, Log, TEXT("IsBettingRoundOver: True (<=1 player left in hand)."));
-        return true; // Раздача заканчивается, если остался один или ноль игроков
-    }
-
-    // Проверяем, все ли оставшиеся в игре игроки сделали свою ставку в этом раунде,
-    // и их ставки равны максимальной ставке в раунде ИЛИ они олл-ин.
-    bool bAllBetsMatchedOrAllIn = true;
-    int32 PotentialActingPlayerCount = 0; // Сколько игроков все еще могут сделать ход (не Folded, не All-In на текущую ставку)
-
-    for (int32 SeatIndex : PlayerIndicesInHand)
-    {
+    // Если была агрессия (LastAggressorSeatIndex != -1)
+    // Раунд окончен, если ВСЕ ОСТАЛЬНЫЕ активные игроки (кроме самого LastAggressor)
+    // уже сделали ход (bHasActedThisSubRound == true) И их ставка равна CurrentBetToCall (или они AllIn/Folded).
+    // И ход должен был бы вернуться к LastAggressor.
+    for (int32 SeatIndex : PlayersStillInHandIndices) {
         const FPlayerSeatData& Seat = GameStateData->Seats[SeatIndex];
-        if (Seat.Status == EPlayerStatus::Folded) continue;
 
-        // Игрок должен действовать, если он не All-In и его ставка меньше текущей ставки для колла
-        if (Seat.Status != EPlayerStatus::AllIn && Seat.CurrentBet < HighestBetThisRound)
-        {
-            PotentialActingPlayerCount++;
-            // UE_LOG(LogTemp, Verbose, TEXT("IsBettingRoundOver: Seat %d can still act (Bet: %lld, ToCall: %lld, Status: %s)"), SeatIndex, Seat.CurrentBet, HighestBetThisRound, *UEnum::GetValueAsString(Seat.Status));
-        }
-        // Игрок также должен действовать, если он открыл торги (GameStateData->PlayerWhoOpenedBettingThisRound == SeatIndex)
-        // и ход еще не вернулся к нему после того, как все остальные уравняли или сфолдили.
-        // ИЛИ если он был последним агрессором (GameStateData->LastAggressorSeatIndex == SeatIndex)
-        // и все остальные, кто перед ним, уже сделали ход (уравняли/сфолдили).
-        // ЭТО САМАЯ СЛОЖНАЯ ЧАСТЬ: определить, что круг ставок действительно замкнулся.
+        if (Seat.Status == EPlayerStatus::AllIn && Seat.Stack == 0) continue; // Пропускаем тех, кто уже не может действовать
 
-        // Упрощенная проверка для MVP: если никто больше не может повысить или сделать ставку,
-        // и все, кто не олл-ин, имеют ставки равные CurrentBetToCall.
-        if (Seat.Status != EPlayerStatus::AllIn && Seat.CurrentBet != HighestBetThisRound)
-        {
-            bAllBetsMatchedOrAllIn = false; // Есть игрок, который не уравнял и не олл-ин
-            // UE_LOG(LogTemp, Verbose, TEXT("IsBettingRoundOver: False, Seat %d has not matched bet (Bet: %lld, ToCall: %lld)"), SeatIndex, Seat.CurrentBet, HighestBetThisRound);
-            // break; // Достаточно одного такого
-        }
-    }
-
-    // Если нет игроков, которые МОГУТ сделать ход (т.е. все либо уравняли, либо олл-ин, либо сфолдили)
-    // И если торги уже были открыты (т.е. PlayerWhoOpenedBettingThisRound НЕ равен текущему игроку, чей ход должен быть следующим,
-    // или если PlayerWhoOpenedBettingThisRound == -1, но CurrentBetToCall > 0 (т.е. BB был поставлен))
-    if (PotentialActingPlayerCount == 0 && GameStateData->PlayerWhoOpenedBettingThisRound != -1) {
-        // Дополнительно нужно проверить, что текущий игрок, которому должен перейти ход,
-        // это не тот, кто открыл торги (или был последним агрессором), и что все между ними уже походили.
-        // Самый простой способ - если PlayerWhoOpenedBettingThisRound это следующий игрок по GetNextPlayerToAct.
-        int32 NextToActIfRoundContinues = GetNextPlayerToAct(GameStateData->CurrentTurnSeat, false); // кто ходил бы следующим
-        if (NextToActIfRoundContinues == GameStateData->PlayerWhoOpenedBettingThisRound || // Круг дошел до того, кто открыл торги
-            NextToActIfRoundContinues == GameStateData->LastAggressorSeatIndex || // Круг дошел до последнего агрессора
-            (NumPlayersStillInHand > 0 && PotentialActingPlayerCount == 0) // Или просто никто больше не может ходить
-            )
-        {
-            if (GameStateData->CurrentStage != EGameStage::Preflop || GameStateData->LastAggressorSeatIndex != GameStateData->PendingBigBlindSeat || GameStateData->CurrentBetToCall > GameStateData->BigBlindAmount || PlayerIndicesInHand.Num() <= 2)
-            { // Эта проверка нужна, чтобы избежать немедленного завершения префлопа, если BB чекает (опция)
-                UE_LOG(LogTemp, Log, TEXT("IsBettingRoundOver: True (PotentialActingPlayerCount is 0 and round has likely completed). NextToAct: %d, Opener: %d, Aggressor: %d"), NextToActIfRoundContinues, GameStateData->PlayerWhoOpenedBettingThisRound, GameStateData->LastAggressorSeatIndex);
-                return true;
+        if (Seat.Status == EPlayerStatus::Playing) { // Рассматриваем тех, кто еще может ставить
+            if (Seat.CurrentBet < GameStateData->CurrentBetToCall && Seat.Stack > 0) {
+                UE_LOG(LogTemp, Verbose, TEXT("  IsBettingRoundOver: False (Seat %d needs to meet call of %lld. Bet: %lld)."), SeatIndex, GameStateData->CurrentBetToCall, Seat.CurrentBet);
+                return false; // Кто-то еще не уравнял
+            }
+            // Если CurrentBet == CurrentBetToCall, но bHasActedThisSubRound == false,
+            // это означает, что он еще не отреагировал на последний рейз.
+            if (!Seat.bHasActedThisSubRound) {
+                UE_LOG(LogTemp, Verbose, TEXT("  IsBettingRoundOver: False (Seat %d matched bet, but HasActedThisSubRound is false)."), SeatIndex);
+                return false;
             }
         }
     }
 
-
-    // UE_LOG(LogTemp, Verbose, TEXT("IsBettingRoundOver: False (Default). PotentialActingPlayers: %d. AllBetsMatchedOrAllIn: %s"), PotentialActingPlayerCount, bAllBetsMatchedOrAllIn ? TEXT("true") : TEXT("false"));
-    return false;
+    // Если мы дошли сюда, все ставки уравнены, и все активные игроки уже сделали ход в этом под-раунде.
+    UE_LOG(LogTemp, Log, TEXT("IsBettingRoundOver: True (Aggression occurred, and all subsequent players have acted and matched bets)."));
+    return true;
 }
+
 
 void UOfflineGameManager::ProceedToNextGameStage()
 {
-    if (!GameStateData || !Deck) return;
+    if (!GameStateData || !Deck) {
+        UE_LOG(LogTemp, Error, TEXT("ProceedToNextGameStage: GameStateData or Deck is null!"));
+        return;
+    }
 
-    // Подсчитываем, сколько игроков еще в игре (не сфолдили)
+    EGameStage StageBeforeAdvance = GameStateData->CurrentStage; // Сохраняем текущую стадию для логики
+    UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: Attempting to advance from stage: %s"), *UEnum::GetValueAsString(StageBeforeAdvance));
+
+    // 1. Подсчитываем, сколько игроков еще в игре (не сфолдили)
     int32 PlayersLeftInHand = 0;
     int32 WinnerIfOneLeft = -1;
-    for (const FPlayerSeatData& Seat : GameStateData->Seats)
-    {
-        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded)
-        {
+    for (const FPlayerSeatData& Seat : GameStateData->Seats) {
+        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded) {
             PlayersLeftInHand++;
-            WinnerIfOneLeft = Seat.SeatIndex; // Запоминаем последнего
+            WinnerIfOneLeft = Seat.SeatIndex; // Запоминаем последнего не сфолдившего
         }
     }
 
-    if (PlayersLeftInHand <= 1)
-    {
-        UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: Only %d player(s) left. Awarding pot."), PlayersLeftInHand);
-        if (PlayersLeftInHand == 1 && WinnerIfOneLeft != -1)
-        {
+    // 2. Проверяем, не закончилась ли рука из-за фолдов или не пора ли на шоудаун (если текущая стадия была Ривер)
+    if (PlayersLeftInHand <= 1 || StageBeforeAdvance == EGameStage::River) {
+        if (PlayersLeftInHand == 1 && WinnerIfOneLeft != -1) {
+            UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: Only one player (%s, Seat %d) left. Awarding pot."),
+                *GameStateData->Seats[WinnerIfOneLeft].PlayerName, WinnerIfOneLeft);
             AwardPotToWinner({ WinnerIfOneLeft });
         }
-        else // 0 игроков или ошибка
-        {
-            UE_LOG(LogTemp, Warning, TEXT("ProceedToNextGameStage: 0 players left or error. Pot might be split or returned (not implemented for MVP)."));
-            // Для MVP можно просто начать новую руку или завершить игру
-            // Если банк есть, а игроков 0 - это ошибка логики где-то.
+        else if (PlayersLeftInHand > 1 && StageBeforeAdvance == EGameStage::River) {
+            UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: River betting complete, %d players left. Proceeding to Showdown."), PlayersLeftInHand);
+            ProceedToShowdown(); // Переходим к шоудауну
+            return; // ProceedToShowdown сам завершит руку или начнет новую
         }
-        // После AwardPotToWinner можно сразу StartNewHand() или через UI кнопку
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("ProceedToNextGameStage: Hand ends due to %d players left or unexpected state. Pot: %lld"), PlayersLeftInHand, GameStateData->Pot);
+            if (PlayersLeftInHand == 0 && GameStateData->Pot > 0) {
+                // Ситуация, когда банк не пуст, но игроков не осталось (ошибка или очень специфический сценарий)
+                // Можно добавить логику возврата банка или его переноса. Для MVP пока просто обнуляем.
+                UE_LOG(LogTemp, Error, TEXT("ProceedToNextGameStage: 0 players left but pot is %lld! This should not happen."), GameStateData->Pot);
+            }
+            AwardPotToWinner({}); // Попытка отдать банк, если есть (может быть разделен или возвращен, если 0 победителей)
+        }
+
+        // После завершения руки (победитель один или шоудаун уже вызван)
         GameStateData->CurrentStage = EGameStage::WaitingForPlayers; // Готовимся к новой руке
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over"), GameStateData->Pot); // Pot должен быть 0 после AwardPot
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
         if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
-        // TODO: Возможно, здесь нужно будет вызвать StartNewHand() после небольшой задержки
+        // TODO: В будущем здесь может быть задержка и автоматический вызов StartNewHand()
+        // или ожидание команды от UI для начала новой руки.
         return;
     }
 
+    // --- Если рука продолжается, готовимся к НОВОМУ РАУНДУ СТАВОК на следующей улице ---
+    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Betting round ended. Proceeding to next street. ---"));
 
-    // Сброс ставок текущего раунда для всех активных игроков
-    for (FPlayerSeatData& Seat : GameStateData->Seats)
-    {
-        if (Seat.Status != EPlayerStatus::Folded && Seat.Status != EPlayerStatus::SittingOut)
-        {
-            Seat.CurrentBet = 0; // Ставки для нового раунда начинаются с нуля
-        }
-    }
+    // 3. Сброс состояния для нового раунда ставок
     GameStateData->CurrentBetToCall = 0;
     GameStateData->LastBetOrRaiseAmountInCurrentRound = 0;
     GameStateData->LastAggressorSeatIndex = -1;
-    GameStateData->PlayerWhoOpenedBettingThisRound = -1; // Сбрасываем, кто открывал торги
+    // PlayerWhoOpenedBettingThisRound будет установлен ниже, после определения первого ходящего на новой улице.
+    GameStateData->PlayerWhoOpenedBettingThisRound = -1;
 
-    EGameStage NextStage = EGameStage::Showdown; // По умолчанию, если все стадии пройдены
+    for (FPlayerSeatData& Seat : GameStateData->Seats) {
+        if (Seat.bIsSittingIn && Seat.Status == EPlayerStatus::Playing) { // Сбрасываем только для тех, кто еще активно играет
+            Seat.CurrentBet = 0;
+            Seat.bHasActedThisSubRound = false; // КЛЮЧЕВОЙ СБРОС
+        }
+        // Для AllIn игроков CurrentBet не сбрасываем, их ставка уже зафиксирована.
+        // bHasActedThisSubRound для них не так важен, так как они не будут делать новых ходов.
+    }
 
-    switch (GameStateData->CurrentStage)
+    EGameStage NextStageToSet = GameStateData->CurrentStage; // Инициализируем на случай непредвиденного CurrentStage
+
+    // 4. Раздача карт для следующей улицы
+    switch (StageBeforeAdvance) // Используем сохраненную стадию ДО ее изменения
     {
     case EGameStage::Preflop:
-        NextStage = EGameStage::Flop;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Proceeding to Flop ---"));
-        // Deck->DealCard(); // Сжигаем карту (опционально)
-        if (Deck->NumCardsLeft() < 3) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for Flop!")); /* TODO: Handle error */ return; }
+        NextStageToSet = EGameStage::Flop;
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        // Deck->DealCard(); // Сжигание карты - опционально
+        if (Deck->NumCardsLeft() < 3) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for Flop!")); /* TODO: Обработка ошибки, возможно, завершить руку */ return; }
         GameStateData->CommunityCards.Add(Deck->DealCard().Get(FCard()));
         GameStateData->CommunityCards.Add(Deck->DealCard().Get(FCard()));
         GameStateData->CommunityCards.Add(Deck->DealCard().Get(FCard()));
         if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Flop: %s %s %s"),
-            *GameStateData->CommunityCards[0].ToString(),
-            *GameStateData->CommunityCards[1].ToString(),
-            *GameStateData->CommunityCards[2].ToString()));
+            *GameStateData->CommunityCards[0].ToString(), *GameStateData->CommunityCards[1].ToString(), *GameStateData->CommunityCards[2].ToString()));
         break;
     case EGameStage::Flop:
-        NextStage = EGameStage::Turn;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Proceeding to Turn ---"));
-        // Deck->DealCard(); // Сжигаем карту
-        if (Deck->NumCardsLeft() < 1) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for Turn!")); /* TODO: Handle error */ return; }
+        NextStageToSet = EGameStage::Turn;
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        if (Deck->NumCardsLeft() < 1) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for Turn!")); /* TODO: Обработка ошибки */ return; }
         GameStateData->CommunityCards.Add(Deck->DealCard().Get(FCard()));
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Turn: %s"), *GameStateData->CommunityCards[3].ToString()));
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Turn: %s"), *GameStateData->CommunityCards.Last().ToString()));
         break;
     case EGameStage::Turn:
-        NextStage = EGameStage::River;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Proceeding to River ---"));
-        // Deck->DealCard(); // Сжигаем карту
-        if (Deck->NumCardsLeft() < 1) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for River!")); /* TODO: Handle error */ return; }
+        NextStageToSet = EGameStage::River;
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        if (Deck->NumCardsLeft() < 1) { UE_LOG(LogTemp, Error, TEXT("Not enough cards for River!")); /* TODO: Обработка ошибки */ return; }
         GameStateData->CommunityCards.Add(Deck->DealCard().Get(FCard()));
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("River: %s"), *GameStateData->CommunityCards[4].ToString()));
-        break;
-    case EGameStage::River:
-        NextStage = EGameStage::Showdown; // После Ривера идем на вскрытие
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Final betting round ended. Proceeding to Showdown ---"));
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("River: %s"), *GameStateData->CommunityCards.Last().ToString()));
         break;
     default:
-        UE_LOG(LogTemp, Warning, TEXT("ProceedToNextGameStage called from unexpected stage: %s"), *UEnum::GetValueAsString(GameStateData->CurrentStage));
-        return; // Ничего не делаем, если стадия некорректна
+        UE_LOG(LogTemp, Error, TEXT("ProceedToNextGameStage called from invalid or unexpected stage to deal new cards: %s."), *UEnum::GetValueAsString(StageBeforeAdvance));
+        // Эта ветка не должна достигаться, если логика ProcessPlayerAction и IsBettingRoundOver верна,
+        // и если условие (PlayersLeftInHand <= 1 || GameStateData->CurrentStage == EGameStage::River) в начале отработало.
+        return;
     }
 
-    if (OnCommunityCardsUpdatedDelegate.IsBound()) OnCommunityCardsUpdatedDelegate.Broadcast(GameStateData->CommunityCards);
-
-    GameStateData->CurrentStage = NextStage;
-
-    if (NextStage == EGameStage::Showdown)
-    {
-        ProceedToShowdown();
+    // 5. Уведомляем UI об обновлении ВСЕХ общих карт
+    if (OnCommunityCardsUpdatedDelegate.IsBound()) {
+        OnCommunityCardsUpdatedDelegate.Broadcast(GameStateData->CommunityCards);
     }
-    else // Flop, Turn, River - начинаем новый круг торгов
-    {
-        int32 FirstToAct = DetermineFirstPlayerToActPostflop();
-        if (FirstToAct != -1)
-        {
-            GameStateData->PlayerWhoOpenedBettingThisRound = FirstToAct; // Первый игрок на постфлопе "открывает" торги
-            RequestPlayerAction(FirstToAct);
+
+    // 6. Устанавливаем новую стадию игры
+    GameStateData->CurrentStage = NextStageToSet;
+    UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: New stage is %s."), *UEnum::GetValueAsString(NextStageToSet));
+
+    // 7. Начинаем новый круг торгов
+    int32 FirstToActOnNewStreet = DetermineFirstPlayerToActPostflop();
+    if (FirstToActOnNewStreet != -1) {
+        GameStateData->PlayerWhoOpenedBettingThisRound = FirstToActOnNewStreet;
+        UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: First to act on %s is Seat %d (%s). Opener set."),
+            *UEnum::GetValueAsString(NextStageToSet), FirstToActOnNewStreet, *GameStateData->Seats[FirstToActOnNewStreet].PlayerName);
+        RequestPlayerAction(FirstToActOnNewStreet);
+    }
+    else {
+        // Если не осталось игроков для хода (например, все, кроме одного, олл-ин на предыдущей улице,
+        // а этот один не может ставить, или все оставшиеся олл-ин).
+        UE_LOG(LogTemp, Warning, TEXT("ProceedToNextGameStage: No player to act on %s. PlayersLeftInHand: %d. This may mean all remaining are all-in."),
+            *UEnum::GetValueAsString(NextStageToSet), PlayersLeftInHand);
+
+        // Если это еще не ривер, и есть несколько игроков (но они все олл-ин),
+        // мы должны автоматически раздать оставшиеся карты до ривера и перейти к шоудауну.
+        if (NextStageToSet < EGameStage::River && PlayersLeftInHand > 1) {
+            UE_LOG(LogTemp, Warning, TEXT("   Auto-advancing to next stage again as no one can act."));
+            ProceedToNextGameStage(); // Рекурсивный вызов для раздачи следующей улицы
         }
-        else // Все олл-ин или сфолдили, и это не шоудаун (маловероятно, но возможно)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("ProceedToNextGameStage: No player to act on %s. Advancing again."), *UEnum::GetValueAsString(NextStage));
-            // Это может зациклить, если логика GetNextPlayerToAct или IsBettingRoundOver некорректна
-            // Для безопасности, если нет игроков для хода, возможно, сразу на шоудаун (если есть карты)
-            if (GameStateData->CommunityCards.Num() >= 3) ProceedToShowdown();
-            else { /* Ошибка, не должно быть */ }
+        else if (PlayersLeftInHand > 1) { // Уже на ривере (или ошибка), и никто не может ходить -> шоудаун
+            ProceedToShowdown();
+        }
+        else {
+            // Если остался 1 игрок, это должно было обработаться в самом начале функции.
+            // Эта ветка - аварийный случай.
+            UE_LOG(LogTemp, Error, TEXT("   Unexpected state in ProceedToNextGameStage fallback (No one to act, but PlayersLeftInHand is not >1 or stage is not < River)."));
+            GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
+            // ... (уведомление UI о завершении руки) ...
         }
     }
 }

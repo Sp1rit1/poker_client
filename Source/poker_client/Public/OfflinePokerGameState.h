@@ -77,6 +77,8 @@ public:
         BigBlindAmount = 0;
         PendingSmallBlindSeat = -1;
         PendingBigBlindSeat = -1;
+        LastAggressorSeatIndex = -1;
+        LastBetOrRaiseAmountInCurrentRound = 0;
     }
 
     // --- Новые Геттеры (BlueprintCallable) ---

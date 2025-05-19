@@ -170,34 +170,37 @@ struct FPlayerSeatData
 	int64 PlayerId = -1; // ID пользователя (если залогинен)
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite чтобы можно было менять извне
-		int64 Stack = 0; // Количество фишек
+	int64 Stack = 0; // Количество фишек
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite - сюда будем класть карты
-		TArray<FCard> HoleCards; // Карманные карты (обычно 2)
+	TArray<FCard> HoleCards; // Карманные карты (обычно 2)
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для обновления статуса
-		EPlayerStatus Status = EPlayerStatus::Waiting; // Текущий статус игрока
+	EPlayerStatus Status = EPlayerStatus::Waiting; // Текущий статус игрока
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для установки, кто бот
-		bool bIsBot = false; // Является ли это место ботом
+	bool bIsBot = false; // Является ли это место ботом
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для подсветки хода
-		bool bIsTurn = false; // Сейчас ход этого игрока?
+	bool bIsTurn = false; // Сейчас ход этого игрока?
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения баттона
-		bool bIsDealer = false; // Находится ли баттон дилера на этом месте?
+	bool bIsDealer = false; // Находится ли баттон дилера на этом месте?
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения SB
-		bool bIsSmallBlind = false; // Поставил ли малый блайнд?
+	bool bIsSmallBlind = false; // Поставил ли малый блайнд?
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения BB
-		bool bIsBigBlind = false; // Поставил ли большой блайнд?
+	bool bIsBigBlind = false; // Поставил ли большой блайнд?
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для отображения ставки
-		int64 CurrentBet = 0; // Сумма, поставленная в текущем раунде торговли
+	int64 CurrentBet = 0; // Сумма, поставленная в текущем раунде торговли
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat") // ReadWrite для возможности сидеть вне игры
-		bool bIsSittingIn = true; // Участвует ли игрок сейчас (не в Sit Out)?
+	bool bIsSittingIn = true; // Участвует ли игрок сейчас (не в Sit Out)?
+
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat")
+	bool bHasActedThisSubRound = false; // Сделал ли игрок ход в текущем "под-раунде" ставок
 
 	FPlayerSeatData() = default;
 
