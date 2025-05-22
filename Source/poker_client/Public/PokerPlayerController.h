@@ -59,6 +59,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Game State")
     UOfflinePokerGameState* GetCurrentGameState() const;
 
+    UFUNCTION(BlueprintCallable, Category = "Player Actions")
+    void RequestStartNewHandFromUI();
+
 
 protected:
     virtual void BeginPlay() override;

@@ -569,3 +569,46 @@ void APokerPlayerController::HandlePostBlindAction()
         else { UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: CurrentTurnSeat %d is invalid."), ActingPlayerSeat); }
     }
 }
+
+void APokerPlayerController::RequestStartNewHandFromUI()
+{
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::RequestStartNewHandFromUI called by UI."));
+    UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
+    if (!GI) {
+        UE_LOG(LogTemp, Error, TEXT("RequestStartNewHandFromUI: MyGameInstance is null."));
+        return;
+    }
+
+    UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
+    if (!OfflineManager) {
+        UE_LOG(LogTemp, Error, TEXT("RequestStartNewHandFromUI: OfflineGameManager is null."));
+        return;
+    }
+
+    FString ReasonWhyNot;
+    if (OfflineManager->CanStartNewHand(ReasonWhyNot))
+    {
+        UE_LOG(LogTemp, Log, TEXT("RequestStartNewHandFromUI: CanStartNewHand returned true. Calling StartNewHand()."));
+
+        // Опционально: Скрыть элементы шоудауна, если они есть и интерфейс это поддерживает
+        if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+        {
+            // IGameHUDInterface::Execute_ClearShowdownDisplay(GameHUDWidgetInstance); // Если вы добавили эту функцию
+        }
+        // OnNewHandAboutToStartDelegate в OfflineManager должен позаботиться о скрытии карт на столах
+
+        OfflineManager->StartNewHand();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RequestStartNewHandFromUI: Cannot start new hand: %s"), *ReasonWhyNot);
+        // Уведомить HUD о причине
+        if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+        {
+            // Если у вас есть ShowNotificationMessage в интерфейсе
+            IGameHUDInterface::Execute_ShowNotificationMessage(GameHUDWidgetInstance, ReasonWhyNot, 5.0f);
+            // Или используем историю, если нет отдельной функции уведомления
+            // IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance, FString::Printf(TEXT("SYSTEM: %s"), *ReasonWhyNot));
+        }
+    }
+}

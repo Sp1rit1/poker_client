@@ -108,6 +108,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
 	void StartNewHand();
 
+	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
+	bool CanStartNewHand(FString& OutReasonIfNotPossible); // Возвращает true, если можно начать
+
 	/**
 	 * Вызывается UI (через PlayerController), когда игрок совершает действие.
 	 * Обрабатывает действие игрока и определяет дальнейший ход игры.
