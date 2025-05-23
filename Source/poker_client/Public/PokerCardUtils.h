@@ -32,6 +32,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Poker|Showdown Info", meta = (DisplayName = "Get Amount Won (Showdown)"))
     static int64 GetShowdownPlayerAmountWon(const FShowdownPlayerInfo& ShowdownInfo);
 
+    UFUNCTION(BlueprintPure, Category = "Poker|Showdown Info", meta = (DisplayName = "Get Player Status (Showdown)"))
+    static EPlayerStatus GetShowdownPlayerStatus(const FShowdownPlayerInfo& ShowdownInfo);
+    
     // --- Функции для FPokerHandResult ---
 
     UFUNCTION(BlueprintPure, Category = "Poker|Hand Result", meta = (DisplayName = "Get Hand Rank (Result)"))
@@ -39,6 +42,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Poker|Hand Result", meta = (DisplayName = "Get Kickers (Result)"))
     static TArray<ECardRank> GetKickersFromResult(const FPokerHandResult& HandResult);
+
+    UFUNCTION(BlueprintPure, Category = "Poker|Showdown Info", meta = (DisplayName = "Get Net Result (Showdown)"))
+    static int64 GetShowdownPlayerNetResult(const FShowdownPlayerInfo& ShowdownInfo);
 
     // Функция для преобразования EPokerHandRank в читаемую строку (может быть полезной)
     UFUNCTION(BlueprintPure, Category = "Poker|Hand Result", meta = (DisplayName = "Hand Rank To String"))

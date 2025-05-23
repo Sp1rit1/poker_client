@@ -235,4 +235,10 @@ struct FShowdownPlayerInfo
 
 	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
 	int64 AmountWon = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	int64 NetResult = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown") 
+	EPlayerStatus PlayerStatusAtShowdown = EPlayerStatus::Waiting;
 };

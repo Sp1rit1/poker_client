@@ -120,6 +120,8 @@ public:
 
 
 private:
+
+	TMap<int32, int64> StacksAtHandStart_Internal;
 	// --- Внутренние Функции Управления Игрой ---
 
 	/**

@@ -450,24 +450,22 @@ void APokerPlayerController::HandleCommunityCardsUpdated(const TArray<FCard>& Co
     }
 }
 
-void APokerPlayerController::HandleShowdownResults(const TArray<FShowdownPlayerInfo>& ShowdownResults, const FString& WinnerAnnouncement)
+void APokerPlayerController::HandleShowdownResults(const TArray<FShowdownPlayerInfo>& ShowdownPlayerResults, const FString& WinnerAnnouncement)
 {
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleShowdownResults received. Announcement: %s"), *WinnerAnnouncement);
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleShowdownResults received. Announcement: '%s'. Results count: %d"), *WinnerAnnouncement, ShowdownPlayerResults.Num());
 
-    // 1. Уведомить HUD о результатах шоудауна
+    // 1. Уведомить HUD о результатах шоудауна (он сам разберется, как отобразить на основе статуса)
     if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
     {
-        IGameHUDInterface::Execute_DisplayShowdownResults(GameHUDWidgetInstance.Get(), ShowdownResults, WinnerAnnouncement);
+        IGameHUDInterface::Execute_DisplayShowdownResults(GameHUDWidgetInstance.Get(), ShowdownPlayerResults, WinnerAnnouncement);
     }
 
-    // 2. Обновить визуализаторы мест, чтобы ПОКАЗАТЬ ВСЕ КАРТЫ участников шоудауна ЛИЦОМ
-    UOfflinePokerGameState* GameState = GetCurrentGameState(); // У вас уже есть эта функция
-    if (!GameState) return;
-
+    // 2. Обновить визуализаторы мест, чтобы ПОКАЗАТЬ КАРТЫ ЛИЦОМ для всех игроков в ShowdownResults
+    //    (даже если они сфолдили, их PlayerStatusAtShowdown будет это отражать)
     TArray<AActor*> AllSeatVisualizerActors;
     UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UPlayerSeatVisualizerInterface::StaticClass(), AllSeatVisualizerActors);
 
-    for (const FShowdownPlayerInfo& PlayerResult : ShowdownResults)
+    for (const FShowdownPlayerInfo& PlayerResult : ShowdownPlayerResults)
     {
         AActor* FoundVisualizer = nullptr;
         for (AActor* VisualizerActor : AllSeatVisualizerActors)
@@ -479,14 +477,21 @@ void APokerPlayerController::HandleShowdownResults(const TArray<FShowdownPlayerI
             }
         }
 
-        if (FoundVisualizer && PlayerResult.HoleCards.Num() > 0) // Показываем, если есть карты
+        if (FoundVisualizer)
         {
-            // Принудительно показываем карты лицом для всех участников шоудауна
-            IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerResult.HoleCards, true);
+            // Показываем карты лицом, если они есть.
+            // Если игрок сфолдил, его PlayerResult.HoleCards все равно будут переданы,
+            // а UI (WBP_GameHUD) добавит пометку "(сфолдил)".
+            if (PlayerResult.HoleCards.Num() > 0)
+            {
+                IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerResult.HoleCards, true);
+            }
+            else
+            {
+                IPlayerSeatVisualizerInterface::Execute_HideHoleCards(FoundVisualizer);
+            }
         }
     }
-    // После этой функции UI должен отобразить результаты, и игра перейдет в WaitingForPlayers
-    // Кнопка "Next Hand" в HUD должна стать основной для продолжения.
 }
 
 void APokerPlayerController::HandleNewHandAboutToStart()

@@ -32,6 +32,17 @@ int64 UPokerCardUtils::GetShowdownPlayerAmountWon(const FShowdownPlayerInfo& Sho
 {
     return ShowdownInfo.AmountWon;
 }
+
+int64 UPokerCardUtils::GetShowdownPlayerNetResult(const FShowdownPlayerInfo& ShowdownInfo)
+{
+    return ShowdownInfo.NetResult;
+}
+
+EPlayerStatus UPokerCardUtils::GetShowdownPlayerStatus(const FShowdownPlayerInfo& ShowdownInfo)
+{
+    return ShowdownInfo.PlayerStatusAtShowdown;
+}
+
 FString UPokerCardUtils::Conv_CardToString(const FCard& Card)
 {
     return Card.ToRussianString(); // Просто вызываем существующий метод структуры
