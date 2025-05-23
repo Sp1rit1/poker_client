@@ -10,6 +10,7 @@
 #include "OfflineGameManager.h"
 #include "OfflinePokerGameState.h"
 #include "GameHUDInterface.h"
+#include "LevelTransitionManager.h"
 #include "PlayerSeatVisualizerInterface.h" // Включаем интерфейс для мест
 #include "CommunityCardDisplayInterface.h"
 #include "Kismet/GameplayStatics.h"   // Для GetAllActorsWithInterface и GetActorOfClass
@@ -253,14 +254,14 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
         }
 
         // Важно: Вызываем UpdateActionButtons ПЕРЕД UpdatePlayerTurnInfo,
-        // так как UpdatePlayerTurnInfo может использовать флаги (bLocal_CanBet и т.д.),
+        // так как UpdateGameInfo может использовать флаги (bLocal_CanBet и т.д.),
         // которые устанавливаются в UpdateActionButtons.
         IGameHUDInterface::Execute_UpdateActionButtons(
             GameHUDWidgetInstance.Get(),
             OptAllowedActions.GetValue()
         );
 
-        IGameHUDInterface::Execute_UpdatePlayerTurnInfo(
+        IGameHUDInterface::Execute_UpdateGameInfo(
             GameHUDWidgetInstance.Get(),
             OptMovingPlayerName.GetValue(),
             OptCurrentPot.GetValue(),
@@ -640,4 +641,46 @@ void APokerPlayerController::RequestStartNewHandFromUI()
             // IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance, FString::Printf(TEXT("SYSTEM: %s"), *ReasonWhyNot));
         }
     }
+}
+
+#include "MyGameInstance.h"         // Убедитесь, что инклюд есть
+#include "LevelTransitionManager.h" // Включите .h вашего менеджера переходов
+
+void APokerPlayerController::RequestReturnToMainMenu()
+{
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: RequestReturnToMainMenu called."));
+
+    UMyGameInstance* GI = GetGameInstance<UMyGameInstance>();
+    if (!GI)
+    {
+        UE_LOG(LogTemp, Error, TEXT("RequestReturnToMainMenu: MyGameInstance is null!"));
+        return;
+    }
+
+    ULevelTransitionManager* LTM = GI->GetLevelTransitionManager(); // Предполагаем, что у вас есть такой геттер
+    if (!LTM)
+    {
+        UE_LOG(LogTemp, Error, TEXT("RequestReturnToMainMenu: LevelTransitionManager is null!"));
+        return;
+    }
+
+    // Опционально: Уведомить OfflineGameManager о выходе из игры, если нужно что-то сбросить
+    UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
+    if (OfflineManager)
+    {
+        // OfflineManager->ResetGameForMenu(); // Создайте эту функцию в OfflineManager, если она нужна
+                                            // Например, для сброса GameStateData или отписки от делегатов,
+                                            // хотя GameInstance и его объекты обычно переживают смену уровня.
+                                            // Для простоты пока можно пропустить, но для чистоты может понадобиться.
+        UE_LOG(LogTemp, Log, TEXT("RequestReturnToMainMenu: (Optional) OfflineManager exists, consider resetting it if needed."));
+    }
+
+    // Вызываем переход на уровень меню с использованием ассетов заставки из GameInstance
+    LTM->StartLoadLevelWithVideo(
+        FName("MenuLevel"),                     // Имя вашего уровня главного меню
+        GI->LoadingVideo_WidgetClass,      // Ассеты по умолчанию из GameInstance
+        GI->LoadingVideo_MediaPlayer,
+        GI->LoadingVideo_MediaSource,
+        TEXT("")                                // Опции GameMode для MenuLevel не нужны, он использует свой дефолтный
+    );
 }

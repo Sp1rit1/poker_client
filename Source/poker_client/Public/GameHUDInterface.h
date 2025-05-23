@@ -30,7 +30,7 @@ public:
      * @param PlayerStack Стек игрока, чей сейчас ход (или стек локального игрока, если ForPlayerSeatIndex = -1).
      */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
-    void UpdatePlayerTurnInfo(
+    void UpdateGameInfo(
         const FString& MovingPlayerName,        // Имя ходящего
         int64 CurrentPotGlobal,                 // Общий банк на столе
         int64 ActualAmountPlayerNeedsToCall,    // Сколько ХОДЯЩИЙ игрок должен ДОБАВИТЬ для колла

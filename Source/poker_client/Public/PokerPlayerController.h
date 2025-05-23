@@ -62,6 +62,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Actions")
     void RequestStartNewHandFromUI();
 
+    UFUNCTION(BlueprintCallable, Category = "Navigation")
+    void RequestReturnToMainMenu();
+
 
 protected:
     virtual void BeginPlay() override;
