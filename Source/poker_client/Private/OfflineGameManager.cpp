@@ -151,7 +151,7 @@ void UOfflineGameManager::StartNewHand()
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Waiting for players..."), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         return;
     }
     UE_LOG(LogTemp, Log, TEXT("StartNewHand: Number of active players for this hand: %d"), NumActivePlayersThisHand);
@@ -377,22 +377,19 @@ void UOfflineGameManager::PostBlinds()
     OnTableStateInfoDelegate.Broadcast(BlindsPosterName, GameStateData->Pot);
 }
 
-// OfflineGameManager.cpp
-// ... (код из Части 1: конструктор, InitializeGame, StartNewHand, PostBlinds()) ...
-
-// --- ЗАПРОС ДЕЙСТВИЯ У ИГРОКА ---
 void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
 {
     if (!GameStateData || !GameStateData->Seats.IsValidIndex(SeatIndex)) {
         UE_LOG(LogTemp, Warning, TEXT("RequestPlayerAction: Invalid SeatIndex %d or GameStateData null. Broadcasting default/error state."), SeatIndex);
-        OnPlayerTurnStartedDelegate.Broadcast(SeatIndex);
-        OnTableStateInfoDelegate.Broadcast(TEXT("Error: Invalid State"), GameStateData ? GameStateData->Pot : 0);
-        OnPlayerActionsAvailableDelegate.Broadcast({});
-        OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0);
+        // Отправляем "пустые" или дефолтные значения, чтобы UI мог сброситься
+        if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(SeatIndex); // Передаем SeatIndex, чтобы UI знал, кто (не) ходит
+        if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Error: Invalid State"), GameStateData ? GameStateData->Pot : 0);
+        if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0, 0); // Добавлен 0 для CurrentBetOfMovingPlayer
         return;
     }
 
-    // Сбрасываем флаг bIsTurn у предыдущего игрока, если он был и это не тот же самый игрок
+    // Сбрасываем флаг bIsTurn у предыдущего игрока
     if (GameStateData->CurrentTurnSeat != -1 &&
         GameStateData->CurrentTurnSeat != SeatIndex &&
         GameStateData->Seats.IsValidIndex(GameStateData->CurrentTurnSeat))
@@ -403,33 +400,27 @@ void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
     FPlayerSeatData& CurrentPlayer = GameStateData->Seats[SeatIndex];
     CurrentPlayer.bIsTurn = true;
 
-    OnPlayerTurnStartedDelegate.Broadcast(SeatIndex);
-    OnTableStateInfoDelegate.Broadcast(CurrentPlayer.PlayerName, GameStateData->Pot);
+    // Вызываем первые два делегата
+    if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(SeatIndex);
+    if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(CurrentPlayer.PlayerName, GameStateData->Pot);
 
     TArray<EPlayerAction> AllowedActions;
-    int64 MinBetOrRaiseForAction = GameStateData->BigBlindAmount; // Базовый для Bet/Raise
 
     // Проверяем, может ли игрок вообще действовать
     bool bCanPlayerAct = CurrentPlayer.bIsSittingIn &&
         CurrentPlayer.Status != EPlayerStatus::Folded &&
-        CurrentPlayer.Stack > 0; // Должен иметь фишки для большинства действий
+        CurrentPlayer.Stack > 0;
 
     if (CurrentPlayer.Status == EPlayerStatus::AllIn) {
-        // Если игрок уже олл-ин, он не может предпринимать дальнейших действий,
-        // если его ставка уже максимальна или равна CurrentBetToCall.
-        // Однако, если другие игроки могут еще ставить (и создавать побочные банки),
-        // то для них действия еще есть. Для самого AllIn игрока - нет.
-        if (GameStateData->CurrentStage >= EGameStage::Preflop && CurrentPlayer.CurrentBet >= GameStateData->CurrentBetToCall)
+        // Игрок AllIn не может действовать, если его ставка уже покрывает CurrentBetToCall
+        // или если еще не префлоп (т.е. он не может ставить блайнды, если уже AllIn)
+        if ((GameStateData->CurrentStage >= EGameStage::Preflop && CurrentPlayer.CurrentBet >= GameStateData->CurrentBetToCall) ||
+            GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind ||
+            GameStateData->CurrentStage == EGameStage::WaitingForBigBlind)
         {
             bCanPlayerAct = false;
         }
-        // Если игрок All-In, но его ставка меньше CurrentBetToCall, и он SB/BB, он не может "PostBlind"
-        if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind || GameStateData->CurrentStage == EGameStage::WaitingForBigBlind)
-        {
-            bCanPlayerAct = false; // Не может ставить блайнд, если уже олл-ин (этот случай должен быть обработан в PostBlinds)
-        }
     }
-
 
     if (!bCanPlayerAct) {
         UE_LOG(LogTemp, Log, TEXT("RequestPlayerAction: Seat %d (%s) cannot act (Status: %s, Stack: %lld). Broadcasting empty actions."),
@@ -448,68 +439,63 @@ void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
             AllowedActions.Add(EPlayerAction::Check);
         }
 
+        // Call доступен, если есть что коллировать и есть фишки
         if (GameStateData->CurrentBetToCall > CurrentPlayer.CurrentBet && CurrentPlayer.Stack > 0) {
             AllowedActions.Add(EPlayerAction::Call);
         }
 
-        // Логика для Bet и Raise
-        // Минимальная сумма для бета - это Большой Блайнд
-        // Минимальная сумма для чистого рейза (сверх колла) - это размер последнего бета/рейза, или ББ, если не было агрессии
-        int64 MinPureRaiseAmount = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
-
-        if (AllowedActions.Contains(EPlayerAction::Check) && CurrentPlayer.Stack >= GameStateData->BigBlindAmount) { // Бет не меньше ББ
+        // Bet доступен, если можно чекнуть и хватает на минимальный бет (ББ)
+        if (AllowedActions.Contains(EPlayerAction::Check) && CurrentPlayer.Stack >= GameStateData->BigBlindAmount) {
             AllowedActions.Add(EPlayerAction::Bet);
-            MinBetOrRaiseForAction = GameStateData->BigBlindAmount;
         }
 
-        int64 AmountToEffectivelyCall = GameStateData->CurrentBetToCall - CurrentPlayer.CurrentBet;
-        if (CurrentPlayer.Stack > AmountToEffectivelyCall && // Есть больше чем на колл
-            CurrentPlayer.Stack >= (AmountToEffectivelyCall + MinPureRaiseAmount)) // Хватает на колл + мин.чистый.рейз
+        // Raise доступен, если есть что коллировать (CurrentBetToCall > CurrentPlayer.CurrentBet)
+        // и хватает фишек на колл + минимальный чистый рейз.
+        int64 AmountToEffectivelyCallForRaiseCheck = GameStateData->CurrentBetToCall - CurrentPlayer.CurrentBet;
+        if (AmountToEffectivelyCallForRaiseCheck < 0) AmountToEffectivelyCallForRaiseCheck = 0; // На случай, если игрок переплатил (не должно быть)
+
+        int64 MinPureRaiseForRaiseCheck = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
+
+        if (GameStateData->CurrentBetToCall > 0 && // Должна быть предыдущая ставка, чтобы рейзить (иначе это Bet)
+            CurrentPlayer.Stack > AmountToEffectivelyCallForRaiseCheck && // Хватает на колл
+            CurrentPlayer.Stack >= (AmountToEffectivelyCallForRaiseCheck + MinPureRaiseForRaiseCheck)) // Хватает на колл + мин.чистый.рейз
         {
             AllowedActions.Add(EPlayerAction::Raise);
-            MinBetOrRaiseForAction = MinPureRaiseAmount; // Для UI показываем размер чистого рейза
-        }
-        // Если игрок может пойти олл-ин, и это будет считаться валидным бетом/коллом/рейзом
-        if (CurrentPlayer.Stack > 0 && !AllowedActions.Contains(EPlayerAction::Bet) && !AllowedActions.Contains(EPlayerAction::Raise)) {
-            // Если не может сделать стандартный бет/рейз, но может пойти олл-ин
-            if (AllowedActions.Contains(EPlayerAction::Call) && CurrentPlayer.Stack <= AmountToEffectivelyCall) {
-                // Может только заколлировать олл-ином
-            }
-            else if (AllowedActions.Contains(EPlayerAction::Check) && CurrentPlayer.Stack < GameStateData->BigBlindAmount && CurrentPlayer.Stack > 0) {
-                // Может только чекнуть, но может пойти олл-ин бетом, если бы это было валидно (редкий случай)
-            }
-            // Для MVP: EPlayerAction::AllIn не добавляем как отдельное действие,
-            // оно будет подразумеваться, если игрок ставит весь свой стек через Bet/Call/Raise.
         }
     }
     else {
         UE_LOG(LogTemp, Warning, TEXT("RequestPlayerAction: Unhandled stage %s for seat %d."), *UEnum::GetValueAsString(GameStateData->CurrentStage), SeatIndex);
     }
-    OnPlayerActionsAvailableDelegate.Broadcast(AllowedActions);
 
-    int64 BetToCallForUI = 0;
-    int64 MinRaiseForUI = GameStateData->BigBlindAmount; // По умолчанию для ставки/рейза
+    if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast(AllowedActions);
+
+    // --- Расчет значений для OnActionUIDetailsDelegate ---
+    int64 ActualAmountPlayerNeedsToCallUI = 0;
+    int64 MinPureRaiseValueUI = GameStateData->BigBlindAmount; // По умолчанию для Bet или первого Raise
 
     if (GameStateData->CurrentStage >= EGameStage::Preflop && GameStateData->CurrentStage <= EGameStage::River) {
-        BetToCallForUI = GameStateData->CurrentBetToCall - CurrentPlayer.CurrentBet;
-        if (BetToCallForUI < 0) BetToCallForUI = 0;
+        ActualAmountPlayerNeedsToCallUI = GameStateData->CurrentBetToCall - CurrentPlayer.CurrentBet;
+        if (ActualAmountPlayerNeedsToCallUI < 0) ActualAmountPlayerNeedsToCallUI = 0;
 
-        MinRaiseForUI = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
-        // Сумма, которую нужно добавить к CurrentBetToCall для минимального рейза
+        // MinPureRaiseValueUI - это чистый размер предыдущего бета/рейза, или ББ, если это первый бет на улице.
+        MinPureRaiseValueUI = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
     }
     else if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind) {
-        MinRaiseForUI = GameStateData->SmallBlindAmount; // Технически, это сумма для PostBlind
+        // Для постановки SB, "сумма колла" 0, "мин.рейз" - это сам SB
+        ActualAmountPlayerNeedsToCallUI = 0;
+        MinPureRaiseValueUI = GameStateData->SmallBlindAmount;
     }
     else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind) {
-        MinRaiseForUI = GameStateData->BigBlindAmount; // Сумма для PostBlind
+        // Для постановки BB, "сумма колла" 0, "мин.рейз" - это сам BB
+        ActualAmountPlayerNeedsToCallUI = 0;
+        MinPureRaiseValueUI = GameStateData->BigBlindAmount;
     }
 
+    if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(ActualAmountPlayerNeedsToCallUI, MinPureRaiseValueUI, CurrentPlayer.Stack, CurrentPlayer.CurrentBet);
 
-    OnActionUIDetailsDelegate.Broadcast(BetToCallForUI, MinRaiseForUI, CurrentPlayer.Stack);
-
-    UE_LOG(LogTemp, Log, TEXT("RequestPlayerAction for Seat %d (%s). Actions: %d. Stage: %s. Stack: %lld, Pot: %lld, ToCallForUI: %lld, MinRaiseForUI: %lld"),
+    UE_LOG(LogTemp, Log, TEXT("RequestPlayerAction for Seat %d (%s). Actions: %d. Stage: %s. Stack: %lld, PlayerBet: %lld, Pot: %lld, ActualToCallUI: %lld, MinPureRaiseUI: %lld"),
         SeatIndex, *CurrentPlayer.PlayerName, AllowedActions.Num(),
-        *UEnum::GetValueAsString(GameStateData->CurrentStage), CurrentPlayer.Stack, GameStateData->Pot, BetToCallForUI, MinRaiseForUI);
+        *UEnum::GetValueAsString(GameStateData->CurrentStage), CurrentPlayer.Stack, CurrentPlayer.CurrentBet, GameStateData->Pot, ActualAmountPlayerNeedsToCallUI, MinPureRaiseValueUI);
 }
 
 void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount)
@@ -756,7 +742,7 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
             if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
             if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over"), GameStateData->Pot);
             if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-            if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+            if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
             // НЕ ВЫЗЫВАЕМ StartNewHand() автоматически
             return;
         }
@@ -834,7 +820,7 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Error: Not enough players for deal"), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         return;
     }
 
@@ -1242,7 +1228,7 @@ void UOfflineGameManager::ProceedToNextGameStage()
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Error: Game State Null"), GameStateData ? GameStateData->Pot : 0);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0, 0);
         return;
     }
 
@@ -1281,7 +1267,7 @@ void UOfflineGameManager::ProceedToNextGameStage()
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over"), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         // НЕ ЗАПУСКАЕМ StartNewHand() здесь, ждем команды от UI
         return;
     }
@@ -1448,7 +1434,7 @@ void UOfflineGameManager::ProceedToShowdown()
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Error: Game State Null"), GameStateData ? GameStateData->Pot : 0);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0, 0);
         return;
     }
 
@@ -1494,7 +1480,7 @@ void UOfflineGameManager::ProceedToShowdown()
         // Уведомляем UI, что рука окончена и можно нажать "Next Hand"
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over (No Showdown Players)"), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         return;
     }
 
@@ -1506,7 +1492,7 @@ void UOfflineGameManager::ProceedToShowdown()
         GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over"), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         return;
     }
 
@@ -1609,7 +1595,7 @@ void UOfflineGameManager::ProceedToShowdown()
     if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
     if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over. Press 'Next Hand'."), GameStateData->Pot); // Pot должен быть 0
     if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-    if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0);
+    if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
 
     // НЕ ВЫЗЫВАЕМ StartNewHand() автоматически
 }

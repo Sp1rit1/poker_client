@@ -86,7 +86,7 @@ protected:
     void HandleTableStateInfo(const FString& MovingPlayerName, int64 CurrentPot);
 
     UFUNCTION()
-    void HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer);
+    void HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer, int64 CurrentBetOfMovingPlayer);
 
     UFUNCTION()
     void HandleGameHistoryEvent(const FString& HistoryMessage);
@@ -114,6 +114,7 @@ private:
     TOptional<int64> OptMinRaiseAmount;
     TOptional<int64> OptMovingPlayerStack;
     TOptional<int64> OptCurrentPot;
+    TOptional<int64> OptMovingPlayerCurrentBet;
 
     // Вспомогательная функция для проверки, все ли данные собраны, и вызова обновления HUD
     void TryAggregateAndTriggerHUDUpdate();

@@ -18,8 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerActionsAvailableSignature, 
 // Делегат 3: Передача основной информации о состоянии стола (имя ходящего, текущий банк).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTableStateInfoSignature, const FString&, MovingPlayerName, int64, CurrentPot);
 
-// Делегат 4: Передача деталей, необходимых для UI кнопок действий (стоимость колла, мин. рейз, стек ходящего).
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnActionUIDetailsSignature, int64, BetToCall, int64, MinRaiseAmount, int64, PlayerStackOfMovingPlayer);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnActionUIDetailsSignature, int64, ActualAmountToCallForUI, int64, MinPureRaiseValueForUI, int64, PlayerStackOfMovingPlayer, int64, CurrentBetOfMovingPlayer);
 
 // Делегат 5: Сообщение для истории игры.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameHistoryEventSignature, const FString&, HistoryMessage);
@@ -45,7 +44,7 @@ public:
 	// Сделаем его UPROPERTY, чтобы GC его не собрал, и BlueprintReadOnly для доступа из BP (если нужно для отладки)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game State")
 	TObjectPtr<UOfflinePokerGameState> GameStateData;
-
+		
 	// Указатель на объект колоды карт
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game Deck")
 	TObjectPtr<UDeck> Deck;
@@ -186,7 +185,7 @@ private:
 	 * @return Индекс места первого ходящего или -1.
 	 */
 	int32 DetermineFirstPlayerToActPostflop() const;
-
+	
 	/**
 	 * Проверяет, завершен ли текущий круг торгов.
 	 * @return true, если круг торгов завершен, иначе false.

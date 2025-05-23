@@ -30,7 +30,16 @@ public:
      * @param PlayerStack Стек игрока, чей сейчас ход (или стек локального игрока, если ForPlayerSeatIndex = -1).
      */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
-    void UpdatePlayerTurnInfo(const FString& MovingPlayerName, int64 CurrentPot, int64 CurrentBetToCall, int64 MinimumRaise, int64 PlayerStack);
+    void UpdatePlayerTurnInfo(
+        const FString& MovingPlayerName,        // Имя ходящего
+        int64 CurrentPotGlobal,                 // Общий банк на столе
+        int64 ActualAmountPlayerNeedsToCall,    // Сколько ХОДЯЩИЙ игрок должен ДОБАВИТЬ для колла
+        int64 MinPureRaiseValue,                // ЧИСТАЯ сумма минимального рейза (или мин. бета)
+        int64 MovingPlayerActualStack,          // Текущий стек ХОДЯЩЕГО игрока
+        int64 MovingPlayerCurrentBetInRound     // Текущая ставка ХОДЯЩЕГО игрока в этом раунде
+        // Возможно, вам понадобится еще и GameStateData->CurrentBetToCall (общая сумма для колла на столе)
+        // int64 OverallBetToCallOnTable 
+    );
 
     /**
      * Обновляет состояние кнопок действий в HUD на основе доступных действий для текущего игрока.

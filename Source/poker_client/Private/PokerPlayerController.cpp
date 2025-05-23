@@ -208,57 +208,86 @@ void APokerPlayerController::HandleTableStateInfo(const FString& MovingPlayerNam
     OptCurrentPot = CurrentPot;
 }
 
-void APokerPlayerController::HandleActionUIDetails(int64 BetToCall, int64 MinRaiseAmount, int64 PlayerStackOfMovingPlayer)
+void APokerPlayerController::HandleActionUIDetails(int64 ActualAmountToCall, int64 MinPureRaise, int64 PlayerStackOfMovingPlayer, int64 CurrentBetOfMovingPlayer)
 {
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleActionUIDetails: BetToCall %lld, MinRaise %lld, Stack %lld"), BetToCall, MinRaiseAmount, PlayerStackOfMovingPlayer);
-    OptBetToCall = BetToCall;
-    OptMinRaiseAmount = MinRaiseAmount;
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandleActionUIDetails: ActualToCall %lld, MinPureRaise %lld, Stack %lld, CurrentBet %lld"),
+        ActualAmountToCall, MinPureRaise, PlayerStackOfMovingPlayer, CurrentBetOfMovingPlayer);
+
+    OptBetToCall = ActualAmountToCall;         // Теперь это ActualAmountPlayerNeedsToCall
+    OptMinRaiseAmount = MinPureRaise;          // Теперь это MinPureRaiseValue
     OptMovingPlayerStack = PlayerStackOfMovingPlayer;
+    // Добавляем новую TOptional переменную в .h для CurrentBetOfMovingPlayer, если ее нет
+    // TOptional<int64> OptMovingPlayerCurrentBet;
+    OptMovingPlayerCurrentBet = CurrentBetOfMovingPlayer;
+
     TryAggregateAndTriggerHUDUpdate();
 }
+
 void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
 {
     if (OptMovingPlayerSeatIndex.IsSet() &&
         OptMovingPlayerName.IsSet() &&
         OptAllowedActions.IsSet() &&
-        OptBetToCall.IsSet() &&
-        OptMinRaiseAmount.IsSet() &&
+        OptBetToCall.IsSet() &&             // Это теперь ActualAmountPlayerNeedsToCall
+        OptMinRaiseAmount.IsSet() &&        // Это теперь MinPureRaiseValue
         OptMovingPlayerStack.IsSet() &&
-        OptCurrentPot.IsSet())
+        OptCurrentPot.IsSet() &&
+        OptMovingPlayerCurrentBet.IsSet())  // Проверяем новую переменную
     {
-        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate for Seat %d (%s)."),
+        UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate for Seat %d (%s). Aggregated data ready."),
             OptMovingPlayerSeatIndex.GetValue(), *OptMovingPlayerName.GetValue());
 
         if (!GameHUDWidgetInstance || !GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
         {
             UE_LOG(LogTemp, Warning, TEXT("TryAggregateAndTriggerHUDUpdate: HUD not valid or no IGameHUDInterface."));
-            OptMovingPlayerSeatIndex.Reset(); // Предотвратить повторный вызов с теми же данными
+            // Сбрасываем здесь, чтобы не вызывать повторно с неполными данными если что-то пошло не так
+            OptMovingPlayerSeatIndex.Reset();
+            OptMovingPlayerName.Reset();
+            OptAllowedActions.Reset();
+            OptBetToCall.Reset();
+            OptMinRaiseAmount.Reset();
+            OptMovingPlayerStack.Reset();
+            OptCurrentPot.Reset();
+            OptMovingPlayerCurrentBet.Reset();
             return;
         }
 
-        IGameHUDInterface::Execute_UpdatePlayerTurnInfo(
-            GameHUDWidgetInstance.Get(),
-            OptMovingPlayerName.GetValue(),
-            OptCurrentPot.GetValue(),
-            OptBetToCall.GetValue(),
-            OptMinRaiseAmount.GetValue(),
-            OptMovingPlayerStack.GetValue()
-        );
-
+        // Важно: Вызываем UpdateActionButtons ПЕРЕД UpdatePlayerTurnInfo,
+        // так как UpdatePlayerTurnInfo может использовать флаги (bLocal_CanBet и т.д.),
+        // которые устанавливаются в UpdateActionButtons.
         IGameHUDInterface::Execute_UpdateActionButtons(
             GameHUDWidgetInstance.Get(),
             OptAllowedActions.GetValue()
         );
 
-        // ОБНОВЛЯЕМ ВИЗУАЛИЗАТОРЫ МЕСТ ЗДЕСЬ, ЧТОБЫ ОНИ ОТОБРАЖАЛИ АКТУАЛЬНЫЕ СТЕКИ ПОСЛЕ ДЕЙСТВИЙ (например, блайндов)
+        IGameHUDInterface::Execute_UpdatePlayerTurnInfo(
+            GameHUDWidgetInstance.Get(),
+            OptMovingPlayerName.GetValue(),
+            OptCurrentPot.GetValue(),
+            OptBetToCall.GetValue(),          // ActualAmountPlayerNeedsToCall
+            OptMinRaiseAmount.GetValue(),     // MinPureRaiseValue
+            OptMovingPlayerStack.GetValue(),
+            OptMovingPlayerCurrentBet.GetValue() // CurrentBetOfMovingPlayer
+        );
+
         UpdateAllSeatVisualizersFromGameState();
 
-        // Переключение в UI режим, чтобы игрок (или мы за бота) мог нажать кнопку
-        if (!bIsInUIMode)
+        if (!bIsInUIMode && OptMovingPlayerSeatIndex.GetValue() == 0) // Если ход локального игрока и он не в UI режиме
         {
+            // Мы перешли к этому моменту по вашему последнему резюме:
+            // "Автоматическое переключение при ходе локального игрока: Если ход переходит к локальному игроку, 
+            // и он не был в UI-режиме, HandleActionRequested вызывает SwitchToUIInputMode(), 
+            // чтобы игрок мог сразу взаимодействовать с HUD."
+            // Эта логика уже должна быть в HandleActionRequested или здесь.
+            // Если вы ее перенесли сюда, то вот она:
             SwitchToUIInputMode(GameHUDWidgetInstance.Get());
         }
         // Сброс TOptional переменных теперь происходит в HandlePlayerTurnStarted.
+    }
+    else
+    {
+        // Можно добавить лог, если не все данные собраны, для отладки последовательности делегатов
+        // UE_LOG(LogTemp, Verbose, TEXT("TryAggregateAndTriggerHUDUpdate: Not all optional values are set yet."));
     }
 }
 
