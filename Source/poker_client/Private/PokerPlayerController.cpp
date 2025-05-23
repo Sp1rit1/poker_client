@@ -424,18 +424,29 @@ void APokerPlayerController::HandleGameHistoryEvent(const FString& HistoryMessag
 
 void APokerPlayerController::HandleCommunityCardsUpdated(const TArray<FCard>& CommunityCards)
 {
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleCommunityCardsUpdated received. Num cards: %d"), CommunityCards.Num());
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleCommunityCardsUpdated received with %d community cards."), CommunityCards.Num());
+
+    // 1. Обновляем 3D отображение общих карт (BP_CommunityCardArea)
     if (CommunityCardDisplayActor && CommunityCardDisplayActor->GetClass()->ImplementsInterface(UCommunityCardDisplayInterface::StaticClass()))
     {
         ICommunityCardDisplayInterface::Execute_UpdateCommunityCards(CommunityCardDisplayActor.Get(), CommunityCards);
+        UE_LOG(LogTemp, Log, TEXT("   Called UpdateCommunityCards on BP_CommunityCardArea."));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: CommunityCardDisplayActor is null or does not implement interface."));
+        UE_LOG(LogTemp, Warning, TEXT("   CommunityCardDisplayActor is null or does not implement ICommunityCardDisplayInterface. Cannot update 3D community cards."));
     }
-    // После обновления общих карт, состояние игроков (стеки) обычно не меняется до следующего раунда ставок.
-    // Но если вдруг ваша логика это предполагает, или просто для консистентности:
-    // UpdateAllSeatVisualizersFromGameState(); // Это обновит стеки и имена, но карты игроков останутся те же.
+
+    // 2. Обновляем текстовое отображение общих карт в WBP_GameHUD
+    if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
+    {
+        IGameHUDInterface::Execute_UpdateCommunityCardsDisplay(GameHUDWidgetInstance.Get(), CommunityCards); // Вызов новой интерфейсной функции
+        UE_LOG(LogTemp, Log, TEXT("   Called UpdateCommunityCardsDisplay on WBP_GameHUD."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("   GameHUDWidgetInstance is null or does not implement IGameHUDInterface. Cannot update text community cards in HUD."));
+    }
 }
 
 void APokerPlayerController::HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices)
@@ -642,9 +653,6 @@ void APokerPlayerController::RequestStartNewHandFromUI()
         }
     }
 }
-
-#include "MyGameInstance.h"         // Убедитесь, что инклюд есть
-#include "LevelTransitionManager.h" // Включите .h вашего менеджера переходов
 
 void APokerPlayerController::RequestReturnToMainMenu()
 {

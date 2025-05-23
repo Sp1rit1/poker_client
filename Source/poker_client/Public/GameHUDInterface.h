@@ -62,4 +62,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Notifications")
     void ShowNotificationMessage(const FString& Message, float Duration = 3.0f);
 
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Game Events")
+    void UpdateCommunityCardsDisplay(const TArray<FCard>& CommunityCards);
+
 };

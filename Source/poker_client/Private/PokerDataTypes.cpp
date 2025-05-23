@@ -21,4 +21,39 @@ FString FCard::ToString() const
 	return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr); // Формат типа "Ah", "Ks", "Td", "7c"
 }
 
-// Здесь можно добавить реализации других методов структур, если они понадобятся.
+FString FCard::ToRussianString() const
+{
+    FString RankStrPart = TEXT("?");
+    FString SuitStrPart = TEXT("?");
+
+    // Получаем ранг
+    switch (Rank)
+    {
+    case ECardRank::Two:   RankStrPart = TEXT("2"); break;
+    case ECardRank::Three: RankStrPart = TEXT("3"); break;
+    case ECardRank::Four:  RankStrPart = TEXT("4"); break;
+    case ECardRank::Five:  RankStrPart = TEXT("5"); break;
+    case ECardRank::Six:   RankStrPart = TEXT("6"); break;
+    case ECardRank::Seven: RankStrPart = TEXT("7"); break;
+    case ECardRank::Eight: RankStrPart = TEXT("8"); break;
+    case ECardRank::Nine:  RankStrPart = TEXT("9"); break;
+    case ECardRank::Ten:   RankStrPart = TEXT("10"); break; // Или "Т" если хотите одну букву
+    case ECardRank::Jack:  RankStrPart = TEXT("В"); break;  // Валет
+    case ECardRank::Queen: RankStrPart = TEXT("Д"); break;  // Дама
+    case ECardRank::King:  RankStrPart = TEXT("К"); break;  // Король
+    case ECardRank::Ace:   RankStrPart = TEXT("Т"); break;  // Туз
+    default: break;
+    }
+
+    // Получаем масть
+    switch (Suit)
+    {
+    case ECardSuit::Clubs:    SuitStrPart = TEXT("т"); break; // Трефы
+    case ECardSuit::Diamonds: SuitStrPart = TEXT("б"); break; // Бубны
+    case ECardSuit::Hearts:   SuitStrPart = TEXT("ч"); break; // Червы
+    case ECardSuit::Spades:   SuitStrPart = TEXT("п"); break; // Пики
+    default: break;
+    }
+
+    return RankStrPart + SuitStrPart; // Формат "Вч", "3п", "10б", "Тт"
+}

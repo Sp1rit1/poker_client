@@ -111,8 +111,8 @@ struct FCard
 	FCard() = default;
 	FCard(ECardSuit InSuit, ECardRank InRank) : Suit(InSuit), Rank(InRank) {}
 
-	// Функция для текстового представления (для отладки)
 	FString ToString() const;
+	FString ToRussianString() const;
 
 	// Оператор сравнения
 	bool operator==(const FCard& Other) const
