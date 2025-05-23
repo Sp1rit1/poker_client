@@ -102,7 +102,7 @@ protected:
     void HandleActualHoleCardsDealt();
 
     UFUNCTION()
-    void HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices);
+    void HandleShowdownResults(const TArray<FShowdownPlayerInfo>& ShowdownResults, const FString& WinnerAnnouncement);
 
     UFUNCTION() 
     void HandleNewHandAboutToStart();

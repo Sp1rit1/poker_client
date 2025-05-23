@@ -26,9 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameHistoryEventSignature, const 
 // Делегат 6: Уведомление об обновлении общих карт на столе.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommunityCardsUpdatedSignature, const TArray<FCard>&, CommunityCards);
 
-// Делегат 7: Уведомление о результатах шоудауна (опционально, можно передавать данные победителя и комбинации).
-// Пока просто сигнализирует о начале шоудауна и кто участвует.
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShowdownSignature, const TArray<int32>&, ShowdownPlayerSeatIndices);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShowdownResultsSignature, const TArray<FShowdownPlayerInfo>&, ShowdownResults, const FString&, WinnerAnnouncementText);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActualHoleCardsDealtSignature);
 
@@ -69,7 +67,7 @@ public:
 	FOnCommunityCardsUpdatedSignature OnCommunityCardsUpdatedDelegate;
 
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnShowdownSignature OnShowdownDelegate;
+	FOnShowdownResultsSignature OnShowdownResultsDelegate;
 
 	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
 	FOnActualHoleCardsDealtSignature OnActualHoleCardsDealtDelegate;
@@ -159,7 +157,7 @@ private:
 	 * Начисляет банк победителю(ям) раздачи.
 	 * @param WinningSeatIndices Массив индексов мест победителей (может быть несколько при ничьей).
 	 */
-	void AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
+	TMap<int32, int64> AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
 	// Если победитель всегда один для MVP, можно упростить до AwardPotToWinner(int32 WinnerSeatIndex)
 
 	// --- Вспомогательные Функции ---

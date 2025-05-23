@@ -65,4 +65,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Game Events")
     void UpdateCommunityCardsDisplay(const TArray<FCard>& CommunityCards);
 
+    UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Game Events")
+    void DisplayShowdownResults(const TArray<FShowdownPlayerInfo>& ShowdownPlayerResults, const FString& WinnerAnnouncement);
+
 };

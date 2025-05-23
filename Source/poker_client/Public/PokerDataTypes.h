@@ -212,3 +212,27 @@ struct FPlayerSeatData
 		HoleCards.Reserve(2); // Резервируем место под 2 карты
 	}
 };
+
+USTRUCT(BlueprintType)
+struct FShowdownPlayerInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	int32 SeatIndex = -1;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	FString PlayerName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	TArray<FCard> HoleCards;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	FPokerHandResult HandResult; // Результат оценки (ранг + кикеры)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	bool bIsWinner = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Showdown")
+	int64 AmountWon = 0;
+};

@@ -6,6 +6,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
+#include "PokerDataTypes.h"
 #include "MyGameInstance.h"
 #include "OfflineGameManager.h"
 #include "OfflinePokerGameState.h"
@@ -92,7 +93,7 @@ void APokerPlayerController::BeginPlay()
             OfflineManager->OnActionUIDetailsDelegate.AddDynamic(this, &APokerPlayerController::HandleActionUIDetails);
             OfflineManager->OnGameHistoryEventDelegate.AddDynamic(this, &APokerPlayerController::HandleGameHistoryEvent);
             OfflineManager->OnCommunityCardsUpdatedDelegate.AddDynamic(this, &APokerPlayerController::HandleCommunityCardsUpdated);
-            OfflineManager->OnShowdownDelegate.AddDynamic(this, &APokerPlayerController::HandleShowdown);
+            OfflineManager->OnShowdownResultsDelegate.AddDynamic(this, &APokerPlayerController::HandleShowdownResults);
             OfflineManager->OnActualHoleCardsDealtDelegate.AddDynamic(this, &APokerPlayerController::HandleActualHoleCardsDealt);
             OfflineManager->OnNewHandAboutToStartDelegate.AddDynamic(this, &APokerPlayerController::HandleNewHandAboutToStart);
             UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: Subscribed to all OfflineManager delegates."));
@@ -449,57 +450,43 @@ void APokerPlayerController::HandleCommunityCardsUpdated(const TArray<FCard>& Co
     }
 }
 
-void APokerPlayerController::HandleShowdown(const TArray<int32>& ShowdownPlayerSeatIndices)
+void APokerPlayerController::HandleShowdownResults(const TArray<FShowdownPlayerInfo>& ShowdownResults, const FString& WinnerAnnouncement)
 {
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleShowdown received for %d players."), ShowdownPlayerSeatIndices.Num());
+    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController: HandleShowdownResults received. Announcement: %s"), *WinnerAnnouncement);
 
-    UOfflinePokerGameState* GameState = GetCurrentGameState();
-    if (!GameState)
-    {
-        UE_LOG(LogTemp, Error, TEXT("HandleShowdown: GameState is null. Cannot proceed."));
-        return;
-    }
-
+    // 1. Уведомить HUD о результатах шоудауна
     if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
     {
-        IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance.Get(), TEXT("--- SHOWDOWN ---"));
-        IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
+        IGameHUDInterface::Execute_DisplayShowdownResults(GameHUDWidgetInstance.Get(), ShowdownResults, WinnerAnnouncement);
     }
+
+    // 2. Обновить визуализаторы мест, чтобы ПОКАЗАТЬ ВСЕ КАРТЫ участников шоудауна ЛИЦОМ
+    UOfflinePokerGameState* GameState = GetCurrentGameState(); // У вас уже есть эта функция
+    if (!GameState) return;
 
     TArray<AActor*> AllSeatVisualizerActors;
     UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UPlayerSeatVisualizerInterface::StaticClass(), AllSeatVisualizerActors);
 
-    for (int32 PlayerSeatIdxInShowdown : ShowdownPlayerSeatIndices)
+    for (const FShowdownPlayerInfo& PlayerResult : ShowdownResults)
     {
-        if (GameState->Seats.IsValidIndex(PlayerSeatIdxInShowdown))
+        AActor* FoundVisualizer = nullptr;
+        for (AActor* VisualizerActor : AllSeatVisualizerActors)
         {
-            const FPlayerSeatData& PlayerData = GameState->Seats[PlayerSeatIdxInShowdown];
-            AActor* FoundVisualizer = nullptr;
-            for (AActor* VisualizerActor : AllSeatVisualizerActors)
+            if (VisualizerActor && IPlayerSeatVisualizerInterface::Execute_GetSeatIndexRepresentation(VisualizerActor) == PlayerResult.SeatIndex)
             {
-                if (VisualizerActor && IPlayerSeatVisualizerInterface::Execute_GetSeatIndexRepresentation(VisualizerActor) == PlayerSeatIdxInShowdown)
-                {
-                    FoundVisualizer = VisualizerActor;
-                    break;
-                }
-            }
-
-            if (FoundVisualizer)
-            {
-                // На шоудауне показываем карты лицом, если они есть и игрок не сфолдил (хотя в ShowdownPlayerSeatIndices обычно только активные)
-                if (PlayerData.HoleCards.Num() > 0 && PlayerData.Status != EPlayerStatus::Folded)
-                {
-                    IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerData.HoleCards, true);
-                }
-                else
-                {
-                    IPlayerSeatVisualizerInterface::Execute_HideHoleCards(FoundVisualizer);
-                }
+                FoundVisualizer = VisualizerActor;
+                break;
             }
         }
+
+        if (FoundVisualizer && PlayerResult.HoleCards.Num() > 0) // Показываем, если есть карты
+        {
+            // Принудительно показываем карты лицом для всех участников шоудауна
+            IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerResult.HoleCards, true);
+        }
     }
-    // Обновление стеков после AwardPot будет инициировано через следующий вызов TryAggregateAndTriggerHUDUpdate,
-    // который, в свою очередь, вызовет UpdateAllSeatVisualizersFromGameState.
+    // После этой функции UI должен отобразить результаты, и игра перейдет в WaitingForPlayers
+    // Кнопка "Next Hand" в HUD должна стать основной для продолжения.
 }
 
 void APokerPlayerController::HandleNewHandAboutToStart()
