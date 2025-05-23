@@ -233,24 +233,23 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
     // 1. Проверяем, что все необходимые данные от делегатов были получены
     if (!(OptMovingPlayerSeatIndex.IsSet() &&
         OptMovingPlayerName.IsSet() &&
-        OptAllowedActions.IsSet() &&          // Массив доступных действий для ХОДЯЩЕГО игрока
-        OptBetToCall.IsSet() &&             // Сумма, которую ХОДЯЩИЙ игрок должен добавить для колла
-        OptMinRaiseAmount.IsSet() &&        // Минимальный ЧИСТЫЙ рейз для ХОДЯЩЕГО игрока (или мин. бет)
+        OptAllowedActions.IsSet() &&
+        OptBetToCall.IsSet() &&             // Это ActualAmountToCallUI для ХОДЯЩЕГО игрока от RequestPlayerAction
+        OptMinRaiseAmount.IsSet() &&        // Это MinPureRaiseValueUI для ХОДЯЩЕГО игрока от RequestPlayerAction
         OptMovingPlayerStack.IsSet() &&     // Стек ХОДЯЩЕГО игрока
         OptCurrentPot.IsSet() &&
         OptMovingPlayerCurrentBet.IsSet())) // Текущая ставка ХОДЯЩЕГО игрока в этом раунде
     {
-        // Логируем, каких данных не хватает, если нужно для отладки
-        FString MissingOpts = TEXT("Missing Opts: ");
+        FString MissingOpts = TEXT("TryAggregateAndTriggerHUDUpdate: Not all optional values from delegates are set yet. Missing: ");
         if (!OptMovingPlayerSeatIndex.IsSet()) MissingOpts += TEXT("SeatIdx ");
         if (!OptMovingPlayerName.IsSet()) MissingOpts += TEXT("Name ");
         if (!OptAllowedActions.IsSet()) MissingOpts += TEXT("Actions ");
-        if (!OptBetToCall.IsSet()) MissingOpts += TEXT("ToCall ");
-        if (!OptMinRaiseAmount.IsSet()) MissingOpts += TEXT("MinRaise ");
+        if (!OptBetToCall.IsSet()) MissingOpts += TEXT("OptBetToCall(ForMovingPlayer) ");
+        if (!OptMinRaiseAmount.IsSet()) MissingOpts += TEXT("OptMinRaise(ForMovingPlayer) ");
         if (!OptMovingPlayerStack.IsSet()) MissingOpts += TEXT("StackMoving ");
         if (!OptCurrentPot.IsSet()) MissingOpts += TEXT("Pot ");
         if (!OptMovingPlayerCurrentBet.IsSet()) MissingOpts += TEXT("CurrentBetMoving ");
-        UE_LOG(LogTemp, Verbose, TEXT("TryAggregateAndTriggerHUDUpdate: Not all optional values from delegates are set yet. %s"), *MissingOpts);
+        UE_LOG(LogTemp, Verbose, TEXT("%s"), *MissingOpts);
         return;
     }
 
@@ -258,110 +257,90 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
     if (!GameHUDWidgetInstance || !GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
     {
         UE_LOG(LogTemp, Warning, TEXT("TryAggregateAndTriggerHUDUpdate: HUD is not valid or does not implement IGameHUDInterface. Cannot update HUD."));
-        // Сбрасываем TOptional, чтобы не пытаться обновить HUD с неполными данными в следующий раз, если HUD "сломался"
         OptMovingPlayerSeatIndex.Reset(); OptMovingPlayerName.Reset(); OptAllowedActions.Reset();
         OptBetToCall.Reset(); OptMinRaiseAmount.Reset(); OptMovingPlayerStack.Reset();
         OptCurrentPot.Reset(); OptMovingPlayerCurrentBet.Reset();
         return;
     }
 
-    // 3. Получаем основные данные из TOptionals
+    // 3. Получаем основные данные из TOptionals (эти данные относятся к игроку, ЧЕЙ ХОД СЕЙЧАС)
     const int32 MovingPlayerSeatIndex = OptMovingPlayerSeatIndex.GetValue();
     const FString& MovingPlayerName = OptMovingPlayerName.GetValue();
-    const TArray<EPlayerAction>& AllowedActionsForMovingPlayer = OptAllowedActions.GetValue();
-    const int64 PotValue = OptCurrentPot.GetValue();
+    // const TArray<EPlayerAction>& AllowedActionsForMovingPlayer = OptAllowedActions.GetValue(); // Используется ниже
+    const int64 CurrentPotOnTable = OptCurrentPot.GetValue();
     const int64 StackOfMovingPlayer = OptMovingPlayerStack.GetValue();
-    const int64 CurrentBetOfMovingPlayer = OptMovingPlayerCurrentBet.GetValue();
-    // OptBetToCall и OptMinRaiseAmount - это ActualAmountToCallUI и MinPureRaiseValueUI для ХОДЯЩЕГО игрока
+    const int64 CurrentBetOfMovingPlayerInRound = OptMovingPlayerCurrentBet.GetValue();
 
-    const int32 LocalPlayerSeatIndex = 0; // Предполагаем, что локальный игрок всегда SeatIndex 0 в оффлайне
-    const bool bIsLocalPlayerTurn = (MovingPlayerSeatIndex == LocalPlayerSeatIndex);
+    // Значения, рассчитанные в RequestPlayerAction СПЕЦИАЛЬНО для ХОДЯЩЕГО игрока:
+    const int64 CalculatedAmountToCallForMovingPlayer = OptBetToCall.GetValue();
+    const int64 CalculatedMinPureRaiseForMovingPlayer = OptMinRaiseAmount.GetValue();
 
-    UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::TryAggregateAndTriggerHUDUpdate for Seat %d (%s). IsLocalPlayerTurn: %s"),
-        MovingPlayerSeatIndex, *MovingPlayerName, bIsLocalPlayerTurn ? TEXT("true") : TEXT("false"));
+    const int32 LocalPlayerActualSeatIndex = 0;
+    const bool bIsLocalPlayerTurn = (MovingPlayerSeatIndex == LocalPlayerActualSeatIndex);
 
-    // 4. Получаем GameState для расчетов относительно локального игрока
     UOfflinePokerGameState* CurrentGameState = GetCurrentGameState();
-    if (!CurrentGameState) {
-        UE_LOG(LogTemp, Error, TEXT("TryAggregateAndTriggerHUDUpdate: CurrentGameState is NULL! Cannot perform calculations for local player."));
-        // Сброс TOptional здесь тоже может быть уместен
-        OptMovingPlayerSeatIndex.Reset(); OptMovingPlayerName.Reset(); OptAllowedActions.Reset();
-        OptBetToCall.Reset(); OptMinRaiseAmount.Reset(); OptMovingPlayerStack.Reset();
-        OptCurrentPot.Reset(); OptMovingPlayerCurrentBet.Reset();
-        return;
-    }
+    if (!CurrentGameState) { /* ... лог и выход ... */ return; }
 
-    // 5. Рассчитываем данные, специфичные для отображения ЛОКАЛЬНОМУ игроку
     int64 ActualLocalPlayerStack = 0;
     int64 LocalPlayerCurrentBetInThisRound = 0;
-    if (CurrentGameState->Seats.IsValidIndex(LocalPlayerSeatIndex))
+    if (CurrentGameState->Seats.IsValidIndex(LocalPlayerActualSeatIndex))
     {
-        ActualLocalPlayerStack = CurrentGameState->Seats[LocalPlayerSeatIndex].Stack;
-        LocalPlayerCurrentBetInThisRound = CurrentGameState->Seats[LocalPlayerSeatIndex].CurrentBet;
+        ActualLocalPlayerStack = CurrentGameState->Seats[LocalPlayerActualSeatIndex].Stack;
+        LocalPlayerCurrentBetInThisRound = CurrentGameState->Seats[LocalPlayerActualSeatIndex].CurrentBet;
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("TryAggregateAndTriggerHUDUpdate: LocalPlayerSeatIndex %d is not valid in GameState->Seats!"), LocalPlayerSeatIndex); }
 
-    // Сколько ЛОКАЛЬНОМУ игроку нужно ДОБАВИТЬ, чтобы заколлировать текущую ставку на столе
-    int64 AmountLocalPlayerNeedsToAddForCall = CurrentGameState->CurrentBetToCall - LocalPlayerCurrentBetInThisRound;
-    if (AmountLocalPlayerNeedsToAddForCall < 0) AmountLocalPlayerNeedsToAddForCall = 0;
-    // Эта сумма не должна превышать стек локального игрока
-    AmountLocalPlayerNeedsToAddForCall = FMath::Min(AmountLocalPlayerNeedsToAddForCall, ActualLocalPlayerStack);
+    // --- ОПРЕДЕЛЯЕМ, ЧТО ПЕРЕДАВАТЬ В HUD для сумм Call/Raise ---
+    int64 BetToCallForHUDDisplay;
+    int64 MinRaiseForHUDDisplay;
 
-    // Минимальный ЧИСТЫЙ рейз, который можно сделать на текущей улице (или мин. бет, если это первый бет)
-    int64 MinPureRaiseOnTableForLocal = CurrentGameState->LastBetOrRaiseAmountInCurrentRound > 0
-        ? CurrentGameState->LastBetOrRaiseAmountInCurrentRound
-        : CurrentGameState->BigBlindAmount;
-
-
-    // 6. СНАЧАЛА ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПОК и переключаем режим ввода
-    if (bIsLocalPlayerTurn && AllowedActionsForMovingPlayer.Num() > 0)
+    if (bIsLocalPlayerTurn)
     {
-        // Ход локального игрока, и есть доступные действия
-        UE_LOG(LogTemp, Log, TEXT("   Local player's turn (Seat %d). Updating and Enabling action buttons."), LocalPlayerSeatIndex);
-        IGameHUDInterface::Execute_UpdateActionButtons(
-            GameHUDWidgetInstance.Get(),
-            AllowedActionsForMovingPlayer // Передаем действия, доступные локальному игроку
-        );
-
-        if (!bIsInUIMode) // Если мы еще не в UI режиме (например, после хода бота)
-        {
-            UE_LOG(LogTemp, Log, TEXT("   Switching to UI Input Mode for local player's turn."));
-            SwitchToUIInputMode(GameHUDWidgetInstance.Get());
-        }
+        // Если ход локального игрока, используем точные значения, 
+        // рассчитанные для него в RequestPlayerAction и пришедшие через OnActionUIDetailsDelegate.
+        BetToCallForHUDDisplay = CalculatedAmountToCallForMovingPlayer;
+        MinRaiseForHUDDisplay = CalculatedMinPureRaiseForMovingPlayer;
     }
-    else // Ход бота ИЛИ у локального игрока нет действий (например, олл-ин или ошибка)
+    else // Ход бота
     {
-        UE_LOG(LogTemp, Log, TEXT("   Not local player's turn OR no actions available for local (Seat %d). Disabling buttons."), MovingPlayerSeatIndex);
+        // Показываем локальному игроку, сколько ему нужно было бы для колла против текущей ставки стола
+        BetToCallForHUDDisplay = CurrentGameState->CurrentBetToCall - LocalPlayerCurrentBetInThisRound;
+        if (BetToCallForHUDDisplay < 0) BetToCallForHUDDisplay = 0;
+        BetToCallForHUDDisplay = FMath::Min(BetToCallForHUDDisplay, ActualLocalPlayerStack);
+
+        // Показываем локальному игроку, какой сейчас минимальный чистый рейз на столе
+        MinRaiseForHUDDisplay = CurrentGameState->LastBetOrRaiseAmountInCurrentRound > 0
+            ? CurrentGameState->LastBetOrRaiseAmountInCurrentRound
+            : CurrentGameState->BigBlindAmount;
+    }
+
+    // 1. Управляем кнопками и режимом ввода (эта логика остается прежней)
+    const TArray<EPlayerAction>& AllowedActionsForCurrentTurn = OptAllowedActions.GetValue(); // Действия для того, чей ход
+    if (bIsLocalPlayerTurn && AllowedActionsForCurrentTurn.Num() > 0)
+    {
+        IGameHUDInterface::Execute_UpdateActionButtons(GameHUDWidgetInstance.Get(), AllowedActionsForCurrentTurn);
+        if (!bIsInUIMode) { SwitchToUIInputMode(GameHUDWidgetInstance.Get()); }
+    }
+    else
+    {
         IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
-
-        if (bIsInUIMode) // Если это не активный ход локального игрока И мы в UI режиме
-        {
-            UE_LOG(LogTemp, Log, TEXT("   Not local player's active turn and we are in UI mode, switching back to Game mode."));
-            SwitchToGameInputMode();
-        }
+        if (bIsInUIMode) { SwitchToGameInputMode(); }
     }
 
-    // 7. ЗАТЕМ ВСЕГДА ОБНОВЛЯЕМ ОСНОВНУЮ ИНФОРМАЦИЮ В HUD
-    // (Имя ходящего, банк, стек локального игрока, и детали для колла/рейза относительно локального игрока)
+    // 2. Вызываем UpdateGameInfo
     IGameHUDInterface::Execute_UpdateGameInfo(
         GameHUDWidgetInstance.Get(),
         MovingPlayerName,
-        PotValue,
+        CurrentPotOnTable,
         ActualLocalPlayerStack,
         LocalPlayerCurrentBetInThisRound,
-        CurrentGameState->CurrentBetToCall,    // Общая ставка для колла на столе
-        MinPureRaiseOnTableForLocal            // Минимальный чистый рейз на столе
-        // Мы убрали StackOfMovingPlayer и CurrentBetOfMovingPlayer, так как они для PlayerSeatVisualizer
+        BetToCallForHUDDisplay, // Обновленное значение
+        MinRaiseForHUDDisplay   // Обновленное значение
     );
-    UE_LOG(LogTemp, Log, TEXT("   Called UpdateGameInfo. MovingPlayer: %s, Pot: %lld, LocalStack: %lld, LocalBetInRound: %lld, TotalBetToCallForLocal: %lld, MinPureRaiseOnTableForLocal: %lld"),
-        *MovingPlayerName, PotValue, ActualLocalPlayerStack, LocalPlayerCurrentBetInThisRound, CurrentGameState->CurrentBetToCall, MinPureRaiseOnTableForLocal);
+    UE_LOG(LogTemp, Warning, TEXT("CONTROLLER TryAggregate: To HUD->UpdateGameInfo: MovingPlayerName=%s, Pot=%lld, LocalStack=%lld, LocalBet=%lld, HUD_BetToCall=%lld, HUD_MinRaise=%lld"),
+        *MovingPlayerName, CurrentPotOnTable, ActualLocalPlayerStack, LocalPlayerCurrentBetInThisRound, BetToCallForHUDDisplay, MinRaiseForHUDDisplay);
 
-    // 8. Обновляем все 3D-визуализаторы мест (стеки, имена)
     UpdateAllSeatVisualizersFromGameState();
-
-    // Сброс TOptional переменных теперь происходит в HandlePlayerTurnStarted для нового цикла, что корректно.
 }
-
 
 void APokerPlayerController::UpdateAllSeatVisualizersFromGameState()
 {

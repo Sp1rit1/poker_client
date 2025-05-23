@@ -1034,23 +1034,55 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
 // DetermineFirstPlayerToActAtPreflop (переименовано из AfterBlinds)
 int32 UOfflineGameManager::DetermineFirstPlayerToActAtPreflop() const
 {
-    if (!GameStateData || GameStateData->PendingBigBlindSeat == -1) return -1;
+    if (!GameStateData || !GameStateData->Seats.IsValidIndex(GameStateData->PendingBigBlindSeat) || !GameStateData->Seats.IsValidIndex(GameStateData->PendingSmallBlindSeat))
+    {
+        UE_LOG(LogTemp, Error, TEXT("DetermineFirstPlayerToActAtPreflop: GameStateData is null, or PendingBigBlindSeat/PendingSmallBlindSeat is invalid."));
+        return -1;
+    }
 
-    int32 NumPlayersConsideredActive = 0;
-    for (const FPlayerSeatData& Seat : GameStateData->Seats) {
-        // Считаем активными тех, кто не сфолдил и имеет фишки (или уже олл-ин, но еще в игре)
-        if (Seat.bIsSittingIn && (Seat.Status == EPlayerStatus::Playing || Seat.Status == EPlayerStatus::AllIn)) {
-            NumPlayersConsideredActive++;
+    // Сначала подсчитаем, сколько игроков реально участвуют в раздаче
+    // (те, кто не сфолдил до начала ставок и имеют право на карты - т.е. статус Playing или AllIn после постановки блайндов)
+    // На этом этапе (сразу после DealHoleCardsAndStartPreflop, но до первого RequestAction)
+    // все, кто поставил блайнды или должен был их поставить и пошел олл-ин, будут Playing или AllIn.
+    // Остальные активные (bIsSittingIn && Stack > 0) тоже будут Playing.
+    int32 NumPlayersActuallyInHandForBetting = 0;
+    for (const FPlayerSeatData& Seat : GameStateData->Seats)
+    {
+        if (Seat.bIsSittingIn &&
+            (Seat.Status == EPlayerStatus::Playing || Seat.Status == EPlayerStatus::AllIn ||
+                Seat.Status == EPlayerStatus::MustPostSmallBlind || Seat.Status == EPlayerStatus::MustPostBigBlind)) // Включаем тех, кто ЕЩЕ ДОЛЖЕН поставить блайнд (на всякий случай, хотя сюда мы попадаем ПОСЛЕ блайндов)
+        {
+            NumPlayersActuallyInHandForBetting++;
         }
     }
 
-    if (NumPlayersConsideredActive == 2) { // Хедз-ап, после постановки блайндов
-        // Игрок, который поставил SB (и является дилером), ходит первым.
+    UE_LOG(LogTemp, Verbose, TEXT("DetermineFirstPlayerToActAtPreflop: NumPlayersActuallyInHandForBetting: %d. SB Seat: %d, BB Seat: %d"),
+        NumPlayersActuallyInHandForBetting, GameStateData->PendingSmallBlindSeat, GameStateData->PendingBigBlindSeat);
+
+    if (NumPlayersActuallyInHandForBetting < 2)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DetermineFirstPlayerToActAtPreflop: Less than 2 players actually in hand for betting. Returning -1."));
+        // Эта ситуация должна быть обработана ранее, если только один игрок остался после фолдов на блайндах (невозможно с текущей логикой)
+        return -1;
+    }
+
+    if (NumPlayersActuallyInHandForBetting == 2)
+    {
+        // Хедз-ап: первым ходит SB (который также может быть дилером).
+        // Важно, чтобы PendingSmallBlindSeat был корректно определен в StartNewHand для хедз-апа.
+        UE_LOG(LogTemp, Log, TEXT("DetermineFirstPlayerToActAtPreflop: Heads-up detected. SB (Seat %d) acts first."), GameStateData->PendingSmallBlindSeat);
         return GameStateData->PendingSmallBlindSeat;
     }
-    else {
-        // Следующий активный игрок после большого блайнда.
-        return GetNextPlayerToAct(GameStateData->PendingBigBlindSeat, false, EPlayerStatus::MAX_None);
+    else // 3+ игроков в раздаче
+    {
+        // Первым ходит игрок слева от Большого Блайнда.
+        // Мы используем GetNextPlayerToAct, передавая индекс BB и флаг bExcludeStartSeat = true,
+        // чтобы начать поиск СО СЛЕДУЮЩЕГО игрока.
+        // RequiredStatus = EPlayerStatus::MAX_None, так как GetNextPlayerToAct сам проверит,
+        // может ли найденный игрок действовать (Playing со стеком > 0 или AllIn).
+        int32 FirstToAct = GetNextPlayerToAct(GameStateData->PendingBigBlindSeat, true, EPlayerStatus::MAX_None);
+        UE_LOG(LogTemp, Log, TEXT("DetermineFirstPlayerToActAtPreflop: 3+ players. Player to the left of BB (Seat %d) is Seat %d."), GameStateData->PendingBigBlindSeat, FirstToAct);
+        return FirstToAct;
     }
 }
 
