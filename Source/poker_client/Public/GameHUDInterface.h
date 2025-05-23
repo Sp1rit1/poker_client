@@ -31,14 +31,12 @@ public:
      */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
     void UpdateGameInfo(
-        const FString& MovingPlayerName,        // Имя ходящего
-        int64 CurrentPotGlobal,                 // Общий банк на столе
-        int64 ActualAmountPlayerNeedsToCall,    // Сколько ХОДЯЩИЙ игрок должен ДОБАВИТЬ для колла
-        int64 MinPureRaiseValue,                // ЧИСТАЯ сумма минимального рейза (или мин. бета)
-        int64 MovingPlayerActualStack,          // Текущий стек ХОДЯЩЕГО игрока
-        int64 MovingPlayerCurrentBetInRound     // Текущая ставка ХОДЯЩЕГО игрока в этом раунде
-        // Возможно, вам понадобится еще и GameStateData->CurrentBetToCall (общая сумма для колла на столе)
-        // int64 OverallBetToCallOnTable 
+        const FString& MovingPlayerName,        // Имя игрока, чей ход
+        int64 CurrentPot,                       // Текущий банк
+        int64 LocalPlayerActualStack,           // Актуальный стек ЛОКАЛЬНОГО игрока
+        int64 LocalPlayerCurrentBetInRound,     // Сколько ЛОКАЛЬНЫЙ игрок уже поставил в этом раунде
+        int64 TotalBetToCallOnTableForLocal,    // Общая сумма ставки на столе, до которой нужно коллировать ЛОКАЛЬНОМУ ИГРОКУ
+        int64 MinPureRaiseAmountOnTableForLocal // ЧИСТЫЙ минимальный рейз, актуальный на столе для ЛОКАЛЬНОГО ИГРОКА
     );
 
     /**

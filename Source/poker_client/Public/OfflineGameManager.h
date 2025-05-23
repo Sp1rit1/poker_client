@@ -2,198 +2,133 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PokerDataTypes.h"       // Для EPlayerAction, FCard и других покерных типов
-#include "OfflinePokerGameState.h" // Для UOfflinePokerGameState
-#include "Deck.h"                  // Для UDeck
-#include "OfflineGameManager.generated.h" // Должен быть последним инклюдом
+#include "PokerDataTypes.h"
+#include "OfflinePokerGameState.h"
+#include "Deck.h"
+#include "PokerBotAI.h" 
+#include "OfflineGameManager.generated.h"
 
-// --- ДЕЛЕГАТЫ ДЛЯ СВЯЗИ С APokerPlayerController ---
-
-// Делегат 1: Уведомление о том, чей сейчас ход начался. Передает индекс места.
+// --- ДЕЛЕГАТЫ ---
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerTurnStartedSignature, int32, MovingPlayerSeatIndex);
-
-// Делегат 2: Передача списка доступных действий для текущего игрока.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerActionsAvailableSignature, const TArray<EPlayerAction>&, AllowedActions);
-
-// Делегат 3: Передача основной информации о состоянии стола (имя ходящего, текущий банк).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTableStateInfoSignature, const FString&, MovingPlayerName, int64, CurrentPot);
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnActionUIDetailsSignature, int64, ActualAmountToCallForUI, int64, MinPureRaiseValueForUI, int64, PlayerStackOfMovingPlayer, int64, CurrentBetOfMovingPlayer);
-
-// Делегат 5: Сообщение для истории игры.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameHistoryEventSignature, const FString&, HistoryMessage);
-
-// Делегат 6: Уведомление об обновлении общих карт на столе.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommunityCardsUpdatedSignature, const TArray<FCard>&, CommunityCards);
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShowdownResultsSignature, const TArray<FShowdownPlayerInfo>&, ShowdownResults, const FString&, WinnerAnnouncementText);
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActualHoleCardsDealtSignature);
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNewHandAboutToStartSignature);
 
-UCLASS(BlueprintType)
-class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените POKER_CLIENT_API на ваш YOURPROJECT_API
+UCLASS(BlueprintType) // BlueprintType уже был, он позволяет создавать экземпляры этого класса в BP
+class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените YOURPROJECT_API
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	// Указатель на объект, хранящий текущее состояние игры
-	// Сделаем его UPROPERTY, чтобы GC его не собрал, и BlueprintReadOnly для доступа из BP (если нужно для отладки)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game State")
-	TObjectPtr<UOfflinePokerGameState> GameStateData;
-		
-	// Указатель на объект колоды карт
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game Deck")
-	TObjectPtr<UDeck> Deck;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game State")
+    TObjectPtr<UOfflinePokerGameState> GameStateData;
 
-	// --- Делегаты для уведомления внешних систем (APokerPlayerController) ---
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnPlayerTurnStartedSignature OnPlayerTurnStartedDelegate;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Offline Game Deck")
+    TObjectPtr<UDeck> Deck;
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnPlayerActionsAvailableSignature OnPlayerActionsAvailableDelegate;
+    // --- Делегаты ---
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnPlayerTurnStartedSignature OnPlayerTurnStartedDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnPlayerActionsAvailableSignature OnPlayerActionsAvailableDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnTableStateInfoSignature OnTableStateInfoDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnActionUIDetailsSignature OnActionUIDetailsDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnGameHistoryEventSignature OnGameHistoryEventDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnCommunityCardsUpdatedSignature OnCommunityCardsUpdatedDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnShowdownResultsSignature OnShowdownResultsDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnActualHoleCardsDealtSignature OnActualHoleCardsDealtDelegate;
+    UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
+    FOnNewHandAboutToStartSignature OnNewHandAboutToStartDelegate;
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnTableStateInfoSignature OnTableStateInfoDelegate;
+    // --- Настройки ИИ Бота ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Bot Settings", meta = (ClampMin = "0.1", UIMin = "0.1"))
+    float BotActionDelayMin = 0.8f;
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnActionUIDetailsSignature OnActionUIDetailsDelegate;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Bot Settings", meta = (ClampMin = "0.2", UIMin = "0.2"))
+    float BotActionDelayMax = 2.2f;
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnGameHistoryEventSignature OnGameHistoryEventDelegate;
+    UOfflineGameManager();
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnCommunityCardsUpdatedSignature OnCommunityCardsUpdatedDelegate;
+    /**
+     * Инициализирует новую оффлайн игру.
+     * Создает GameState, Deck, рассаживает игроков/ботов, устанавливает размеры блайндов.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Setup") // ИЗМЕНЕНО: Добавлен BlueprintCallable
+    void InitializeGame(int32 NumRealPlayers, int32 NumBots, int64 InitialStack, int64 InSmallBlindAmount);
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnShowdownResultsSignature OnShowdownResultsDelegate;
+    /**
+     * Возвращает текущее состояние игры (для чтения).
+     */
+    UFUNCTION(BlueprintPure, Category = "Offline Game State|Getters") // ИЗМЕНЕНО: Добавлен BlueprintPure
+    UOfflinePokerGameState* GetGameState() const;
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnActualHoleCardsDealtSignature OnActualHoleCardsDealtDelegate;
+    /**
+     * Начинает новую покерную раздачу.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") // ИЗМЕНЕНО: Добавлен BlueprintCallable
+    void StartNewHand();
 
-	UPROPERTY(BlueprintAssignable, Category = "Offline Game|Events")
-	FOnNewHandAboutToStartSignature OnNewHandAboutToStartDelegate;
+    /**
+     * Проверяет, можно ли начать новую руку.
+     * @param OutReasonIfNotPossible Выходной параметр, содержащий причину, если начать нельзя.
+     * @return true, если можно начать новую руку, иначе false.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Offline Game|Game Flow") // ИЗМЕНЕНО: Добавлен BlueprintCallable и BlueprintPure
+    bool CanStartNewHand(FString& OutReasonIfNotPossible); // FString& для Out параметра в BP должен быть настроен в деталях функции в BP
 
-
-	// Конструктор по умолчанию
-	UOfflineGameManager();
-
-	/**
-	 * Инициализирует новую оффлайн игру.
-	 * Создает GameState, Deck, рассаживает игроков/ботов, устанавливает размеры блайндов.
-	 * @param NumRealPlayers Количество реальных игроков (обычно 1).
-	 * @param NumBots Количество ботов.
-	 * @param InitialStack Начальный стек фишек для всех.
-	 * @param InSmallBlindAmount Размер малого блайнда, заданный игроком.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Offline Game|Setup")
-	void InitializeGame(int32 NumRealPlayers, int32 NumBots, int64 InitialStack, int64 InSmallBlindAmount);
-
-	/**
-	 * Возвращает текущее состояние игры (для чтения).
-	 * @return Указатель на UOfflinePokerGameState или nullptr, если игра не инициализирована.
-	 */
-	UFUNCTION(BlueprintPure, Category = "Offline Game State|Getters")
-	UOfflinePokerGameState* GetGameState() const; // Оставим GetGameState, так как вы его уже использовали
-
-	/**
-	 * Начинает новую покерную раздачу.
-	 * Определяет дилера, инициирует постановку блайндов, перемешивает колоду,
-	 * затем вызывает раздачу карт и начало префлопа.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
-	void StartNewHand();
-
-	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
-	bool CanStartNewHand(FString& OutReasonIfNotPossible); // Возвращает true, если можно начать
-
-	/**
-	 * Вызывается UI (через PlayerController), когда игрок совершает действие.
-	 * Обрабатывает действие игрока и определяет дальнейший ход игры.
-	 * @param ActingPlayerSeatIndex Индекс места игрока, совершившего действие.
-	 * @param PlayerAction Совершенное действие (Fold, Call, Bet, Raise, PostBlind).
-	 * @param Amount Сумма ставки/рейза (0 для Fold, Check, Call, PostBlind).
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow")
-	void ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount);
-
+    /**
+     * Вызывается UI (через PlayerController), когда игрок совершает действие.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") // Уже был BlueprintCallable
+    void ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount);
 
 private:
+    UPROPERTY()
+    TObjectPtr<UPokerBotAI> BotAIInstance;
 
-	TMap<int32, int64> StacksAtHandStart_Internal;
-	// --- Внутренние Функции Управления Игрой ---
+    FTimerHandle BotActionTimerHandle;
 
-	/**
-	 * Запрашивает действие у игрока на указанном месте.
-	 * Определяет доступные действия и вызывает соответствующие делегаты для UI.
-	 * @param SeatIndex Индекс места игрока, чей ход.
-	 */
-	void RequestPlayerAction(int32 SeatIndex);
+    TMap<int32, int64> StacksAtHandStart_Internal;
 
-	/**
-	 * Вызывается после того, как игрок на SB поставил блайнд.
-	 * Запрашивает постановку большого блайнда.
-	 */
-	void RequestBigBlind();
+    // --- Внутренние Функции ---
+    void BuildTurnOrderMap();
+    void RequestPlayerAction(int32 SeatIndex);
+    void RequestBigBlind();
+    void DealHoleCardsAndStartPreflop();
+    void ProceedToNextGameStage();
+    void ProceedToShowdown();
+    TMap<int32, int32> CurrentTurnOrderMap_Internal;
+    TMap<int32, int64> AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
 
-	/**
-	 * Раздает карманные карты активным игрокам и начинает раунд Preflop.
-	 * Вызывается после успешной постановки всех блайндов.
-	 */
-	void DealHoleCardsAndStartPreflop();
+    // --- Вспомогательные Функции ---
+    int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true, EPlayerStatus RequiredStatus = EPlayerStatus::MAX_None) const;
+    int32 DetermineFirstPlayerToActAtPreflop() const;
+    int32 DetermineFirstPlayerToActPostflop() const;
+    bool IsBettingRoundOver() const;
+    void PostBlinds();
 
-	/**
-	 * Переходит к следующей стадии игры (Flop, Turn, River, Showdown).
-	 * Раздает общие карты, сбрасывает ставки раунда, определяет первого ходящего.
-	 */
-	void ProceedToNextGameStage();
+    UFUNCTION()
+    void TriggerBotDecision(int32 BotSeatIndex);
 
-	/**
-	 * Запускает процесс вскрытия карт.
-	 * Определяет участников, оценивает руки, находит победителя(ей).
-	 */
-	void ProceedToShowdown();
-
-	/**
-	 * Начисляет банк победителю(ям) раздачи.
-	 * @param WinningSeatIndices Массив индексов мест победителей (может быть несколько при ничьей).
-	 */
-	TMap<int32, int64> AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
-	// Если победитель всегда один для MVP, можно упростить до AwardPotToWinner(int32 WinnerSeatIndex)
-
-	// --- Вспомогательные Функции ---
-
-	/**
-	 * Находит следующее активное место игрока по часовой стрелке,
-	 * учитывая статус игрока (не Folded, есть фишки или AllIn).
-	 * @param StartSeatIndex Индекс места, с которого начинать поиск.
-	 * @param bExcludeStartSeat Если true, то StartSeatIndex не проверяется как первый кандидат.
-	 * @return Индекс следующего активного игрока или -1, если не найден.
-	 */
-	int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true, EPlayerStatus RequiredStatus = EPlayerStatus::MAX_None) const;
-	// Переименовал из GetNextActivePlayerSeat для большей ясности, что ищем именно для хода
-
-	/**
-	 * Определяет первого игрока, который должен действовать после постановки блайндов (на Preflop).
-	 * @return Индекс места первого ходящего или -1.
-	 */
-	int32 DetermineFirstPlayerToActAtPreflop() const; // Переименовал для ясности
-
-	/**
-	 * Определяет первого игрока, который должен действовать на постфлоп раундах (Flop, Turn, River).
-	 * @return Индекс места первого ходящего или -1.
-	 */
-	int32 DetermineFirstPlayerToActPostflop() const;
-	
-	/**
-	 * Проверяет, завершен ли текущий круг торгов.
-	 * @return true, если круг торгов завершен, иначе false.
-	 */
-	bool IsBettingRoundOver() const;
-
-	/**
-	 * Вспомогательная функция для постановки блайндов. Вызывается из StartNewHand.
-	 */
-	void PostBlinds(); // Убрал параметры, так как SB/BB Seat и Amount будут в GameStateData
+    struct FActionDecisionContext
+    {
+        TArray<EPlayerAction> AvailableActions;
+        int64 AmountToCallUI = 0;
+        int64 MinPureRaiseUI = 0;
+        int64 PlayerCurrentStack = 0;
+        int64 PlayerCurrentBetInRound = 0;
+        int64 CurrentBetToCallOnTable = 0;
+    };
+    FActionDecisionContext GetActionContextForSeat(int32 SeatIndex) const;
 };
