@@ -318,12 +318,10 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
     if (bIsLocalPlayerTurn && AllowedActionsForCurrentTurn.Num() > 0)
     {
         IGameHUDInterface::Execute_UpdateActionButtons(GameHUDWidgetInstance.Get(), AllowedActionsForCurrentTurn);
-        if (!bIsInUIMode) { SwitchToUIInputMode(GameHUDWidgetInstance.Get()); }
     }
     else
     {
         IGameHUDInterface::Execute_DisableButtons(GameHUDWidgetInstance.Get());
-        if (bIsInUIMode) { SwitchToGameInputMode(); }
     }
 
     // 2. Вызываем UpdateGameInfo
@@ -575,7 +573,6 @@ void APokerPlayerController::HandleFoldAction()
         {
             GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, EPlayerAction::Fold, 0);
             UpdateAllSeatVisualizersFromGameState();
-            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode(); // Если локальный игрок сделал ход, возвращаем игровой режим
         }
         else { UE_LOG(LogTemp, Warning, TEXT("HandleFoldAction: CurrentTurnSeat is -1.")); }
     }
@@ -595,7 +592,6 @@ void APokerPlayerController::HandleCheckCallAction()
             const FPlayerSeatData& PlayerSeat = GameState->Seats[ActingPlayerSeat];
             EPlayerAction ActionToTake = (GameState->GetCurrentBetToCall() > PlayerSeat.CurrentBet) ? EPlayerAction::Call : EPlayerAction::Check;
             GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, ActionToTake, 0); // Сумма для Call вычисляется в ProcessPlayerAction
-            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode();
         }
         else { UE_LOG(LogTemp, Warning, TEXT("HandleCheckCallAction: CurrentTurnSeat %d is invalid or GameState/OfflineManager null."), ActingPlayerSeat); }
     }
@@ -618,7 +614,6 @@ void APokerPlayerController::HandleBetRaiseAction(int64 Amount)
             // Иначе это Raise.
             EPlayerAction ActionToTake = (GameState->GetCurrentBetToCall() == 0 || PlayerSeat.CurrentBet == GameState->GetCurrentBetToCall()) ? EPlayerAction::Bet : EPlayerAction::Raise;
             GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, ActionToTake, Amount);
-            if (ActingPlayerSeat == 0 && bIsInUIMode) SwitchToGameInputMode();
         }
         else { UE_LOG(LogTemp, Warning, TEXT("HandleBetRaiseAction: CurrentTurnSeat %d is invalid or GameState/OfflineManager null."), ActingPlayerSeat); }
     }
@@ -639,8 +634,6 @@ void APokerPlayerController::HandlePostBlindAction()
                 (GameState->GetCurrentGameStage() == EGameStage::WaitingForBigBlind && CurrentPlayerData.Status == EPlayerStatus::MustPostBigBlind))
             {
                 GI->GetOfflineGameManager()->ProcessPlayerAction(ActingPlayerSeat, EPlayerAction::PostBlind, 0);
-                // SwitchToGameInputMode() здесь НЕ нужен, так как ход сразу перейдет к следующему
-                // и TryAggregateAndTriggerHUDUpdate сам решит, переключать ли режим.
             }
             else {
                 UE_LOG(LogTemp, Warning, TEXT("HandlePostBlindAction: Invalid state for posting blind. Current Stage: %s, Player Status: %s"),
