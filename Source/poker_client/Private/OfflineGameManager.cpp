@@ -1547,15 +1547,17 @@ void UOfflineGameManager::ProceedToNextGameStage()
 
 void UOfflineGameManager::ProceedToShowdown()
 {
-    if (!GameStateData || !Deck) {
+    if (!GameStateData || !Deck) // Добавил проверку Deck на всякий случай, хотя здесь он не используется
+    {
         UE_LOG(LogTemp, Error, TEXT("ProceedToShowdown: GameStateData or Deck is null!"));
+        // Безопасное уведомление UI, если возможно
         if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
         FString ErrorMsg = TEXT("Error: Game State or Deck uninitialized for Showdown");
         TArray<FShowdownPlayerInfo> EmptyResults;
         if (OnShowdownResultsDelegate.IsBound()) OnShowdownResultsDelegate.Broadcast(EmptyResults, ErrorMsg);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(ErrorMsg, GameStateData ? GameStateData->Pot : 0);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0, 0);
+        if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData ? GameStateData->BigBlindAmount : 0, 0, 0); 
         if (GameStateData) GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
         return;
     }
@@ -1566,7 +1568,7 @@ void UOfflineGameManager::ProceedToShowdown()
         if (GameStateData->CommunityCards.Num() > 0) {
             FString CommunityCardsString = TEXT("Community Cards: ");
             for (int32 i = 0; i < GameStateData->CommunityCards.Num(); ++i) {
-                CommunityCardsString += GameStateData->CommunityCards[i].ToString(); // Используем ToString для логов
+                CommunityCardsString += GameStateData->CommunityCards[i].ToString();
                 if (i < GameStateData->CommunityCards.Num() - 1) CommunityCardsString += TEXT(" ");
             }
             OnGameHistoryEventDelegate.Broadcast(CommunityCardsString);
@@ -1576,76 +1578,96 @@ void UOfflineGameManager::ProceedToShowdown()
         }
     }
     GameStateData->CurrentStage = EGameStage::Showdown;
-    GameStateData->CurrentTurnSeat = -1;
-    if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
+    GameStateData->CurrentTurnSeat = -1; // Явно указываем, что активного хода нет
+    if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1); // Уведомляем UI
 
+    // Структура для хранения данных для оценки и последующего использования
     struct FPlayerHandEvaluation
     {
         int32 SeatIndex;
         FPokerHandResult HandResult;
-        FPlayerSeatData PlayerDataSnapshot; // Снимок данных игрока на момент начала шоудауна
+        FPlayerSeatData PlayerDataAtShowdown; // Снимок состояния игрока на момент шоудауна (стек до выигрыша)
+        bool bEligibleToWinPot; // Флаг, может ли игрок претендовать на банк (не сфолдил)
     };
-    TArray<FPlayerHandEvaluation> AllPlayersDealtInEvaluations;
-    TArray<int32> PlayersEligibleToWinPotIndices; // Только те, кто не сфолдил
 
-    // 1. Собираем данные и оцениваем руки ВСЕХ, кто получил карты и участвовал
-    UE_LOG(LogTemp, Log, TEXT("Showdown: Evaluating hands and using PlayerDataSnapshot..."));
-    for (const FPlayerSeatData& CurrentSeatStateInGS : GameStateData->Seats) // Используем другое имя, чтобы не путать со снимком
+    TArray<FPlayerHandEvaluation> PlayerEvaluations; // Будем хранить здесь всех, кто дошел до вскрытия или был AllIn
+
+    // 1. Собираем данные и оцениваем руки игроков, которые НЕ СФОЛДИЛИ и УЧАСТВУЮТ В ИГРЕ
+    UE_LOG(LogTemp, Log, TEXT("Showdown: Evaluating hands of eligible players..."));
+    for (const FPlayerSeatData& CurrentSeatState : GameStateData->Seats)
     {
-        if (CurrentSeatStateInGS.bIsSittingIn && CurrentSeatStateInGS.HoleCards.Num() == 2 &&
-            (CurrentSeatStateInGS.Status != EPlayerStatus::Waiting && CurrentSeatStateInGS.Status != EPlayerStatus::SittingOut))
+        // Рассматриваем только тех, кто сидит за столом и не находится в статусе "Ожидание" (Waiting)
+        // (Waiting обычно до начала раздачи, но на всякий случай)
+        // И у кого есть карманные карты (значит, они участвовали в раздаче)
+        if (CurrentSeatState.bIsSittingIn && CurrentSeatState.Status != EPlayerStatus::Waiting && CurrentSeatState.HoleCards.Num() == 2)
         {
-            FPokerHandResult EvaluatedResult = UPokerHandEvaluator::EvaluatePokerHand(CurrentSeatStateInGS.HoleCards, GameStateData->CommunityCards);
-            // Сохраняем CurrentSeatStateInGS как PlayerDataSnapshot
-            AllPlayersDealtInEvaluations.Add({ CurrentSeatStateInGS.SeatIndex, EvaluatedResult, CurrentSeatStateInGS });
+            FPokerHandResult EvaluatedResult = UPokerHandEvaluator::EvaluatePokerHand(CurrentSeatState.HoleCards, GameStateData->CommunityCards);
+            bool bIsEligible = (CurrentSeatState.Status != EPlayerStatus::Folded);
 
-            if (CurrentSeatStateInGS.Status != EPlayerStatus::Folded)
-            {
-                PlayersEligibleToWinPotIndices.Add(CurrentSeatStateInGS.SeatIndex);
-            }
+            PlayerEvaluations.Add({ CurrentSeatState.SeatIndex, EvaluatedResult, CurrentSeatState, bIsEligible });
+
+            UE_LOG(LogTemp, Verbose, TEXT("  Evaluated Seat %d (%s): HandRank %s, EligibleToWin: %s, Status: %s"),
+                CurrentSeatState.SeatIndex, *CurrentSeatState.PlayerName,
+                *UEnum::GetDisplayValueAsText(EvaluatedResult.HandRank).ToString(),
+                bIsEligible ? TEXT("Yes") : TEXT("No"),
+                *UEnum::GetDisplayValueAsText(CurrentSeatState.Status).ToString());
         }
     }
 
-    if (AllPlayersDealtInEvaluations.Num() == 0) {
-        UE_LOG(LogTemp, Warning, TEXT("Showdown: No hands could be evaluated. Hand ends."));
-        AwardPotToWinner({});
+    if (PlayerEvaluations.Num() == 0) { // Если нет рук для оценки (все сфолдили до шоудауна, что должно было обработаться раньше)
+        UE_LOG(LogTemp, Warning, TEXT("Showdown: No hands could be evaluated. Hand likely ended before showdown."));
+        // AwardPotToWinner({}); // Не нужно, так как ProcessPlayerAction должен был уже наградить
         GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
-        FString ErrorAnnouncement = TEXT("Showdown Error: No players' hands to evaluate.");
-        TArray<FShowdownPlayerInfo> EmptyResultsOnError;
-        if (OnShowdownResultsDelegate.IsBound()) OnShowdownResultsDelegate.Broadcast(EmptyResultsOnError, ErrorAnnouncement);
-        // ... (остальные делегаты для сброса UI)
+        FString Announcement = TEXT("Hand ended before showdown.");
+        TArray<FShowdownPlayerInfo> EmptyResults;
+        if (OnShowdownResultsDelegate.IsBound()) OnShowdownResultsDelegate.Broadcast(EmptyResults, Announcement);
         if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over"), GameStateData->Pot);
         if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
         if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
         return;
     }
 
-    // 2. Определяем победителя(ей) ТОЛЬКО среди тех, кто НЕ СФОЛДИЛ
+    // 2. Определяем победителя(ей) ТОЛЬКО среди тех, кто ELIGIBLE TO WIN (не сфолдил)
+    TArray<FPlayerHandEvaluation> EligibleHandsToCompare;
+    for (const auto& Eval : PlayerEvaluations) {
+        if (Eval.bEligibleToWinPot) {
+            EligibleHandsToCompare.Add(Eval);
+        }
+    }
+
     TArray<int32> ActualWinningSeatIndices;
-    if (PlayersEligibleToWinPotIndices.Num() == 1) {
-        ActualWinningSeatIndices.Add(PlayersEligibleToWinPotIndices[0]);
+    if (EligibleHandsToCompare.Num() == 1) {
+        ActualWinningSeatIndices.Add(EligibleHandsToCompare[0].SeatIndex);
+        UE_LOG(LogTemp, Log, TEXT("Showdown: One eligible player (Seat %d), wins by default."), EligibleHandsToCompare[0].SeatIndex);
     }
-    else if (PlayersEligibleToWinPotIndices.Num() > 1) {
-        TArray<FPlayerHandEvaluation> EligibleHandsToCompare;
-        for (const auto& Eval : AllPlayersDealtInEvaluations) { // Итерируем по AllPlayersDealtInEvaluations
-            if (PlayersEligibleToWinPotIndices.Contains(Eval.SeatIndex)) { // Проверяем, есть ли этот игрок в списке тех, кто может выиграть
-                EligibleHandsToCompare.Add(Eval);
+    else if (EligibleHandsToCompare.Num() > 1) {
+        // Сортируем руки от лучшей к худшей
+        EligibleHandsToCompare.Sort([](const FPlayerHandEvaluation& A, const FPlayerHandEvaluation& B) {
+            return UPokerHandEvaluator::CompareHandResults(A.HandResult, B.HandResult) > 0; // >0 A лучше B
+            });
+
+        FPokerHandResult BestEligibleHand = EligibleHandsToCompare[0].HandResult;
+        ActualWinningSeatIndices.Add(EligibleHandsToCompare[0].SeatIndex);
+
+        for (int32 i = 1; i < EligibleHandsToCompare.Num(); ++i) {
+            if (UPokerHandEvaluator::CompareHandResults(EligibleHandsToCompare[i].HandResult, BestEligibleHand) == 0) {
+                ActualWinningSeatIndices.Add(EligibleHandsToCompare[i].SeatIndex); // Ничья
+            }
+            else {
+                break; // Остальные руки слабее
             }
         }
-        if (EligibleHandsToCompare.Num() > 0) {
-            EligibleHandsToCompare.Sort([](const FPlayerHandEvaluation& A, const FPlayerHandEvaluation& B) {
-                return UPokerHandEvaluator::CompareHandResults(A.HandResult, B.HandResult) > 0;
-                });
-            FPokerHandResult BestEligibleHand = EligibleHandsToCompare[0].HandResult;
-            ActualWinningSeatIndices.Add(EligibleHandsToCompare[0].SeatIndex);
-            for (int32 i = 1; i < EligibleHandsToCompare.Num(); ++i) {
-                if (UPokerHandEvaluator::CompareHandResults(EligibleHandsToCompare[i].HandResult, BestEligibleHand) == 0) {
-                    ActualWinningSeatIndices.Add(EligibleHandsToCompare[i].SeatIndex);
-                }
-                else { break; }
-            }
-        }
+        UE_LOG(LogTemp, Log, TEXT("Showdown: Comparison complete. Best HandRank: %s. Winners: %d"),
+            *UEnum::GetDisplayValueAsText(BestEligibleHand.HandRank).ToString(), ActualWinningSeatIndices.Num());
     }
+    else // EligibleHandsToCompare.Num() == 0 (все сфолдили, но мы здесь) - не должно быть, если PlayersLeftInHand в ProceedToNextStage был >1
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Showdown: No eligible players to compare hands, though PlayerEvaluations was not empty. This indicates an issue."));
+        // В этом случае банк не должен разыгрываться между этими игроками.
+        // Это должно было быть обработано в ProcessPlayerAction или ProceedToNextGameStage.
+        // Если мы сюда дошли, и банк еще есть, это ошибка.
+    }
+
 
     // 3. Награждаем победителя(ей) - это ИЗМЕНИТ стеки в GameStateData->Seats
     TMap<int32, int64> AmountsWonByPlayers = AwardPotToWinner(ActualWinningSeatIndices);
@@ -1654,64 +1676,61 @@ void UOfflineGameManager::ProceedToShowdown()
     TArray<FShowdownPlayerInfo> FinalShowdownResultsData;
     FString FinalWinnerAnnouncementString;
 
-    for (const FPlayerHandEvaluation& EvalEntry : AllPlayersDealtInEvaluations)
+    // Собираем информацию для ВСЕХ, кто участвовал в шоудауне (PlayerEvaluations)
+    for (const FPlayerHandEvaluation& EvalEntry : PlayerEvaluations)
     {
         FShowdownPlayerInfo Info;
         Info.SeatIndex = EvalEntry.SeatIndex;
-        // Используем данные из PlayerDataSnapshot, который был сохранен в FPlayerHandEvaluation
-        Info.PlayerName = EvalEntry.PlayerDataSnapshot.PlayerName;
-        Info.HoleCards = EvalEntry.PlayerDataSnapshot.HoleCards;
-        Info.HandResult = EvalEntry.HandResult;
-        Info.PlayerStatusAtShowdown = EvalEntry.PlayerDataSnapshot.Status;
+        Info.PlayerName = EvalEntry.PlayerDataAtShowdown.PlayerName; // Используем имя из снимка
+        Info.HoleCards = EvalEntry.PlayerDataAtShowdown.HoleCards;   // Карты из снимка
+        Info.HandResult = EvalEntry.HandResult;                      // Оцененный результат
+        Info.PlayerStatusAtShowdown = EvalEntry.PlayerDataAtShowdown.Status; // Статус на момент шоудауна (Folded, AllIn, Playing)
+
         Info.bIsWinner = ActualWinningSeatIndices.Contains(EvalEntry.SeatIndex);
-        Info.AmountWon = AmountsWonByPlayers.FindRef(EvalEntry.SeatIndex);
+        Info.AmountWon = AmountsWonByPlayers.Contains(EvalEntry.SeatIndex) ? AmountsWonByPlayers.FindChecked(EvalEntry.SeatIndex) : 0;
 
         // Рассчитываем NetResult ОТНОСИТЕЛЬНО САМОГО НАЧАЛА РУКИ
+        // Используем GameStateData->Seats[EvalEntry.SeatIndex].Stack (СТЕК ПОСЛЕ ВЫИГРЫША)
+        // и StacksAtHandStart_Internal (СТЕК В НАЧАЛЕ РУКИ)
         if (GameStateData->Seats.IsValidIndex(EvalEntry.SeatIndex) && StacksAtHandStart_Internal.Contains(EvalEntry.SeatIndex))
         {
-            // GameStateData->Seats[EvalEntry.SeatIndex].Stack -- это стек ПОСЛЕ присуждения банка
-            // StacksAtHandStart_Internal.FindChecked(EvalEntry.SeatIndex) -- это стек В САМОМ НАЧАЛЕ РУКИ (до блайндов)
             Info.NetResult = GameStateData->Seats[EvalEntry.SeatIndex].Stack - StacksAtHandStart_Internal.FindChecked(EvalEntry.SeatIndex);
         }
         else
         {
-            Info.NetResult = Info.AmountWon; // Запасной вариант
-            UE_LOG(LogTemp, Warning, TEXT("ProceedToShowdown: Could not find StackAtHandStart_Internal for Seat %d. NetResult for UI defaults to AmountWon."), EvalEntry.SeatIndex);
+            Info.NetResult = Info.AmountWon; // Запасной вариант, если начальный стек не найден
+            UE_LOG(LogTemp, Warning, TEXT("ProceedToShowdown: Could not find StackAtHandStart_Internal for Seat %d (%s). NetResult for UI defaults to AmountWon."), EvalEntry.SeatIndex, *Info.PlayerName);
         }
-
         FinalShowdownResultsData.Add(Info);
 
-        // Логирование для истории игры
+        // Логирование для истории игры (можно немного упростить, т.к. основное объявление будет ниже)
         if (OnGameHistoryEventDelegate.IsBound()) {
-            FString KickersStr;
-            for (ECardRank Kicker : Info.HandResult.Kickers) { KickersStr += UEnum::GetDisplayValueAsText(Kicker).ToString() + TEXT(" "); }
-            KickersStr = KickersStr.TrimEnd();
-            FString StatusTextForLog = (Info.PlayerStatusAtShowdown == EPlayerStatus::Folded) ? TEXT("(Folded)") :
-                (Info.bIsWinner ? FString::Printf(TEXT("(Wins %lld, Net: %+lld)"), Info.AmountWon, Info.NetResult) : FString::Printf(TEXT("(Net: %+lld)"), Info.NetResult));
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s (Seat %d) shows: %s %s. Hand: %s. Kickers: [%s] %s"),
+            FString HandDesc = UEnum::GetDisplayValueAsText(Info.HandResult.HandRank).ToString();
+            FString ActionDesc = TEXT("");
+            if (Info.PlayerStatusAtShowdown == EPlayerStatus::Folded) ActionDesc = TEXT("(Folded)");
+            else if (Info.bIsWinner) ActionDesc = FString::Printf(TEXT("(Wins %lld)"), Info.AmountWon);
+
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s (Seat %d) shows %s %s - %s %s"),
                 *Info.PlayerName, Info.SeatIndex,
-                Info.HoleCards.IsValidIndex(0) ? *Info.HoleCards[0].ToString() : TEXT("N/A"),
-                Info.HoleCards.IsValidIndex(1) ? *Info.HoleCards[1].ToString() : TEXT("N/A"),
-                *UEnum::GetDisplayValueAsText(Info.HandResult.HandRank).ToString(),
-                *KickersStr,
-                *StatusTextForLog
+                Info.HoleCards.IsValidIndex(0) ? *Info.HoleCards[0].ToString() : TEXT("??"),
+                Info.HoleCards.IsValidIndex(1) ? *Info.HoleCards[1].ToString() : TEXT("??"),
+                *HandDesc, *ActionDesc
             ));
         }
     }
 
-    // Формируем строку объявления победителя(ей) (БЕЗ NetResult в главном объявлении)
+    // Формируем строку объявления победителя(ей)
     if (ActualWinningSeatIndices.Num() > 0) {
         if (ActualWinningSeatIndices.Num() == 1) {
             int32 WinnerIdx = ActualWinningSeatIndices[0];
+            // Находим информацию о победителе в FinalShowdownResultsData для корректного имени и руки
             const FShowdownPlayerInfo* WinnerInfoPtr = FinalShowdownResultsData.FindByPredicate(
                 [WinnerIdx](const FShowdownPlayerInfo& info) { return info.SeatIndex == WinnerIdx; });
             if (WinnerInfoPtr) {
-                FinalWinnerAnnouncementString = FString::Printf(TEXT("Winner: %s (Hand: %s) wins %lld!"),
-                    *WinnerInfoPtr->PlayerName,
-                    *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString(),
-                    WinnerInfoPtr->AmountWon);
+                FinalWinnerAnnouncementString = FString::Printf(TEXT("%s wins %lld with %s!"),
+                    *WinnerInfoPtr->PlayerName, WinnerInfoPtr->AmountWon, *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString());
             }
-            else { FinalWinnerAnnouncementString = TEXT("Winner determined, but info not found for announcement."); }
+            else { FinalWinnerAnnouncementString = TEXT("Winner determined, but info not found."); }
         }
         else {
             FinalWinnerAnnouncementString = TEXT("Split Pot! Winners: ");
@@ -1720,24 +1739,18 @@ void UOfflineGameManager::ProceedToShowdown()
                 const FShowdownPlayerInfo* WinnerInfoPtr = FinalShowdownResultsData.FindByPredicate(
                     [WinnerIdx](const FShowdownPlayerInfo& info) { return info.SeatIndex == WinnerIdx; });
                 if (WinnerInfoPtr) {
-                    FinalWinnerAnnouncementString += FString::Printf(TEXT("%s (Hand: %s, Wins: %lld)"),
-                        *WinnerInfoPtr->PlayerName,
-                        *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString(),
-                        WinnerInfoPtr->AmountWon
-                    );
-                    if (i < ActualWinningSeatIndices.Num() - 1) FinalWinnerAnnouncementString += TEXT(", ");
+                    FinalWinnerAnnouncementString += FString::Printf(TEXT("%s (%s, +%lld)"),
+                        *WinnerInfoPtr->PlayerName, *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString(), WinnerInfoPtr->AmountWon);
+                    if (i < ActualWinningSeatIndices.Num() - 1) FinalWinnerAnnouncementString += TEXT("; ");
                 }
             }
         }
     }
     else {
-        FinalWinnerAnnouncementString = TEXT("No winner for the pot this hand.");
+        FinalWinnerAnnouncementString = TEXT("No specific winner for the pot this hand (e.g., all folded before showdown, pot awarded earlier).");
     }
+    if (OnGameHistoryEventDelegate.IsBound() && !FinalWinnerAnnouncementString.IsEmpty()) OnGameHistoryEventDelegate.Broadcast(FinalWinnerAnnouncementString);
 
-    // Записываем основное объявление победителя в историю еще раз, если оно не пустое (на случай, если предыдущее было более детальным для каждого игрока)
-    if (OnGameHistoryEventDelegate.IsBound() && !FinalWinnerAnnouncementString.IsEmpty() && !FinalWinnerAnnouncementString.Contains(TEXT("Showdown Results:"))) {
-        OnGameHistoryEventDelegate.Broadcast(FinalWinnerAnnouncementString);
-    }
 
     if (OnShowdownResultsDelegate.IsBound())
     {
@@ -1748,10 +1761,12 @@ void UOfflineGameManager::ProceedToShowdown()
     // 5. Рука завершена
     UE_LOG(LogTemp, Log, TEXT("--- HAND OVER (After Showdown Finalization) ---"));
     GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
-    if (OnPlayerTurnStartedDelegate.IsBound()) OnPlayerTurnStartedDelegate.Broadcast(-1);
-    if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over. Press 'Next Hand'."), GameStateData->Pot);
+    // OnPlayerTurnStartedDelegate.Broadcast(-1); // Уже вызван в начале ProceedToShowdown
+    if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over. Press 'Next Hand'."), GameStateData->Pot); // Pot должен быть 0
     if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
-    if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0);
+    if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0); // Добавлен 5-й параметр
+
+    // НЕ вызываем StartNewHand() автоматически. Ждем команды от UI.
 }
 
 
