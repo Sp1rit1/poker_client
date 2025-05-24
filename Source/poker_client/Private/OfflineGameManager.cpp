@@ -1226,9 +1226,41 @@ int32 UOfflineGameManager::GetNextPlayerToAct(int32 StartSeatIndex, bool bExclud
 
 int32 UOfflineGameManager::DetermineFirstPlayerToActPostflop() const
 {
-    if (!GameStateData || GameStateData->DealerSeat == -1) return -1;
-    // Первый активный игрок слева от дилера (включая SB, если он еще в игре)
-    return GetNextPlayerToAct(GameStateData->DealerSeat, false, EPlayerStatus::MAX_None);
+    if (!GameStateData || GameStateData->DealerSeat == -1 || GameStateData->Seats.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("DetermineFirstPlayerToActPostflop: Invalid preconditions (GameState, DealerSeat, or Seats empty)."));
+        return -1;
+    }
+
+    if (CurrentTurnOrderMap_Internal.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("DetermineFirstPlayerToActPostflop: CurrentTurnOrderMap_Internal is empty! Cannot determine action order."));
+        // Это критично. Возможно, BuildTurnOrderMap() не был вызван или не смог построить карту.
+        // В качестве аварийного варианта можно попытаться найти первого активного слева от дилера по простому кругу,
+        // но это нарушит ваш кастомный порядок. Лучше убедиться, что карта всегда построена.
+        return -1;
+    }
+
+    // Начинаем поиск со СЛЕДУЮЩЕГО игрока ПОСЛЕ дилера в нашем кастомном порядке.
+    // GetNextPlayerToAct должен использовать CurrentTurnOrderMap_Internal.
+    // Передаем DealerSeat и bExcludeStartSeat = true.
+    // RequiredStatus = EPlayerStatus::MAX_None, так как GetNextPlayerToAct сам проверит,
+    // может ли найденный игрок действовать (Playing со стеком или AllIn).
+    int32 FirstToAct = GetNextPlayerToAct(GameStateData->DealerSeat, true, EPlayerStatus::MAX_None);
+    // ^^^^ Ключевое изменение
+
+    if (FirstToAct == -1)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DetermineFirstPlayerToActPostflop: GetNextPlayerToAct returned -1 (no active player found starting after dealer %d). This might happen if only dealer is left or map error."), GameStateData->DealerSeat);
+        // Если не найден следующий активный игрок (например, все остальные сфолдили или дилер остался один),
+        // это должно быть обработано логикой завершения руки/раздачи в ProceedToNextGameStage.
+        // Но если игроков > 1, и мы не нашли, это проблема в GetNextPlayerToAct или TurnOrderMap.
+        // Для надежности, если FirstToAct == -1, а игроков в руке еще > 1, это ошибка.
+        // Но ProceedToNextGameStage должен это поймать.
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("DetermineFirstPlayerToActPostflop: Dealer is Seat %d. First to act on postflop determined as Seat %d."), GameStateData->DealerSeat, FirstToAct);
+    return FirstToAct;
 }
 
 bool UOfflineGameManager::IsBettingRoundOver() const
