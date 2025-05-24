@@ -12,7 +12,13 @@
 				"Engine",
 				"CoreUObject"
 			]
-		}
+		},
+		
+		{
+            "Name": "poker_client_tests", 
+            "Type": "DeveloperTool",      
+            "LoadingPhase": "Default"    
+        }
 	],
 	"Plugins": [
 		{
