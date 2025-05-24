@@ -21,11 +21,6 @@ public:
 
 private:
     static FPokerHandResult EvaluateSingleFiveCardHand(const TArray<FCard>& FiveCards);
-    static void SortFiveCardsDesc(TArray<FCard>& FiveCardsToSort);
-    static bool IsStraight(const TArray<FCard>& SortedFiveCards, ECardRank& OutHighCardRank);
-    static bool IsFlush(const TArray<FCard>& FiveCards, ECardSuit& OutFlushSuit);
-    static void CountRanks(const TArray<FCard>& FiveCardsToCount, TMap<ECardRank, int32>& OutRankCounts);
-    static void GetKickers(const TArray<FCard>& SortedFiveCards, int32 NumKickersToGet, TArray<ECardRank>& OutKickersArray, const TSet<ECardRank>& RanksToExclude);
 
     // Индексы для комбинаций 7 карт по 5
     static const int32 Combinations7c5[21][5];
