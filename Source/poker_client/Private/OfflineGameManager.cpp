@@ -216,7 +216,7 @@ void UOfflineGameManager::StartNewHand()
     }
     else {
         // GetNextPlayerToAct теперь должен находить игроков со статусом Playing
-        GameStateData->DealerSeat = GetNextPlayerToAct(GameStateData->DealerSeat, false, EPlayerStatus::Playing);
+        GameStateData->DealerSeat = GetNextPlayerToAct(GameStateData->DealerSeat, true, EPlayerStatus::Playing);
     }
 
     if (GameStateData->DealerSeat == -1) {
@@ -2054,4 +2054,14 @@ void UOfflineGameManager::TriggerBotDecision(int32 BotSeatIndex)
     // Для Call сумма будет вычислена в ProcessPlayerAction на основе CurrentBetToCall.
 
     ProcessPlayerAction(BotSeatIndex, ChosenAction, AmountForProcessAction);
+}
+
+UPokerBotAI* UOfflineGameManager::GetBotAIInstance() const
+{
+    return BotAIInstance.Get();
+}
+
+UDeck* UOfflineGameManager::GetDeck() const
+{
+    return Deck.Get();
 }

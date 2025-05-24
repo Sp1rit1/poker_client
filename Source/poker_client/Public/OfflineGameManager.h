@@ -93,6 +93,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") // Уже был BlueprintCallable
     void ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount);
 
+    UFUNCTION(BlueprintPure, Category = "Offline Game|Getters") // BlueprintPure, если хотите вызывать из BP
+    UPokerBotAI* GetBotAIInstance() const;
+
+    UFUNCTION(BlueprintPure, Category = "Offline Game|Getters")
+    UDeck* GetDeck() const;
+
 private:
     UPROPERTY()
     TObjectPtr<UPokerBotAI> BotAIInstance;

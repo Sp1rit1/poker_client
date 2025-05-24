@@ -33,7 +33,8 @@ public class poker_client_tests : ModuleRules
                 "Engine",      
                 "UnrealEd",    
                 "AutomationController", 
-                "AutomationWindow"    
+                "AutomationWindow",
+                "FunctionalTesting"
             }
         );
 
