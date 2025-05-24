@@ -2,315 +2,364 @@
 #include "PokerDataTypes.h"
 #include "Algo/Sort.h"
 #include "Containers/Map.h"
-#include "Containers/Set.h" // Для TSet в GetKickers
-#include "Math/UnrealMathUtility.h" // Для FMath::Min
+#include "Containers/Set.h"
+#include "Math/UnrealMathUtility.h"
 #include "Logging/LogMacros.h"
 
-// Определяем константу с индексами для комбинаций 7 choose 5 (все 21)
-// Это позволяет избежать рекурсии или сложных циклов генерации комбинаций
+// Можете определить свою лог категорию, если хотите
+// DECLARE_LOG_CATEGORY_EXTERN(LogPokerEval, Log, All); 
+// DEFINE_LOG_CATEGORY(LogPokerEval);
+
 const int32 UPokerHandEvaluator::Combinations7c5[21][5] = {
-	{0, 1, 2, 3, 4}, {0, 1, 2, 3, 5}, {0, 1, 2, 3, 6}, {0, 1, 2, 4, 5}, {0, 1, 2, 4, 6},
-	{0, 1, 2, 5, 6}, {0, 1, 3, 4, 5}, {0, 1, 3, 4, 6}, {0, 1, 3, 5, 6}, {0, 1, 4, 5, 6},
-	{0, 2, 3, 4, 5}, {0, 2, 3, 4, 6}, {0, 2, 3, 5, 6}, {0, 2, 4, 5, 6}, {0, 3, 4, 5, 6},
-	{1, 2, 3, 4, 5}, {1, 2, 3, 4, 6}, {1, 2, 3, 5, 6}, {1, 2, 4, 5, 6}, {1, 3, 4, 5, 6},
-	{2, 3, 4, 5, 6}
+    {0, 1, 2, 3, 4}, {0, 1, 2, 3, 5}, {0, 1, 2, 3, 6}, {0, 1, 2, 4, 5}, {0, 1, 2, 4, 6},
+    {0, 1, 2, 5, 6}, {0, 1, 3, 4, 5}, {0, 1, 3, 4, 6}, {0, 1, 3, 5, 6}, {0, 1, 4, 5, 6},
+    {0, 2, 3, 4, 5}, {0, 2, 3, 4, 6}, {0, 2, 3, 5, 6}, {0, 2, 4, 5, 6}, {0, 3, 4, 5, 6},
+    {1, 2, 3, 4, 5}, {1, 2, 3, 4, 6}, {1, 2, 3, 5, 6}, {1, 2, 4, 5, 6}, {1, 3, 4, 5, 6},
+    {2, 3, 4, 5, 6}
+};
+
+const int32 UPokerHandEvaluator::Combinations6c5[6][5] = {
+    {0, 1, 2, 3, 4}, {0, 1, 2, 3, 5}, {0, 1, 2, 4, 5},
+    {0, 1, 3, 4, 5}, {0, 2, 3, 4, 5}, {1, 2, 3, 4, 5}
 };
 
 
 FPokerHandResult UPokerHandEvaluator::EvaluatePokerHand(const TArray<FCard>& HoleCards, const TArray<FCard>& CommunityCards)
 {
-	TArray<FCard> AllCards = HoleCards;
-	AllCards.Append(CommunityCards);
+    TArray<FCard> AllCardsCombined = HoleCards;
+    AllCardsCombined.Append(CommunityCards);
 
-	const int32 NumTotalCards = AllCards.Num();
-	FPokerHandResult BestHandResult; // Инициализируется HighCard по умолчанию
+    const int32 NumTotalCards = AllCardsCombined.Num();
+    FPokerHandResult BestOverallHandResult; // Инициализируется HighCard по умолчанию
 
-	if (NumTotalCards < 5)
-	{
-		// Недостаточно карт, возвращаем HighCard с лучшей картой
-		if (NumTotalCards > 0)
-		{
-			TArray<FCard> TempSort = AllCards;
-			SortFiveCardsDesc(TempSort); // Используем сортировку для 5, т.к. она обрабатывает массивы < 5
-			BestHandResult.HandRank = EPokerHandRank::HighCard;
-			BestHandResult.Kickers.Add(TempSort[0].Rank);
-		}
-		// Если 0 карт, вернется дефолтный HighCard без кикеров
-		return BestHandResult;
-	}
+    FString AllCardsStrForLog;
+    for (const FCard& Card : AllCardsCombined) { AllCardsStrForLog += Card.ToString() + TEXT(" "); }
+    UE_LOG(LogTemp, Log, TEXT("--- UPokerHandEvaluator::EvaluatePokerHand START --- Total Cards: %d. Cards: [%s]"), NumTotalCards, *AllCardsStrForLog.TrimEnd());
 
-	// --- Основная логика: Найти лучшую 5-карточную руку ---
+    if (NumTotalCards < 5)
+    {
+        UE_LOG(LogTemp, Log, TEXT("  Not enough cards (%d) for a 5-card hand. Evaluating as HighCard."), NumTotalCards);
+        if (NumTotalCards > 0)
+        {
+            TArray<FCard> TempSort = AllCardsCombined;
+            SortFiveCardsDesc(TempSort);
+            BestOverallHandResult.HandRank = EPokerHandRank::HighCard;
+            if (TempSort.IsValidIndex(0)) { BestOverallHandResult.Kickers.Add(TempSort[0].Rank); }
+        }
+        UE_LOG(LogTemp, Log, TEXT("--- UPokerHandEvaluator::EvaluatePokerHand END --- Returning (Partial): %s"), *UEnum::GetDisplayValueAsText(BestOverallHandResult.HandRank).ToString());
+        return BestOverallHandResult;
+    }
 
-	TArray<FCard> CurrentFiveCards;
-	CurrentFiveCards.SetNumUninitialized(5); // Выделяем память один раз
+    TArray<FCard> CurrentFiveCardCombination;
+    CurrentFiveCardCombination.SetNumUninitialized(5);
 
-	if (NumTotalCards == 5)
-	{
-		// Если ровно 5 карт, оцениваем только их
-		for (int i = 0; i < 5; ++i) CurrentFiveCards[i] = AllCards[i];
-		BestHandResult = EvaluateSingleFiveCardHand(CurrentFiveCards);
-	}
-	else if (NumTotalCards == 6)
-	{
-		// Перебираем все 6 комбинаций по 5 карт (6 choose 5)
-		for (int32 i = 0; i < 6; ++i)
-		{
-			int32 CurrentIndex = 0;
-			for (int32 j = 0; j < 6; ++j)
-			{
-				if (i == j) continue; // Пропускаем одну карту
-				CurrentFiveCards[CurrentIndex++] = AllCards[j];
-			}
-			FPokerHandResult CurrentResult = EvaluateSingleFiveCardHand(CurrentFiveCards);
-			if (CompareHandResults(CurrentResult, BestHandResult) > 0)
-			{
-				BestHandResult = CurrentResult;
-			}
-		}
-	}
-	else // NumTotalCards == 7 (или больше, но мы используем только 7)
-	{
-		int32 CardsToUse = FMath::Min(NumTotalCards, 7); // На случай если передали > 7 карт
-		// Перебираем все 21 комбинацию по 5 карт из 7 (7 choose 5)
-		for (int32 i = 0; i < 21; ++i)
-		{
-			for (int32 j = 0; j < 5; ++j)
-			{
-				int32 cardIndex = Combinations7c5[i][j];
-				if (cardIndex < CardsToUse) // Проверка на случай если карт меньше 7
-				{
-					CurrentFiveCards[j] = AllCards[cardIndex];
-				}
-				else // Если индекс выходит за пределы, просто возьмем последнюю карту (маловероятно, но безопасно)
-				{
-					CurrentFiveCards[j] = AllCards[CardsToUse - 1];
-				}
+    if (NumTotalCards == 5)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("  Path: Exactly 5 cards. Evaluating this single combination."));
+        for (int i = 0; i < 5; ++i) CurrentFiveCardCombination[i] = AllCardsCombined[i];
+        BestOverallHandResult = EvaluateSingleFiveCardHand(CurrentFiveCardCombination);
+    }
+    else if (NumTotalCards == 6)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("  Path: 6 cards. Evaluating 6 choose 5 combinations."));
+        for (int32 i = 0; i < 6; ++i) // Index of the card to EXCLUDE from AllCardsCombined
+        {
+            int32 TempIdx = 0;
+            FString ComboStrForLog;
+            for (int32 j = 0; j < 6; ++j) {
+                if (i == j) continue; // Skip card i
+                CurrentFiveCardCombination[TempIdx] = AllCardsCombined[j];
+                ComboStrForLog += AllCardsCombined[j].ToString() + TEXT(" ");
+                TempIdx++;
+            }
+            UE_LOG(LogTemp, Verbose, TEXT("    Evaluating 6c5 Combo (Skipping card at AllCardsCombined index %d): [%s]"), i, *ComboStrForLog.TrimEnd());
+            FPokerHandResult CurrentCombinationResult = EvaluateSingleFiveCardHand(CurrentFiveCardCombination);
+            if (CompareHandResults(CurrentCombinationResult, BestOverallHandResult) > 0) {
+                BestOverallHandResult = CurrentCombinationResult;
+                UE_LOG(LogTemp, Verbose, TEXT("      >>>> New Best Hand from 6c5: %s"), *UEnum::GetDisplayValueAsText(BestOverallHandResult.HandRank).ToString());
+            }
+        }
+    }
+    else // NumTotalCards >= 7 (используем первые 7, если больше)
+    {
+        TArray<FCard> CardsToEvaluateFrom; // Будет содержать первые 7 карт
+        for (int32 i = 0; i < FMath::Min(NumTotalCards, 7); ++i) { CardsToEvaluateFrom.Add(AllCardsCombined[i]); }
 
-			}
-			FPokerHandResult CurrentResult = EvaluateSingleFiveCardHand(CurrentFiveCards);
-			if (CompareHandResults(CurrentResult, BestHandResult) > 0)
-			{
-				BestHandResult = CurrentResult;
-			}
-		}
-	}
+        UE_LOG(LogTemp, Verbose, TEXT("  Path: %d cards (using first %d). Evaluating 7 choose 5 combinations."), NumTotalCards, CardsToEvaluateFrom.Num());
 
-	return BestHandResult;
+        for (int32 i = 0; i < 21; ++i) // 21 комбинация для 7c5
+        {
+            FString ComboStrForLog;
+            for (int32 j = 0; j < 5; ++j) {
+                int32 cardIndexInSubArray = Combinations7c5[i][j];
+                // Индексы в Combinations7c5 для массива из 7 элементов.
+                // CardsToEvaluateFrom всегда будет иметь размер 7 (или меньше, если изначально было <7 карт, но это обработано выше)
+                CurrentFiveCardCombination[j] = CardsToEvaluateFrom[cardIndexInSubArray];
+                ComboStrForLog += CardsToEvaluateFrom[cardIndexInSubArray].ToString() + TEXT(" ");
+            }
+            UE_LOG(LogTemp, Verbose, TEXT("    Evaluating 7c5 Combo #%d: [%s]"), i, *ComboStrForLog.TrimEnd());
+            FPokerHandResult CurrentCombinationResult = EvaluateSingleFiveCardHand(CurrentFiveCardCombination);
+            if (CompareHandResults(CurrentCombinationResult, BestOverallHandResult) > 0) {
+                BestOverallHandResult = CurrentCombinationResult;
+                UE_LOG(LogTemp, Verbose, TEXT("      >>>> New Best Hand from 7c5: %s"), *UEnum::GetDisplayValueAsText(BestOverallHandResult.HandRank).ToString());
+            }
+        }
+    }
+
+    FString KickersStrForLog;
+    for (ECardRank Kicker : BestOverallHandResult.Kickers) KickersStrForLog += UEnum::GetDisplayValueAsText(Kicker).ToString() + TEXT(" ");
+    UE_LOG(LogTemp, Log, TEXT("--- UPokerHandEvaluator::EvaluatePokerHand END --- Final Best Hand: %s, Kickers: [%s]"),
+        *UEnum::GetDisplayValueAsText(BestOverallHandResult.HandRank).ToString(), *KickersStrForLog.TrimEnd());
+    return BestOverallHandResult;
 }
 
-
-// --- Реализация оценки конкретной 5-карточной руки ---
 FPokerHandResult UPokerHandEvaluator::EvaluateSingleFiveCardHand(const TArray<FCard>& FiveCards)
 {
-	if (FiveCards.Num() != 5) return FPokerHandResult(); // Должно быть ровно 5 карт
+    if (FiveCards.Num() != 5) {
+        UE_LOG(LogTemp, Error, TEXT("EvaluateSingleFiveCardHand: ERROR - Called with %d cards, expected 5. Returning default HighCard."), FiveCards.Num());
+        return FPokerHandResult();
+    }
 
-	FPokerHandResult Result;
-	TArray<FCard> SortedCards = FiveCards; // Копируем для сортировки
-	SortFiveCardsDesc(SortedCards); // Сортируем от старшей к младшей
+    FString CardsStrForLog;
+    for (const FCard& c : FiveCards) CardsStrForLog += c.ToString() + TEXT(" ");
+    UE_LOG(LogTemp, Verbose, TEXT("  EvaluateSingleFiveCardHand: Input for single eval [%s]"), *CardsStrForLog.TrimEnd());
 
-	ECardRank StraightHighCard;
-	ECardSuit FlushSuit;
-	bool bIsStraight = IsStraight(SortedCards, StraightHighCard);
-	bool bIsFlush = IsFlush(SortedCards, FlushSuit);
+    FPokerHandResult Result;
+    TArray<FCard> SortedCards = FiveCards;
+    SortFiveCardsDesc(SortedCards); // Сортируем от старшей к младшей
 
-	// Проверка на Стрит Флеш / Роял Флеш
-	if (bIsStraight && bIsFlush)
-	{
-		Result.HandRank = (StraightHighCard == ECardRank::Ace) ? EPokerHandRank::RoyalFlush : EPokerHandRank::StraightFlush;
-		Result.Kickers.Add(StraightHighCard); // Кикер - старшая карта стрита
-		return Result;
-	}
+    FString SortedCardsStrForLog;
+    for (const FCard& c : SortedCards) SortedCardsStrForLog += c.ToString() + TEXT(" ");
+    UE_LOG(LogTemp, Verbose, TEXT("    Sorted Input: [%s]"), *SortedCardsStrForLog.TrimEnd());
 
-	// Подсчет рангов для Каре, Фулл Хауса, Сета, Пар
-	TMap<ECardRank, int32> RankCounts;
-	CountRanks(SortedCards, RankCounts);
+    ECardRank StraightHighCardValue;
+    ECardSuit FlushSuitValue;
+    bool bIsStraight = IsStraight(SortedCards, StraightHighCardValue);
+    bool bIsFlush = IsFlush(SortedCards, FlushSuitValue);
 
-	TArray<ECardRank> Fours;
-	TArray<ECardRank> Threes;
-	TArray<ECardRank> Pairs;
+    UE_LOG(LogTemp, Verbose, TEXT("    Checks - IsStraight: %s (High: %s), IsFlush: %s (Suit: %s)"),
+        bIsStraight ? TEXT("Yes") : TEXT("No"),
+        bIsStraight ? *UEnum::GetDisplayValueAsText(StraightHighCardValue).ToString() : TEXT("N/A"),
+        bIsFlush ? TEXT("Yes") : TEXT("No"),
+        bIsFlush ? *UEnum::GetDisplayValueAsText(FlushSuitValue).ToString() : TEXT("N/A"));
 
-	for (const auto& Pair : RankCounts)
-	{
-		if (Pair.Value == 4) Fours.Add(Pair.Key);
-		else if (Pair.Value == 3) Threes.Add(Pair.Key);
-		else if (Pair.Value == 2) Pairs.Add(Pair.Key);
-	}
+    // 1. Стрит Флеш / Роял Флеш
+    if (bIsStraight && bIsFlush) {
+        // Проверка на Роял Флеш: стрит от туза (A K Q J T) той же масти.
+        // StraightHighCardValue для A-5 стрита будет Five. Для T-A стрита будет Ace.
+        Result.HandRank = (StraightHighCardValue == ECardRank::Ace && SortedCards[1].Rank == ECardRank::King)
+            ? EPokerHandRank::RoyalFlush : EPokerHandRank::StraightFlush;
+        Result.Kickers.Add(StraightHighCardValue);
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: %s (High: %s)"),
+            *UEnum::GetDisplayValueAsText(Result.HandRank).ToString(), *UEnum::GetDisplayValueAsText(StraightHighCardValue).ToString());
+        return Result;
+    }
 
-	// Проверка на Каре (Four of a Kind)
-	if (Fours.Num() == 1)
-	{
-		Result.HandRank = EPokerHandRank::FourOfAKind;
-		Result.Kickers.Add(Fours[0]); // Ранг каре
-		GetKickers(SortedCards, 1, Result.Kickers, { Fours[0] }); // 1 кикер
-		return Result;
-	}
+    // 2. Подсчет рангов для Каре, Фулл Хауса, Сета, Пар
+    TMap<ECardRank, int32> RankCountsMap;
+    CountRanks(SortedCards, RankCountsMap);
+    FString RankCountsStrForLog;
+    for (const auto& Elem : RankCountsMap) RankCountsStrForLog += FString::Printf(TEXT("%s:%d "), *UEnum::GetDisplayValueAsText(Elem.Key).ToString(), Elem.Value);
+    UE_LOG(LogTemp, Verbose, TEXT("    RankCounts: {%s}"), *RankCountsStrForLog.TrimEnd());
 
-	// Проверка на Фулл Хаус (Full House)
-	if (Threes.Num() == 1 && Pairs.Num() == 1)
-	{
-		Result.HandRank = EPokerHandRank::FullHouse;
-		Result.Kickers.Add(Threes[0]); // Ранг тройки
-		Result.Kickers.Add(Pairs[0]);  // Ранг пары
-		return Result;
-	}
+    TArray<ECardRank> RanksOfFours; TArray<ECardRank> RanksOfThrees; TArray<ECardRank> RanksOfPairs;
+    for (const auto& CountEntry : RankCountsMap) {
+        if (CountEntry.Value == 4) RanksOfFours.Add(CountEntry.Key);
+        else if (CountEntry.Value == 3) RanksOfThrees.Add(CountEntry.Key);
+        else if (CountEntry.Value == 2) RanksOfPairs.Add(CountEntry.Key);
+    }
+    // Сортируем массивы троек и пар по убыванию, на случай если их несколько (хотя для 5 карт это ограничено)
+    RanksOfThrees.Sort([](const ECardRank& A, const ECardRank& B) { return A > B; });
+    RanksOfPairs.Sort([](const ECardRank& A, const ECardRank& B) { return A > B; });
+    UE_LOG(LogTemp, Verbose, TEXT("    Group Counts - Fours: %d, Threes: %d, Pairs: %d"), RanksOfFours.Num(), RanksOfThrees.Num(), RanksOfPairs.Num());
 
-	// Проверка на Флеш (Flush)
-	if (bIsFlush)
-	{
-		Result.HandRank = EPokerHandRank::Flush;
-		GetKickers(SortedCards, 5, Result.Kickers, {}); // 5 кикеров (все карты)
-		return Result;
-	}
+    // 3. Каре (Four of a Kind)
+    if (RanksOfFours.Num() == 1) {
+        Result.HandRank = EPokerHandRank::FourOfAKind;
+        Result.Kickers.Add(RanksOfFours[0]); // Ранг каре
+        GetKickers(SortedCards, 1, Result.Kickers, { RanksOfFours[0] }); // 1 кикер
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: FourOfAKind (%s)"), *UEnum::GetDisplayValueAsText(RanksOfFours[0]).ToString());
+        return Result;
+    }
 
-	// Проверка на Стрит (Straight)
-	if (bIsStraight)
-	{
-		Result.HandRank = EPokerHandRank::Straight;
-		Result.Kickers.Add(StraightHighCard); // Кикер - старшая карта стрита
-		return Result;
-	}
+    // 4. Фулл Хаус (Full House)
+    if (RanksOfThrees.Num() == 1 && RanksOfPairs.Num() >= 1) { // Тройка и хотя бы одна пара
+        Result.HandRank = EPokerHandRank::FullHouse;
+        Result.Kickers.Add(RanksOfThrees[0]); // Ранг тройки
+        Result.Kickers.Add(RanksOfPairs[0]);  // Ранг старшей из пар (если их несколько, что невозможно с тройкой на 5 картах)
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: FullHouse (%ss over %ss)"),
+            *UEnum::GetDisplayValueAsText(RanksOfThrees[0]).ToString(), *UEnum::GetDisplayValueAsText(RanksOfPairs[0]).ToString());
+        return Result;
+    }
+    // Еще один случай Фулл Хауса: две тройки (невозможно на 5 картах, но для полноты)
+    if (RanksOfThrees.Num() >= 2) { // Например, 3-3-3-2-2 (одна тройка и одна пара) или 3-3-3- K-K (если бы было >5 карт)
+        Result.HandRank = EPokerHandRank::FullHouse;
+        Result.Kickers.Add(RanksOfThrees[0]); // Старшая тройка
+        // В качестве "пары" для фулл-хауса берем старшую карту из второй тройки.
+        // Но это не совсем корректно для кикеров фулл-хауса, если тройки две.
+        // Правильнее было бы: старшая тройка, и самая старшая из оставшихся двух карт как пара (если они пара)
+        // Для 5 карт две тройки невозможны. Если есть одна тройка и одна пара, это уже обработано.
+        // Этот блок избыточен для 5 карт.
+    }
 
-	// Проверка на Сет/Тройку (Three of a Kind)
-	if (Threes.Num() == 1)
-	{
-		Result.HandRank = EPokerHandRank::ThreeOfAKind;
-		Result.Kickers.Add(Threes[0]); // Ранг тройки
-		GetKickers(SortedCards, 2, Result.Kickers, { Threes[0] }); // 2 кикера
-		return Result;
-	}
 
-	// Проверка на Две Пары (Two Pair)
-	if (Pairs.Num() >= 2) // Может быть 2 пары в 5 картах
-	{
-		Pairs.Sort([](const ECardRank& A, const ECardRank& B) { return A > B; }); // Сортируем пары
-		Result.HandRank = EPokerHandRank::TwoPair;
-		Result.Kickers.Add(Pairs[0]); // Старшая пара
-		Result.Kickers.Add(Pairs[1]); // Младшая пара
-		GetKickers(SortedCards, 1, Result.Kickers, { Pairs[0], Pairs[1] }); // 1 кикер
-		return Result;
-	}
+    // 5. Флеш (Flush)
+    if (bIsFlush) {
+        Result.HandRank = EPokerHandRank::Flush;
+        GetKickers(SortedCards, 5, Result.Kickers, {}); // 5 кикеров (все карты флеша по старшинству)
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: Flush (Suit: %s, HighCard: %s)"),
+            *UEnum::GetDisplayValueAsText(FlushSuitValue).ToString(),
+            SortedCards.IsValidIndex(0) ? *UEnum::GetDisplayValueAsText(SortedCards[0].Rank).ToString() : TEXT("N/A"));
+        return Result;
+    }
 
-	// Проверка на Одну Пару (One Pair)
-	if (Pairs.Num() == 1)
-	{
-		Result.HandRank = EPokerHandRank::OnePair;
-		Result.Kickers.Add(Pairs[0]); // Ранг пары
-		GetKickers(SortedCards, 3, Result.Kickers, { Pairs[0] }); // 3 кикера
-		return Result;
-	}
+    // 6. Стрит (Straight)
+    if (bIsStraight) {
+        Result.HandRank = EPokerHandRank::Straight;
+        Result.Kickers.Add(StraightHighCardValue); // Кикер - старшая карта стрита
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: Straight (High: %s)"), *UEnum::GetDisplayValueAsText(StraightHighCardValue).ToString());
+        return Result;
+    }
 
-	// Если ничего не найдено - Старшая Карта (High Card)
-	Result.HandRank = EPokerHandRank::HighCard;
-	GetKickers(SortedCards, 5, Result.Kickers, {}); // 5 кикеров (все карты)
-	return Result;
+    // 7. Сет/Тройка (Three of a Kind) - Фулл-хаус уже проверен
+    if (RanksOfThrees.Num() == 1) {
+        Result.HandRank = EPokerHandRank::ThreeOfAKind;
+        Result.Kickers.Add(RanksOfThrees[0]);
+        GetKickers(SortedCards, 2, Result.Kickers, { RanksOfThrees[0] }); // 2 кикера
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: ThreeOfAKind (%s)"), *UEnum::GetDisplayValueAsText(RanksOfThrees[0]).ToString());
+        return Result;
+    }
+
+    // 8. Две Пары (Two Pair)
+    if (RanksOfPairs.Num() >= 2) { // Если есть 2 или 3 пары (3 пары на 5 картах = 2 пары + кикер)
+        // RanksOfPairs уже отсортирован по убыванию
+        Result.HandRank = EPokerHandRank::TwoPair;
+        Result.Kickers.Add(RanksOfPairs[0]); // Старшая пара
+        Result.Kickers.Add(RanksOfPairs[1]); // Младшая пара
+        GetKickers(SortedCards, 1, Result.Kickers, { RanksOfPairs[0], RanksOfPairs[1] }); // 1 кикер
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: TwoPair (%s and %s)"),
+            *UEnum::GetDisplayValueAsText(RanksOfPairs[0]).ToString(), *UEnum::GetDisplayValueAsText(RanksOfPairs[1]).ToString());
+        return Result;
+    }
+
+    // 9. Одна Пара (One Pair)
+    if (RanksOfPairs.Num() == 1) {
+        Result.HandRank = EPokerHandRank::OnePair;
+        Result.Kickers.Add(RanksOfPairs[0]);
+        GetKickers(SortedCards, 3, Result.Kickers, { RanksOfPairs[0] }); // 3 кикера
+        UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: OnePair (%s)"), *UEnum::GetDisplayValueAsText(RanksOfPairs[0]).ToString());
+        return Result;
+    }
+
+    // 10. Старшая Карта (High Card)
+    Result.HandRank = EPokerHandRank::HighCard;
+    GetKickers(SortedCards, 5, Result.Kickers, {}); // 5 кикеров (все карты по старшинству)
+    UE_LOG(LogTemp, Verbose, TEXT("    Detected Hand: HighCard (Highest: %s)"),
+        SortedCards.IsValidIndex(0) ? *UEnum::GetDisplayValueAsText(SortedCards[0].Rank).ToString() : TEXT("N/A"));
+    return Result;
 }
 
-
-// --- Реализация вспомогательных функций ---
-
-void UPokerHandEvaluator::SortFiveCardsDesc(TArray<FCard>& FiveCards)
+void UPokerHandEvaluator::SortFiveCardsDesc(TArray<FCard>& CardsToSort)
 {
-	// Сортируем по убыванию ранга
-	// Используем Algo::Sort для небольших массивов, может быть эффективнее
-	Algo::Sort(FiveCards, [](const FCard& A, const FCard& B) {
-		return A.Rank > B.Rank;
-		});
+    Algo::Sort(CardsToSort, [](const FCard& A, const FCard& B) {
+        return A.Rank > B.Rank;
+        });
 }
 
-bool UPokerHandEvaluator::IsStraight(const TArray<FCard>& SortedFiveCards, ECardRank& OutHighCard)
+bool UPokerHandEvaluator::IsStraight(const TArray<FCard>& SortedFiveCards, ECardRank& OutHighCardRank)
 {
-	if (SortedFiveCards.Num() != 5) return false;
+    if (SortedFiveCards.Num() != 5) return false;
+    // Карты УЖЕ должны быть отсортированы по убыванию ранга
+    bool bIsWheel = SortedFiveCards[0].Rank == ECardRank::Ace &&
+        SortedFiveCards[1].Rank == ECardRank::Five &&
+        SortedFiveCards[2].Rank == ECardRank::Four &&
+        SortedFiveCards[3].Rank == ECardRank::Three &&
+        SortedFiveCards[4].Rank == ECardRank::Two;
+    if (bIsWheel) {
+        OutHighCardRank = ECardRank::Five; // Старшая карта "колеса" - это 5
+        return true;
+    }
 
-	bool bSequential = true;
-	for (int32 i = 0; i < 4; ++i)
-	{
-		if (static_cast<uint8>(SortedFiveCards[i].Rank) != static_cast<uint8>(SortedFiveCards[i + 1].Rank) + 1)
-		{
-			bSequential = false;
-			break;
-		}
-	}
-
-	if (bSequential)
-	{
-		OutHighCard = SortedFiveCards[0].Rank; // Старшая карта обычного стрита
-		return true;
-	}
-
-	// Отдельная проверка на стрит A-2-3-4-5 ("Wheel")
-	if (SortedFiveCards[0].Rank == ECardRank::Ace &&
-		SortedFiveCards[1].Rank == ECardRank::Five &&
-		SortedFiveCards[2].Rank == ECardRank::Four &&
-		SortedFiveCards[3].Rank == ECardRank::Three &&
-		SortedFiveCards[4].Rank == ECardRank::Two)
-	{
-		OutHighCard = ECardRank::Five; // Старшая карта для A-5 стрита - это 5
-		return true;
-	}
-
-	return false;
+    // Проверка на обычный стрит
+    for (int32 i = 0; i < 4; ++i) {
+        if (static_cast<int32>(SortedFiveCards[i].Rank) != static_cast<int32>(SortedFiveCards[i + 1].Rank) + 1) {
+            return false; // Последовательность нарушена
+        }
+    }
+    OutHighCardRank = SortedFiveCards[0].Rank; // Старшая карта обычного стрита
+    return true;
 }
 
-bool UPokerHandEvaluator::IsFlush(const TArray<FCard>& FiveCards, ECardSuit& OutSuit)
+bool UPokerHandEvaluator::IsFlush(const TArray<FCard>& FiveCardsToTest, ECardSuit& OutFlushSuit)
 {
-	if (FiveCards.Num() != 5) return false;
-
-	OutSuit = FiveCards[0].Suit;
-	for (int32 i = 1; i < 5; ++i)
-	{
-		if (FiveCards[i].Suit != OutSuit)
-		{
-			return false;
-		}
-	}
-	return true;
+    if (FiveCardsToTest.Num() != 5) return false;
+    OutFlushSuit = FiveCardsToTest[0].Suit;
+    for (int32 i = 1; i < 5; ++i) {
+        if (FiveCardsToTest[i].Suit != OutFlushSuit) { return false; }
+    }
+    return true;
 }
 
-void UPokerHandEvaluator::CountRanks(const TArray<FCard>& FiveCards, TMap<ECardRank, int32>& OutRankCounts)
+void UPokerHandEvaluator::CountRanks(const TArray<FCard>& FiveCardsToCount, TMap<ECardRank, int32>& OutRankCountsMap)
 {
-	OutRankCounts.Empty();
-	for (const FCard& Card : FiveCards)
-	{
-		OutRankCounts.FindOrAdd(Card.Rank)++;
-	}
+    OutRankCountsMap.Empty();
+    for (const FCard& Card : FiveCardsToCount) {
+        OutRankCountsMap.FindOrAdd(Card.Rank)++;
+    }
 }
 
-void UPokerHandEvaluator::GetKickers(const TArray<FCard>& SortedFiveCards, int32 NumKickersToGet, TArray<ECardRank>& OutKickers, const TSet<ECardRank>& RanksToExclude)
+void UPokerHandEvaluator::GetKickers(const TArray<FCard>& SortedFiveCardsInput, int32 NumKickersToGet, TArray<ECardRank>& OutKickersArray, const TSet<ECardRank>& RanksToExcludeSet)
 {
-	// OutKickers НЕ очищается здесь, предполагается, что она уже содержит основные карты комбинации
-	int32 KickersAdded = 0;
-	for (const FCard& Card : SortedFiveCards)
-	{
-		if (!RanksToExclude.Contains(Card.Rank))
-		{
-			// Проверяем, нет ли уже такого кикера (на случай, если основные карты уже добавлены)
-			if (!OutKickers.Contains(Card.Rank))
-			{
-				OutKickers.Add(Card.Rank);
-				KickersAdded++;
-				if (KickersAdded >= NumKickersToGet)
-				{
-					return;
-				}
-			}
-		}
-	}
+    // OutKickersArray ПРЕДПОЛАГАЕТСЯ УЖЕ СОДЕРЖИТ ОСНОВНЫЕ КАРТЫ КОМБИНАЦИИ, если они есть (пары, тройки и т.д.)
+    // Эта функция ДОБАВЛЯЕТ оставшиеся кикеры.
+    int32 CurrentKickersInArray = OutKickersArray.Num(); // Сколько основных карт уже добавлено
+    int32 ActualNumKickersToAdd = NumKickersToGet;
+    // Для пар/троек/каре, NumKickersToGet - это количество именно КИКЕРОВ.
+    // Для флеша/стрита/хайкарда, NumKickersToGet = 5, и мы просто добавляем все 5 карт, если их еще нет.
+
+    for (const FCard& Card : SortedFiveCardsInput) {
+        if (!RanksToExcludeSet.Contains(Card.Rank)) { // Карта не входит в основную часть комбинации
+            // Проверяем, нет ли уже такого кикера (если основные карты уже были добавлены И это тот же ранг)
+            // ИЛИ если мы просто собираем 5 лучших карт для флеша/стрита/хайкарда
+            if (!OutKickersArray.Contains(Card.Rank) || RanksToExcludeSet.IsEmpty())
+            {
+                // Если RanksToExcludeSet пуст, мы просто добавляем NumKickersToGet старших карт
+                if (RanksToExcludeSet.IsEmpty() && OutKickersArray.Num() >= ActualNumKickersToAdd) break;
+                // Если RanksToExcludeSet НЕ пуст, мы добавляем NumKickersToGet *дополнительных* карт
+                if (!RanksToExcludeSet.IsEmpty() && (OutKickersArray.Num() - CurrentKickersInArray) >= ActualNumKickersToAdd) break;
+
+
+                OutKickersArray.Add(Card.Rank);
+            }
+        }
+    }
+    // После добавления всех возможных кикеров, если их больше чем нужно (для флеша/стрита/хайкарда),
+    // оставляем только нужное количество старших. OutKickersArray уже должен быть отсортирован по добавлению от старших.
+    // Основные карты комбинации (если были) должны быть в начале OutKickersArray.
+    // Если это флеш/стрит/хайкард, RanksToExclude пуст, CurrentKickersInArray = 0.
+    // Мы просто берем первые NumKickersToGet карт.
+    if (OutKickersArray.Num() > (CurrentKickersInArray + ActualNumKickersToAdd) && !RanksToExcludeSet.IsEmpty()) {
+        OutKickersArray.RemoveAt(CurrentKickersInArray + ActualNumKickersToAdd, OutKickersArray.Num() - (CurrentKickersInArray + ActualNumKickersToAdd), true);
+    }
+    else if (OutKickersArray.Num() > ActualNumKickersToAdd && RanksToExcludeSet.IsEmpty()) {
+        OutKickersArray.RemoveAt(ActualNumKickersToAdd, OutKickersArray.Num() - ActualNumKickersToAdd, true);
+    }
 }
 
 int32 UPokerHandEvaluator::CompareHandResults(const FPokerHandResult& HandA, const FPokerHandResult& HandB)
 {
-	// 1. Сравниваем ранг комбинации
-	if (HandA.HandRank > HandB.HandRank) return 1;
-	if (HandA.HandRank < HandB.HandRank) return -1;
+    if (HandA.HandRank > HandB.HandRank) return 1;
+    if (HandA.HandRank < HandB.HandRank) return -1;
 
-	// 2. Ранги равны, сравниваем кикеры
-	int32 NumKickers = FMath::Min(HandA.Kickers.Num(), HandB.Kickers.Num());
-	for (int32 i = 0; i < NumKickers; ++i)
-	{
-		if (HandA.Kickers[i] > HandB.Kickers[i]) return 1;
-		if (HandA.Kickers[i] < HandB.Kickers[i]) return -1;
-	}
-
-	// Если все кикеры равны (или их нет), комбинации считаются равными
-	return 0;
+    // Ранги равны, сравниваем кикеры
+    // Kickers должны быть отсортированы от старшего к младшему
+    // HandA.Kickers[0] - ранг основной комбинации (пара, тройка, старшая карта флеша/стрита)
+    // HandA.Kickers[1] - ранг второй пары ИЛИ первый кикер
+    // и т.д.
+    int32 NumKickersToCompare = FMath::Min(HandA.Kickers.Num(), HandB.Kickers.Num());
+    for (int32 i = 0; i < NumKickersToCompare; ++i) {
+        if (HandA.Kickers[i] > HandB.Kickers[i]) return 1;
+        if (HandA.Kickers[i] < HandB.Kickers[i]) return -1;
+    }
+    return 0; // Руки полностью равны
 }

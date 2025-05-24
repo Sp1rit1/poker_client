@@ -58,29 +58,8 @@ TArray<ECardRank> UPokerCardUtils::GetKickersFromResult(const FPokerHandResult& 
     return HandResult.Kickers;
 }
 
-FString UPokerCardUtils::Conv_PokerHandRankToString(EPokerHandRank HandRankEnum)
+FString UPokerCardUtils::Conv_PokerHandRankToRussianString(EPokerHandRank HandRankEnum)
 {
-    // UEnum::GetDisplayValueAsText() более предпочтителен, если у вас есть UMETA(DisplayName) для всех значений Enum.
-    // Если нет, то простой switch:
-    const UEnum* EnumPtr = StaticEnum<EPokerHandRank>();
-    if (EnumPtr)
-    {
-        return EnumPtr->GetDisplayNameTextByValue(static_cast<int64>(HandRankEnum)).ToString();
-    }
-
-    // Fallback, если GetDisplayNameTextByValue не сработал или для простоты
-    switch (HandRankEnum)
-    {
-    case EPokerHandRank::HighCard: return TEXT("High Card");
-    case EPokerHandRank::OnePair: return TEXT("One Pair");
-    case EPokerHandRank::TwoPair: return TEXT("Two Pair");
-    case EPokerHandRank::ThreeOfAKind: return TEXT("Three of a Kind");
-    case EPokerHandRank::Straight: return TEXT("Straight");
-    case EPokerHandRank::Flush: return TEXT("Flush");
-    case EPokerHandRank::FullHouse: return TEXT("Full House");
-    case EPokerHandRank::FourOfAKind: return TEXT("Four of a Kind");
-    case EPokerHandRank::StraightFlush: return TEXT("Straight Flush");
-    case EPokerHandRank::RoyalFlush: return TEXT("Royal Flush");
-    default: return TEXT("Unknown HandRank");
-    }
+    // Вызываем свободную функцию, определенную в PokerDataTypes
+    return PokerRankToRussianString(HandRankEnum);
 }

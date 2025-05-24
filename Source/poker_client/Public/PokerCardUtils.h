@@ -46,7 +46,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "Poker|Showdown Info", meta = (DisplayName = "Get Net Result (Showdown)"))
     static int64 GetShowdownPlayerNetResult(const FShowdownPlayerInfo& ShowdownInfo);
 
-    // Функция для преобразования EPokerHandRank в читаемую строку (может быть полезной)
-    UFUNCTION(BlueprintPure, Category = "Poker|Hand Result", meta = (DisplayName = "Hand Rank To String"))
-    static FString Conv_PokerHandRankToString(EPokerHandRank HandRankEnum);
+    UFUNCTION(BlueprintPure, Category = "Poker|Hand Result", meta = (DisplayName = "Hand Rank To Russian String"))
+    static FString Conv_PokerHandRankToRussianString(EPokerHandRank HandRankEnum);
 };

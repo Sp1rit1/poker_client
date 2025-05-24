@@ -57,3 +57,21 @@ FString FCard::ToRussianString() const
 
     return RankStrPart + SuitStrPart; // Формат "Вч", "3п", "10б", "Тт"
 }
+
+FString PokerRankToRussianString(EPokerHandRank HandRank)
+{
+    switch (HandRank)
+    {
+    case EPokerHandRank::HighCard:     return TEXT("Старшая Карта");
+    case EPokerHandRank::OnePair:      return TEXT("Одна Пара");
+    case EPokerHandRank::TwoPair:      return TEXT("Две Пары");
+    case EPokerHandRank::ThreeOfAKind: return TEXT("Сет"); // или "Тройка"
+    case EPokerHandRank::Straight:     return TEXT("Стрит");
+    case EPokerHandRank::Flush:        return TEXT("Флеш");
+    case EPokerHandRank::FullHouse:    return TEXT("Фулл-Хаус");
+    case EPokerHandRank::FourOfAKind:  return TEXT("Каре");
+    case EPokerHandRank::StraightFlush:return TEXT("Стрит-Флеш");
+    case EPokerHandRank::RoyalFlush:   return TEXT("Роял-Флеш");
+    default:                           return TEXT("Неизвестная Комбинация");
+    }
+}

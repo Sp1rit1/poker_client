@@ -129,7 +129,7 @@ void UOfflineGameManager::StartNewHand()
     BuildTurnOrderMap();
 
     UE_LOG(LogTemp, Log, TEXT("--- STARTING NEW HAND ---"));
-    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- New Hand Starting ---"));
+    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("--- Начало Новой Раздачи ---"));
 
     if (OnNewHandAboutToStartDelegate.IsBound())
     {
@@ -224,7 +224,7 @@ void UOfflineGameManager::StartNewHand()
         return;
     }
     GameStateData->Seats[GameStateData->DealerSeat].bIsDealer = true;
-    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Dealer is %s (Seat %d)"), *GameStateData->Seats[GameStateData->DealerSeat].PlayerName, GameStateData->DealerSeat));
+    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Диллер - %s (Место: %d)"), *GameStateData->Seats[GameStateData->DealerSeat].PlayerName, GameStateData->DealerSeat));
 
     // 3. Перемешивание колоды
     Deck->Initialize();
@@ -455,7 +455,7 @@ void UOfflineGameManager::PostBlinds()
             SBPlayer.bIsSmallBlind = true;
             SBPlayer.Status = EPlayerStatus::Playing; // Поставил блайнд, теперь в игре
             GameStateData->Pot += ActualSB;
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s posts Small Blind: %lld. Stack: %lld"), *SBPlayer.PlayerName, ActualSB, SBPlayer.Stack));
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Small Blind: %lld. Стек: %lld"), *SBPlayer.PlayerName, ActualSB, SBPlayer.Stack));
         }
     }
     else { UE_LOG(LogTemp, Error, TEXT("PostBlinds: Invalid PendingSmallBlindSeat index: %d"), GameStateData->PendingSmallBlindSeat); }
@@ -480,7 +480,7 @@ void UOfflineGameManager::PostBlinds()
             GameStateData->PlayerWhoOpenedBettingThisRound = DetermineFirstPlayerToActAtPreflop();
 
 
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s posts Big Blind: %lld. Stack: %lld"), *BBPlayer.PlayerName, ActualBB, BBPlayer.Stack));
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Big Blind: %lld. Стек: %lld"), *BBPlayer.PlayerName, ActualBB, BBPlayer.Stack));
         }
     }
     else { UE_LOG(LogTemp, Error, TEXT("PostBlinds: Invalid PendingBigBlindSeat index: %d"), GameStateData->PendingBigBlindSeat); }
@@ -613,7 +613,7 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
     else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind) {
         if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingBigBlindSeat) {
             PostBlinds(); // Поставит BB, обновит Pot, CurrentBetToCall, LastAggressor etc.
-            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Blinds posted. Current Pot: %lld"), GameStateData->Pot));
+            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Блайнды поставлены. Банк: %lld"), GameStateData->Pot));
             DealHoleCardsAndStartPreflop();
         }
         else { /* ... re-request ... */ RequestPlayerAction(ActingPlayerSeatIndex); }
@@ -644,13 +644,13 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
             case EPlayerAction::Fold:
                 Player.Status = EPlayerStatus::Folded;
                 // Player.bHasActedThisSubRound = true; // Устанавливается ниже для всех валидных действий
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s folds."), *PlayerName));
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s пасует (fold)."), *PlayerName));
                 break;
 
             case EPlayerAction::Check:
                 if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
                     // Player.bHasActedThisSubRound = true;
-                    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s checks."), *PlayerName));
+                    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s пропускает (check)."), *PlayerName));
                 }
                 else {
                     UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Check by %s. BetToCall: %lld, PlayerBet: %lld. Re-requesting action."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
@@ -665,7 +665,7 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
                 if (AmountNeededToCallAbsolute <= 0) { // Нечего коллировать или уже заколлировано
                     if (Player.CurrentBet == GameStateData->CurrentBetToCall) { // Можно было чекнуть
                         UE_LOG(LogTemp, Verbose, TEXT("ProcessPlayerAction: %s attempted Call but could Check. Treating as Check."), *PlayerName);
-                        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s checks (was call attempt)."), *PlayerName));
+                        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s пропускает (check)."), *PlayerName));
                         // Player.bHasActedThisSubRound = true; (будет установлено ниже)
                     }
                     else {
@@ -680,8 +680,8 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
                 Player.CurrentBet += ActualAmountPlayerPutsInPot;
                 GameStateData->Pot += ActualAmountPlayerPutsInPot;
                 // Player.bHasActedThisSubRound = true;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s calls %lld. Stack: %lld"), *PlayerName, ActualAmountPlayerPutsInPot, Player.Stack));
-                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s отвечает (call): %lld. Стек: %lld"), *PlayerName, ActualAmountPlayerPutsInPot, Player.Stack));
+                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s идёт All-In."), *PlayerName)); }
             }
             break;
 
@@ -716,8 +716,8 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
                 if (GameStateData->PlayerWhoOpenedBettingThisRound == -1) GameStateData->PlayerWhoOpenedBettingThisRound = ActingPlayerSeatIndex;
                 // Player.bHasActedThisSubRound = true;
                 bActionCausedAggression = true;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s bets %lld. Stack: %lld"), *PlayerName, ActualBetAmountPlayerAdds, Player.Stack));
-                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s ставит (bet): %lld. Стек: %lld"), *PlayerName, ActualBetAmountPlayerAdds, Player.Stack));
+                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s идёт All-In."), *PlayerName)); }
             }
             break;
 
@@ -772,8 +772,8 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
                 // PlayerWhoOpenedBettingThisRound не меняется при рейзе, он устанавливается при первом бете.
                 // Player.bHasActedThisSubRound = true;
                 bActionCausedAggression = true;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s raises to %lld (added %lld). Stack: %lld"), *PlayerName, Player.CurrentBet, AmountPlayerActuallyAdds, Player.Stack));
-                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поднимает (raise) до %lld (добавил %lld). Стек: %lld"), *PlayerName, Player.CurrentBet, AmountPlayerActuallyAdds, Player.Stack));
+                if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s идёт All-In."), *PlayerName)); }
             }
             break;
 
@@ -881,7 +881,7 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
     }
 
     UE_LOG(LogTemp, Log, TEXT("DealHoleCardsAndStartPreflop: Initiating card dealing and preflop setup..."));
-    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("Dealing hole cards..."));
+    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("Раздача карманных карт..."));
 
     // 1. Собираем индексы всех игроков, которые находятся в статусе 'Playing' 
     //    (этот статус должен быть установлен для SB и BB в ProcessPlayerAction -> PostBlinds).
@@ -1021,7 +1021,7 @@ void UOfflineGameManager::DealHoleCardsAndStartPreflop()
             }
         }
     }
-    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("Hole cards dealt. Preflop betting starts."));
+    if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(TEXT("Карманные карты разданы. Начинается прием ставок на префлопе."));
 
     // 6. Уведомляем контроллер, что карты розданы, ПЕРЕД запросом первого действия на префлопе
     if (OnActualHoleCardsDealtDelegate.IsBound()) {
@@ -1406,7 +1406,7 @@ void UOfflineGameManager::ProceedToNextGameStage()
     EGameStage StageBeforeAdvance = GameStateData->CurrentStage;
     UE_LOG(LogTemp, Log, TEXT("--- ProceedToNextGameStage: Advancing from %s ---"), *UEnum::GetValueAsString(StageBeforeAdvance));
     if (OnGameHistoryEventDelegate.IsBound()) {
-        OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Betting round on %s ended. ---"), *UEnum::GetValueAsString(StageBeforeAdvance)));
+        OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Раунд ставок на %s окончен. ---"), *UEnum::GetValueAsString(StageBeforeAdvance)));
     }
 
     // 1. Проверяем, сколько игроков еще не сфолдило
@@ -1462,7 +1462,7 @@ void UOfflineGameManager::ProceedToNextGameStage()
     case EGameStage::Preflop:
     {
         NextStageToSet = EGameStage::Flop;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Раздача на стадии Flop ---")));
         // Deck->DealCard(); // Опциональное сжигание карты
         for (int i = 0; i < 3; ++i) {
             TOptional<FCard> DealtCardOpt = Deck->DealCard();
@@ -1470,20 +1470,20 @@ void UOfflineGameManager::ProceedToNextGameStage()
             else { bDealingErrorOccurred = true; UE_LOG(LogTemp, Error, TEXT("Deck ran out for Flop card %d"), i + 1); break; }
         }
         if (!bDealingErrorOccurred && GameStateData->CommunityCards.Num() >= 3 && OnGameHistoryEventDelegate.IsBound()) {
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Flop: %s %s %s"),
-                *GameStateData->CommunityCards[0].ToString(), *GameStateData->CommunityCards[1].ToString(), *GameStateData->CommunityCards[2].ToString()));
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Общие карты на Flop: %s %s %s"),
+                *GameStateData->CommunityCards[0].ToRussianString(), *GameStateData->CommunityCards[1].ToRussianString(), *GameStateData->CommunityCards[2].ToRussianString()));
         }
     }
     break;
     case EGameStage::Flop:
     {
         NextStageToSet = EGameStage::Turn;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Раздача на стадии Turn ---")));
         TOptional<FCard> TurnCardOpt = Deck->DealCard();
         if (TurnCardOpt.IsSet()) {
             GameStateData->CommunityCards.Add(TurnCardOpt.GetValue());
             if (GameStateData->CommunityCards.Num() >= 4 && OnGameHistoryEventDelegate.IsBound()) {
-                OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Turn: %s"), *GameStateData->CommunityCards.Last().ToString()));
+                OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Общие карты на Turn: %s"), *GameStateData->CommunityCards.Last().ToRussianString()));
             }
         }
         else { bDealingErrorOccurred = true; UE_LOG(LogTemp, Error, TEXT("Deck ran out for Turn")); }
@@ -1492,12 +1492,12 @@ void UOfflineGameManager::ProceedToNextGameStage()
     case EGameStage::Turn:
     {
         NextStageToSet = EGameStage::River;
-        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Dealing %s ---"), *UEnum::GetValueAsString(NextStageToSet)));
+        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Раздача на стадии River ---")));
         TOptional<FCard> RiverCardOpt = Deck->DealCard();
         if (RiverCardOpt.IsSet()) {
             GameStateData->CommunityCards.Add(RiverCardOpt.GetValue());
             if (GameStateData->CommunityCards.Num() >= 5 && OnGameHistoryEventDelegate.IsBound()) {
-                OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("River: %s"), *GameStateData->CommunityCards.Last().ToString()));
+                OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Общие карты на River: %s"), *GameStateData->CommunityCards.Last().ToRussianString()));
             }
         }
         else { bDealingErrorOccurred = true; UE_LOG(LogTemp, Error, TEXT("Deck ran out for River")); }
@@ -1554,12 +1554,12 @@ void UOfflineGameManager::ProceedToNextGameStage()
             if (bDealingErrorOccurred) break;
 
             UE_LOG(LogTemp, Log, TEXT("ProceedToNextGameStage: Auto-dealing for stage %s"), *UEnum::GetValueAsString(StageToDealNext));
-            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Auto-Dealing %s ---"), *UEnum::GetValueAsString(StageToDealNext)));
+            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("--- Автоматическая раздача на %s ---"), *UEnum::GetValueAsString(StageToDealNext)));
 
             TOptional<FCard> NextCardOpt = Deck->DealCard();
             if (NextCardOpt.IsSet()) {
                 GameStateData->CommunityCards.Add(NextCardOpt.GetValue());
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s: %s"), *UEnum::GetValueAsString(StageToDealNext), *GameStateData->CommunityCards.Last().ToString()));
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s: %s"), *UEnum::GetValueAsString(StageToDealNext), *GameStateData->CommunityCards.Last().ToRussianString()));
             }
             else {
                 bDealingErrorOccurred = true;
@@ -1597,17 +1597,17 @@ void UOfflineGameManager::ProceedToShowdown()
 
     UE_LOG(LogTemp, Log, TEXT("--- PROCEEDING TO SHOWDOWN (NetResult relative to Hand Start, Full Reveal) ---"));
     if (OnGameHistoryEventDelegate.IsBound()) {
-        OnGameHistoryEventDelegate.Broadcast(TEXT("--- Showdown ---"));
+        OnGameHistoryEventDelegate.Broadcast(TEXT("--- Вскрытие карт ---"));
         if (GameStateData->CommunityCards.Num() > 0) {
-            FString CommunityCardsString = TEXT("Community Cards: ");
+            FString CommunityCardsString = TEXT("Общие карты: ");
             for (int32 i = 0; i < GameStateData->CommunityCards.Num(); ++i) {
-                CommunityCardsString += GameStateData->CommunityCards[i].ToString();
+                CommunityCardsString += GameStateData->CommunityCards[i].ToRussianString();
                 if (i < GameStateData->CommunityCards.Num() - 1) CommunityCardsString += TEXT(" ");
             }
             OnGameHistoryEventDelegate.Broadcast(CommunityCardsString);
         }
         else {
-            OnGameHistoryEventDelegate.Broadcast(TEXT("No Community Cards on table for Showdown."));
+            OnGameHistoryEventDelegate.Broadcast(TEXT("Общие карты на стол не выкладывались."));
         }
     }
     GameStateData->CurrentStage = EGameStage::Showdown;
@@ -1738,15 +1738,15 @@ void UOfflineGameManager::ProceedToShowdown()
 
         // Логирование для истории игры (можно немного упростить, т.к. основное объявление будет ниже)
         if (OnGameHistoryEventDelegate.IsBound()) {
-            FString HandDesc = UEnum::GetDisplayValueAsText(Info.HandResult.HandRank).ToString();
+            FString HandDesc = *PokerRankToRussianString(Info.HandResult.HandRank); 
             FString ActionDesc = TEXT("");
-            if (Info.PlayerStatusAtShowdown == EPlayerStatus::Folded) ActionDesc = TEXT("(Folded)");
-            else if (Info.bIsWinner) ActionDesc = FString::Printf(TEXT("(Wins %lld)"), Info.AmountWon);
+            if (Info.PlayerStatusAtShowdown == EPlayerStatus::Folded) ActionDesc = TEXT("(Спасовал)");
+            else if (Info.bIsWinner) ActionDesc = FString::Printf(TEXT("(Выиграл %lld)"), Info.AmountWon);
 
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s (Seat %d) shows %s %s - %s %s"),
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s (Место: %d) показывает %s %s - %s %s"),
                 *Info.PlayerName, Info.SeatIndex,
-                Info.HoleCards.IsValidIndex(0) ? *Info.HoleCards[0].ToString() : TEXT("??"),
-                Info.HoleCards.IsValidIndex(1) ? *Info.HoleCards[1].ToString() : TEXT("??"),
+                Info.HoleCards.IsValidIndex(0) ? *Info.HoleCards[0].ToRussianString() : TEXT("??"),
+                Info.HoleCards.IsValidIndex(1) ? *Info.HoleCards[1].ToRussianString() : TEXT("??"),
                 *HandDesc, *ActionDesc
             ));
         }
@@ -1760,27 +1760,27 @@ void UOfflineGameManager::ProceedToShowdown()
             const FShowdownPlayerInfo* WinnerInfoPtr = FinalShowdownResultsData.FindByPredicate(
                 [WinnerIdx](const FShowdownPlayerInfo& info) { return info.SeatIndex == WinnerIdx; });
             if (WinnerInfoPtr) {
-                FinalWinnerAnnouncementString = FString::Printf(TEXT("%s wins %lld with %s!"),
-                    *WinnerInfoPtr->PlayerName, WinnerInfoPtr->AmountWon, *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString());
+                FinalWinnerAnnouncementString = FString::Printf(TEXT("%s выиграл %lld с комбинацией: %s!"),
+                    *WinnerInfoPtr->PlayerName, WinnerInfoPtr->AmountWon, *PokerRankToRussianString(WinnerInfoPtr->HandResult.HandRank));
             }
-            else { FinalWinnerAnnouncementString = TEXT("Winner determined, but info not found."); }
+            else { FinalWinnerAnnouncementString = TEXT("Победитель определён, но информации нет"); }
         }
         else {
-            FinalWinnerAnnouncementString = TEXT("Split Pot! Winners: ");
+            FinalWinnerAnnouncementString = TEXT("Банк разделили: ");
             for (int32 i = 0; i < ActualWinningSeatIndices.Num(); ++i) {
                 int32 WinnerIdx = ActualWinningSeatIndices[i];
                 const FShowdownPlayerInfo* WinnerInfoPtr = FinalShowdownResultsData.FindByPredicate(
                     [WinnerIdx](const FShowdownPlayerInfo& info) { return info.SeatIndex == WinnerIdx; });
                 if (WinnerInfoPtr) {
                     FinalWinnerAnnouncementString += FString::Printf(TEXT("%s (%s, +%lld)"),
-                        *WinnerInfoPtr->PlayerName, *UEnum::GetDisplayValueAsText(WinnerInfoPtr->HandResult.HandRank).ToString(), WinnerInfoPtr->AmountWon);
+                        *WinnerInfoPtr->PlayerName, *PokerRankToRussianString(WinnerInfoPtr->HandResult.HandRank), WinnerInfoPtr->AmountWon);
                     if (i < ActualWinningSeatIndices.Num() - 1) FinalWinnerAnnouncementString += TEXT("; ");
                 }
             }
         }
     }
     else {
-        FinalWinnerAnnouncementString = TEXT("No specific winner for the pot this hand (e.g., all folded before showdown, pot awarded earlier).");
+        FinalWinnerAnnouncementString = TEXT("В этой раздаче нет определенного победителя");
     }
     if (OnGameHistoryEventDelegate.IsBound() && !FinalWinnerAnnouncementString.IsEmpty()) OnGameHistoryEventDelegate.Broadcast(FinalWinnerAnnouncementString);
 
@@ -1795,7 +1795,7 @@ void UOfflineGameManager::ProceedToShowdown()
     UE_LOG(LogTemp, Log, TEXT("--- HAND OVER (After Showdown Finalization) ---"));
     GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
     // OnPlayerTurnStartedDelegate.Broadcast(-1); // Уже вызван в начале ProceedToShowdown
-    if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Hand Over. Press 'Next Hand'."), GameStateData->Pot); // Pot должен быть 0
+    if (OnTableStateInfoDelegate.IsBound()) OnTableStateInfoDelegate.Broadcast(TEXT("Раздача завершена"), GameStateData->Pot); // Pot должен быть 0
     if (OnPlayerActionsAvailableDelegate.IsBound()) OnPlayerActionsAvailableDelegate.Broadcast({});
     if (OnActionUIDetailsDelegate.IsBound()) OnActionUIDetailsDelegate.Broadcast(0, GameStateData->BigBlindAmount, 0, 0); // Добавлен 5-й параметр
 
@@ -1828,7 +1828,7 @@ TMap<int32, int64> UOfflineGameManager::AwardPotToWinner(const TArray<int32>& Wi
     if (WinningSeatIndices.Num() == 0) {
         UE_LOG(LogTemp, Warning, TEXT("AwardPotToWinner: No winners provided, but pot is %lld. Pot will be reset and not awarded."), TotalPotToAward);
         if (OnGameHistoryEventDelegate.IsBound()) {
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Pot of %lld remains unawarded (no winners specified)."), TotalPotToAward));
+            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Банк в размере %lld остается неразыгранным (победители не указаны)"), TotalPotToAward));
         }
         GameStateData->Pot = 0; // Сбрасываем банк
         return AmountsWonByPlayers; // Возвращаем пустую карту, так как нет явных победителей для записи выигрыша
@@ -1863,7 +1863,7 @@ TMap<int32, int64> UOfflineGameManager::AwardPotToWinner(const TArray<int32>& Wi
             if (!WinnersLogString.IsEmpty()) {
                 WinnersLogString += TEXT(", ");
             }
-            WinnersLogString += FString::Printf(TEXT("%s (Seat %d) +%lld (New Stack: %lld)"),
+            WinnersLogString += FString::Printf(TEXT("%s (Место %d) +%lld (Обновлённый стек: %lld)"),
                 *Winner.PlayerName,
                 Winner.SeatIndex,
                 CurrentPlayerShare,
@@ -1877,7 +1877,7 @@ TMap<int32, int64> UOfflineGameManager::AwardPotToWinner(const TArray<int32>& Wi
         }
     }
 
-    FString FinalLogMessage = FString::Printf(TEXT("Pot of %lld awarded. %s"), TotalPotToAward, *WinnersLogString);
+    FString FinalLogMessage = FString::Printf(TEXT("Банк в размере %lld достаётся %s"), TotalPotToAward, *WinnersLogString);
     UE_LOG(LogTemp, Log, TEXT("AwardPotToWinner: %s"), *FinalLogMessage);
     if (OnGameHistoryEventDelegate.IsBound()) {
         OnGameHistoryEventDelegate.Broadcast(FinalLogMessage);

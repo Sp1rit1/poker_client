@@ -154,6 +154,8 @@ struct FPokerHandResult
 	FPokerHandResult() = default;
 };
 
+FString PokerRankToRussianString(EPokerHandRank HandRank);
+
 // Структура, хранящая данные об одном игроке (или месте) за столом
 USTRUCT(BlueprintType)
 struct FPlayerSeatData
