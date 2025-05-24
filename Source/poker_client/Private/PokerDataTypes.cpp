@@ -4,21 +4,45 @@
 // Реализация метода ToString для структуры FCard
 FString FCard::ToString() const
 {
-	// Получаем текстовое представление ранга и масти из Enums
-	const UEnum* SuitEnum = StaticEnum<ECardSuit>();
-	const UEnum* RankEnum = StaticEnum<ECardRank>();
+    FString RankStr = TEXT("?");
+    FString SuitStr = TEXT("?");
 
-	FString SuitStr = SuitEnum ? SuitEnum->GetNameStringByValue(static_cast<int64>(Suit)) : TEXT("?");
-	FString RankStr = RankEnum ? RankEnum->GetNameStringByValue(static_cast<int64>(Rank)) : TEXT("?");
+    // --- Обработка Ранга с помощью switch-case ---
+    switch (Rank)
+    {
+    case ECardRank::Two:   RankStr = TEXT("2"); break;
+    case ECardRank::Three: RankStr = TEXT("3"); break;
+    case ECardRank::Four:  RankStr = TEXT("4"); break;
+    case ECardRank::Five:  RankStr = TEXT("5"); break;
+    case ECardRank::Six:   RankStr = TEXT("6"); break;
+    case ECardRank::Seven: RankStr = TEXT("7"); break;
+    case ECardRank::Eight: RankStr = TEXT("8"); break;
+    case ECardRank::Nine:  RankStr = TEXT("9"); break;
+    case ECardRank::Ten:   RankStr = TEXT("T"); break;
+    case ECardRank::Jack:  RankStr = TEXT("J"); break;
+    case ECardRank::Queen: RankStr = TEXT("Q"); break;
+    case ECardRank::King:  RankStr = TEXT("K"); break;
+    case ECardRank::Ace:   RankStr = TEXT("A"); break;
+    default:
+        // Можно добавить логирование или оставить "?" если Rank невалиден
+        UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardRank value: %d"), static_cast<int32>(Rank));
+        break;
+    }
 
-	if (RankStr.StartsWith(TEXT("ECardRank::"))) RankStr = RankStr.RightChop(11); // Убираем префикс
-	if (RankStr == TEXT("Ten")) RankStr = TEXT("T"); // Особый случай для 10
-	else if (RankStr.Len() > 1) RankStr = RankStr.Left(1); // Берем первую букву (J, Q, K, A) или цифру
+    // --- Обработка Масти с помощью switch-case ---
+    switch (Suit)
+    {
+    case ECardSuit::Clubs:    SuitStr = TEXT("c"); break;
+    case ECardSuit::Diamonds: SuitStr = TEXT("d"); break;
+    case ECardSuit::Hearts:   SuitStr = TEXT("h"); break;
+    case ECardSuit::Spades:   SuitStr = TEXT("s"); break;
+    default:
+        // Можно добавить логирование или оставить "?" если Suit невалиден
+        UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardSuit value: %d"), static_cast<int32>(Suit));
+        break;
+    }
 
-	if (SuitStr.StartsWith(TEXT("ECardSuit::"))) SuitStr = SuitStr.RightChop(11); // Убираем префикс
-	if (SuitStr.Len() > 0) SuitStr = SuitStr.ToLower().Left(1); // Берем первую букву (c, d, h, s)
-
-	return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr); // Формат типа "Ah", "Ks", "Td", "7c"
+    return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr);
 }
 
 FString FCard::ToRussianString() const
@@ -74,4 +98,11 @@ FString PokerRankToRussianString(EPokerHandRank HandRank)
     case EPokerHandRank::RoyalFlush:   return TEXT("Роял-Флеш");
     default:                           return TEXT("Неизвестная Комбинация");
     }
+}
+
+uint32 GetTypeHash(const FCard& Card)
+{
+    uint32 SuitHash = GetTypeHash(Card.Suit);
+    uint32 RankHash = GetTypeHash(Card.Rank);
+    return HashCombine(SuitHash, RankHash);
 }

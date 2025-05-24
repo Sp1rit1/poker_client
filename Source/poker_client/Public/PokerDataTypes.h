@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/ObjectMacros.h" // Needed for UENUM, USTRUCT
+#include "Templates/TypeHash.h"
 #include "PokerDataTypes.generated.h" // MUST be the last include
 
 // Масть карты
@@ -94,10 +95,13 @@ enum class EPlayerAction : uint8
 };
 
 
+POKER_CLIENT_API uint32 GetTypeHash(const FCard& Card);
+
+POKER_CLIENT_API FString PokerRankToRussianString(EPokerHandRank HandRank);
 
 // Структура, представляющая одну игральную карту
 USTRUCT(BlueprintType)
-struct FCard
+struct POKER_CLIENT_API  FCard
 {
 	GENERATED_BODY()
 
@@ -133,7 +137,7 @@ struct FCard
 
 // Структура, представляющая результат оценки покерной комбинации
 USTRUCT(BlueprintType)
-struct FPokerHandResult
+struct POKER_CLIENT_API FPokerHandResult
 {
 	GENERATED_BODY()
 
@@ -154,11 +158,9 @@ struct FPokerHandResult
 	FPokerHandResult() = default;
 };
 
-FString PokerRankToRussianString(EPokerHandRank HandRank);
-
 // Структура, хранящая данные об одном игроке (или месте) за столом
 USTRUCT(BlueprintType)
-struct FPlayerSeatData
+struct POKER_CLIENT_API  FPlayerSeatData
 {
 	GENERATED_BODY()
 
@@ -216,7 +218,7 @@ struct FPlayerSeatData
 };
 
 USTRUCT(BlueprintType)
-struct FShowdownPlayerInfo
+struct POKER_CLIENT_API  FShowdownPlayerInfo
 {
 	GENERATED_BODY()
 
