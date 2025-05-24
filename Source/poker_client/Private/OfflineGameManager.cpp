@@ -594,9 +594,8 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
 
     FPlayerSeatData& Player = GameStateData->Seats[ActingPlayerSeatIndex];
     FString PlayerName = Player.PlayerName;
-    // int64 InitialPlayerStackForLog = Player.Stack; // Можно раскомментировать, если нужно для более детального лога
 
-    UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Seat %d (%s) attempts Action: %s, Amount: %lld. Stage: %s. Stack: %lld, PBet: %lld, Pot: %lld, ToCall: %lld, LstAggr: %d (Amt %lld), Opnr: %d, HasActed: %s"),
+    UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Seat %d (%s) attempts Action: %s, Amount (total bet for Bet/Raise): %lld. Stage: %s. Stack: %lld, PBetInRound: %lld, Pot: %lld, ToCallOnTable: %lld, LstAggr: %d (Amt %lld), Opener: %d, HasActed: %s"),
         ActingPlayerSeatIndex, *PlayerName, *UEnum::GetValueAsString(PlayerAction), Amount,
         *UEnum::GetValueAsString(GameStateData->CurrentStage), Player.Stack, Player.CurrentBet, GameStateData->Pot, GameStateData->CurrentBetToCall,
         GameStateData->LastAggressorSeatIndex, GameStateData->LastBetOrRaiseAmountInCurrentRound, GameStateData->PlayerWhoOpenedBettingThisRound,
@@ -605,25 +604,19 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
     // --- Обработка Постановки Блайндов ---
     if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind) {
         if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingSmallBlindSeat) {
-            PostBlinds();
+            PostBlinds(); // Эта функция теперь вызывается только ОДИН РАЗ после того, как ОБА блайнда подтвердили свое действие
             RequestBigBlind();
         }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid action/player for SB stage. Re-requesting."));
-            RequestPlayerAction(ActingPlayerSeatIndex);
-        }
+        else { /* ... re-request ... */ RequestPlayerAction(ActingPlayerSeatIndex); }
         return;
     }
     else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind) {
         if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingBigBlindSeat) {
-            PostBlinds();
+            PostBlinds(); // Поставит BB, обновит Pot, CurrentBetToCall, LastAggressor etc.
             if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Blinds posted. Current Pot: %lld"), GameStateData->Pot));
             DealHoleCardsAndStartPreflop();
         }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid action/player for BB stage. Re-requesting."));
-            RequestPlayerAction(ActingPlayerSeatIndex);
-        }
+        else { /* ... re-request ... */ RequestPlayerAction(ActingPlayerSeatIndex); }
         return;
     }
 
@@ -631,14 +624,18 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
     if (GameStateData->CurrentStage >= EGameStage::Preflop && GameStateData->CurrentStage <= EGameStage::River)
     {
         bool bActionCausedAggression = false;
+        bool bActionValidAndPerformed = true; // Флаг, что действие было валидным и выполнено
 
         // Проверяем, может ли игрок вообще действовать (не Folded, не All-In который уже не может повлиять на банк)
-        if (Player.Status == EPlayerStatus::Folded || (Player.Status == EPlayerStatus::AllIn && Player.Stack == 0 && Player.CurrentBet >= GameStateData->CurrentBetToCall))
+        // Исключение: если игрок All-In, но его ставка меньше CurrentBetToCall, он не может действовать, но IsBettingRoundOver это учтет.
+        if (Player.Status == EPlayerStatus::Folded ||
+            (Player.Status == EPlayerStatus::AllIn && Player.Stack == 0 && Player.CurrentBet >= GameStateData->CurrentBetToCall))
         {
-            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Player %s (Seat %d) is already Folded or All-In and cannot make new voluntary actions. Will be skipped by betting round logic."), *PlayerName, ActingPlayerSeatIndex);
-            // Player.bIsTurn = false; // Снимаем флаг хода ниже, после общей логики
-            // Не устанавливаем bHasActedThisSubRound, так как он не действовал добровольно в этом под-раунде.
-            // Его пропустит GetNextPlayerToAct или IsBettingRoundOver.
+            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Player %s (Seat %d) is Folded or unabled All-In. Action processing skipped for them."), *PlayerName, ActingPlayerSeatIndex);
+            // Игрок уже не может влиять на банк, bHasActedThisSubRound для него не важен для определения конца круга,
+            // если он не LastAggressor. IsBettingRoundOver должен корректно обработать AllIn игроков.
+            // Не ставим bHasActedThisSubRound, так как он не совершал нового действия.
+            bActionValidAndPerformed = false; // Действие не было выполнено этим игроком сейчас
         }
         else // Игрок может действовать
         {
@@ -646,32 +643,35 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
             {
             case EPlayerAction::Fold:
                 Player.Status = EPlayerStatus::Folded;
-                Player.bHasActedThisSubRound = true;
+                // Player.bHasActedThisSubRound = true; // Устанавливается ниже для всех валидных действий
                 if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s folds."), *PlayerName));
                 break;
 
             case EPlayerAction::Check:
                 if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
-                    Player.bHasActedThisSubRound = true;
+                    // Player.bHasActedThisSubRound = true;
                     if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s checks."), *PlayerName));
                 }
                 else {
                     UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Check by %s. BetToCall: %lld, PlayerBet: %lld. Re-requesting action."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                    RequestPlayerAction(ActingPlayerSeatIndex);
+                    bActionValidAndPerformed = false; // Действие не было выполнено
                 }
                 break;
 
             case EPlayerAction::Call:
             {
                 int64 AmountNeededToCallAbsolute = GameStateData->CurrentBetToCall - Player.CurrentBet;
-                if (AmountNeededToCallAbsolute <= 0) {
-                    if (Player.CurrentBet == GameStateData->CurrentBetToCall) {
-                        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s effectively checks (attempted invalid call)."), *PlayerName));
-                        Player.bHasActedThisSubRound = true;
+                if (AmountNeededToCallAbsolute <= 0) { // Нечего коллировать или уже заколлировано
+                    if (Player.CurrentBet == GameStateData->CurrentBetToCall) { // Можно было чекнуть
+                        UE_LOG(LogTemp, Verbose, TEXT("ProcessPlayerAction: %s attempted Call but could Check. Treating as Check."), *PlayerName);
+                        if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s checks (was call attempt)."), *PlayerName));
+                        // Player.bHasActedThisSubRound = true; (будет установлено ниже)
                     }
                     else {
                         UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Call by %s. BetToCall: %lld, PlayerBet: %lld. Re-requesting."), *PlayerName, GameStateData->CurrentBetToCall, Player.CurrentBet);
-                        RequestPlayerAction(ActingPlayerSeatIndex); return;
+                        RequestPlayerAction(ActingPlayerSeatIndex);
+                        bActionValidAndPerformed = false;
                     }
                     break;
                 }
@@ -679,110 +679,142 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
                 Player.Stack -= ActualAmountPlayerPutsInPot;
                 Player.CurrentBet += ActualAmountPlayerPutsInPot;
                 GameStateData->Pot += ActualAmountPlayerPutsInPot;
-                Player.bHasActedThisSubRound = true;
+                // Player.bHasActedThisSubRound = true;
                 if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s calls %lld. Stack: %lld"), *PlayerName, ActualAmountPlayerPutsInPot, Player.Stack));
                 if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
             }
             break;
 
-            case EPlayerAction::Bet:
+            case EPlayerAction::Bet: // Бет возможен, только если CurrentBetToCall равен текущей ставке игрока (обычно 0)
             {
                 if (Player.CurrentBet != GameStateData->CurrentBetToCall) {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Must Call/Check/Raise). CurrentBet: %lld, ToCall: %lld. Re-requesting."), *PlayerName, Player.CurrentBet, GameStateData->CurrentBetToCall);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Cannot Bet, must Call/Raise/Fold). CurrentBet: %lld, ToCall: %lld. Re-requesting."), *PlayerName, Player.CurrentBet, GameStateData->CurrentBetToCall);
+                    RequestPlayerAction(ActingPlayerSeatIndex);
+                    bActionValidAndPerformed = false;
+                    break;
+                }
+                // Amount здесь - это чистая сумма бета (сколько добавляется сверх Player.CurrentBet, которое должно быть 0)
+                // Но AI передает ОБЩУЮ сумму ставки. Для первого бета Amount == чистый бет.
+                int64 ActualBetAmountPlayerAdds = Amount; // Если Player.CurrentBet = 0
+                if (ActualBetAmountPlayerAdds <= 0) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Amount %lld must be > 0). Re-requesting."), *PlayerName, ActualBetAmountPlayerAdds);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
                 int64 MinBetSize = GameStateData->BigBlindAmount;
-                if ((Amount < MinBetSize && Amount < Player.Stack) || Amount <= 0) {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Amount %lld invalid vs MinBet %lld or Stack %lld). Re-requesting."), *PlayerName, Amount, MinBetSize, Player.Stack);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                if (ActualBetAmountPlayerAdds < MinBetSize && ActualBetAmountPlayerAdds < Player.Stack) { // Нельзя ставить меньше минимума, кроме олл-ина
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Bet by %s (Amount %lld < MinBet %lld and not All-In). Re-requesting."), *PlayerName, ActualBetAmountPlayerAdds, MinBetSize);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
-                if (Amount > Player.Stack) Amount = Player.Stack;
+                if (ActualBetAmountPlayerAdds > Player.Stack) ActualBetAmountPlayerAdds = Player.Stack; // Коррекция на олл-ин
 
-                Player.Stack -= Amount;
-                Player.CurrentBet += Amount;
-                GameStateData->Pot += Amount;
-                GameStateData->CurrentBetToCall = Player.CurrentBet;
-                GameStateData->LastBetOrRaiseAmountInCurrentRound = Amount;
+                Player.Stack -= ActualBetAmountPlayerAdds;
+                Player.CurrentBet += ActualBetAmountPlayerAdds; // Теперь Player.CurrentBet = ActualBetAmountPlayerAdds
+                GameStateData->Pot += ActualBetAmountPlayerAdds;
+                GameStateData->CurrentBetToCall = Player.CurrentBet; // Новая сумма для колла
+                GameStateData->LastBetOrRaiseAmountInCurrentRound = ActualBetAmountPlayerAdds; // Это была первая ставка, ее размер
                 GameStateData->LastAggressorSeatIndex = ActingPlayerSeatIndex;
                 if (GameStateData->PlayerWhoOpenedBettingThisRound == -1) GameStateData->PlayerWhoOpenedBettingThisRound = ActingPlayerSeatIndex;
-                Player.bHasActedThisSubRound = true;
+                // Player.bHasActedThisSubRound = true;
                 bActionCausedAggression = true;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s bets %lld. Stack: %lld"), *PlayerName, Amount, Player.Stack));
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s bets %lld. Stack: %lld"), *PlayerName, ActualBetAmountPlayerAdds, Player.Stack));
                 if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
             }
             break;
 
             case EPlayerAction::Raise:
             {
+                // Amount здесь - это ОБЩАЯ сумма, до которой игрок хочет поднять свою ставку.
+                int64 TotalNewBetByPlayer = Amount;
+
+                // 1. Проверка, есть ли вообще что рейзить (CurrentBetToCall должен быть > 0)
                 if (GameStateData->CurrentBetToCall == 0) {
                     UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (No bet to raise, should be Bet). Re-requesting."), *PlayerName);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
-                if (Player.CurrentBet >= GameStateData->CurrentBetToCall && Player.Stack > 0) {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (Already met/exceeded current bet or cannot raise self). Re-requesting."), *PlayerName);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
-                }
-
-                int64 TotalNewBetByPlayer = Amount;
-                int64 AmountPlayerMustAdd = TotalNewBetByPlayer - Player.CurrentBet;
-
-                if (AmountPlayerMustAdd <= 0 && TotalNewBetByPlayer < (Player.CurrentBet + Player.Stack)) {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (Adds %lld, not >0, and not All-In). Re-requesting."), *PlayerName, AmountPlayerMustAdd);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
-                }
-                if (AmountPlayerMustAdd > Player.Stack) {
-                    AmountPlayerMustAdd = Player.Stack;
-                    TotalNewBetByPlayer = Player.CurrentBet + Player.Stack;
+                // 2. Проверка, что новая общая ставка БОЛЬШЕ текущей ставки для колла
+                if (TotalNewBetByPlayer <= GameStateData->CurrentBetToCall && TotalNewBetByPlayer < (Player.CurrentBet + Player.Stack)) {
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s. TotalBet %lld not > CurrentBetToCall %lld (and not a smaller All-In). Re-requesting."),
+                        *PlayerName, TotalNewBetByPlayer, GameStateData->CurrentBetToCall);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
 
+                // Сколько игрок реально добавляет фишек в банк в этом действии
+                int64 AmountPlayerActuallyAdds = TotalNewBetByPlayer - Player.CurrentBet;
+                if (AmountPlayerActuallyAdds <= 0 && TotalNewBetByPlayer < (Player.CurrentBet + Player.Stack)) { // Должен добавить > 0, если не олл-ин
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (Adds %lld, not >0, and not All-In). Re-requesting."), *PlayerName, AmountPlayerActuallyAdds);
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
+                }
+
+                // Если запрашиваемая общая ставка больше, чем есть у игрока (с учетом уже поставленного) -> это олл-ин
+                if (AmountPlayerActuallyAdds > Player.Stack) {
+                    AmountPlayerActuallyAdds = Player.Stack;
+                    TotalNewBetByPlayer = Player.CurrentBet + Player.Stack; // Корректируем общую ставку до олл-ина
+                }
+
+                // Чистая сумма рейза СВЕРХ предыдущей максимальной ставки на столе
                 int64 PureRaiseAmount = TotalNewBetByPlayer - GameStateData->CurrentBetToCall;
+                // Минимальный допустимый чистый рейз (размер предыдущего бета/рейза, или ББ если это первый рейз после лимпов/блайндов)
                 int64 MinValidPureRaise = GameStateData->LastBetOrRaiseAmountInCurrentRound > 0 ? GameStateData->LastBetOrRaiseAmountInCurrentRound : GameStateData->BigBlindAmount;
 
-                if (PureRaiseAmount < MinValidPureRaise && AmountPlayerMustAdd < Player.Stack) {
+                // Валидация: чистый рейз должен быть не меньше минимального, ЕСЛИ это не олл-ин на меньшую сумму
+                if (PureRaiseAmount < MinValidPureRaise && AmountPlayerActuallyAdds < Player.Stack) {
                     UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (PureRaise %lld < MinValidPureRaise %lld and not All-In). Re-requesting."), *PlayerName, PureRaiseAmount, MinValidPureRaise);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
-                }
-                if (TotalNewBetByPlayer <= GameStateData->CurrentBetToCall && AmountPlayerMustAdd < Player.Stack) {
-                    UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid Raise by %s (TotalBet %lld not > ToCall %lld and not All-In). Re-requesting."), *PlayerName, TotalNewBetByPlayer, GameStateData->CurrentBetToCall);
-                    RequestPlayerAction(ActingPlayerSeatIndex); return;
+                    RequestPlayerAction(ActingPlayerSeatIndex); bActionValidAndPerformed = false; break;
                 }
 
-                Player.Stack -= AmountPlayerMustAdd;
-                Player.CurrentBet = TotalNewBetByPlayer;
-                GameStateData->Pot += AmountPlayerMustAdd;
-                GameStateData->CurrentBetToCall = Player.CurrentBet;
-                GameStateData->LastBetOrRaiseAmountInCurrentRound = PureRaiseAmount > 0 ? PureRaiseAmount : MinValidPureRaise;
+                Player.Stack -= AmountPlayerActuallyAdds;
+                Player.CurrentBet = TotalNewBetByPlayer; // Обновляем общую ставку игрока в этом раунде
+                GameStateData->Pot += AmountPlayerActuallyAdds;
+
+                GameStateData->CurrentBetToCall = Player.CurrentBet; // Новая сумма для колла
+                GameStateData->LastBetOrRaiseAmountInCurrentRound = PureRaiseAmount > 0 ? PureRaiseAmount : MinValidPureRaise; // Если PureRaise <0 из-за олл-ина, берем MinValidPureRaise
                 GameStateData->LastAggressorSeatIndex = ActingPlayerSeatIndex;
-                Player.bHasActedThisSubRound = true;
+                // PlayerWhoOpenedBettingThisRound не меняется при рейзе, он устанавливается при первом бете.
+                // Player.bHasActedThisSubRound = true;
                 bActionCausedAggression = true;
-                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s raises to %lld (added %lld). Stack: %lld"), *PlayerName, Player.CurrentBet, AmountPlayerMustAdd, Player.Stack));
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s raises to %lld (added %lld). Stack: %lld"), *PlayerName, Player.CurrentBet, AmountPlayerActuallyAdds, Player.Stack));
                 if (Player.Stack == 0) { Player.Status = EPlayerStatus::AllIn; if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s is All-In."), *PlayerName)); }
             }
             break;
 
             default:
                 UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Unknown action %s received."), *UEnum::GetValueAsString(PlayerAction));
-                RequestPlayerAction(ActingPlayerSeatIndex); return;
+                RequestPlayerAction(ActingPlayerSeatIndex);
+                bActionValidAndPerformed = false; // Неизвестное действие не выполнено
             }
-        } // конец if (Player can act)
+        }
 
-        Player.bIsTurn = false; // Снимаем флаг хода с текущего игрока после его действия или пропуска
+        if (!bActionValidAndPerformed) {
+            // Если действие было невалидным и мы вызвали RequestPlayerAction, то выходим,
+            // чтобы не продолжать логику определения следующего хода.
+            return;
+        }
+
+        // Если действие было валидным (Fold, Check, Call, Bet, Raise) и игрок не был пропущен
+        if (Player.Status != EPlayerStatus::Folded && !(Player.Status == EPlayerStatus::AllIn && Player.Stack == 0 && Player.CurrentBet >= GameStateData->CurrentBetToCall))
+        {
+            Player.bHasActedThisSubRound = true;
+        }
+
+        Player.bIsTurn = false;
 
         if (bActionCausedAggression) {
+            UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Aggression from Seat %d. Resetting bHasActedThisSubRound for others."), ActingPlayerSeatIndex);
             for (FPlayerSeatData& SeatToReset : GameStateData->Seats) {
                 if (SeatToReset.SeatIndex != ActingPlayerSeatIndex &&
                     SeatToReset.bIsSittingIn &&
-                    SeatToReset.Status == EPlayerStatus::Playing &&
-                    SeatToReset.Stack > 0) {
+                    SeatToReset.Status == EPlayerStatus::Playing && // Только для тех, кто еще может ходить
+                    SeatToReset.Stack > 0) {                       // И у кого есть фишки
                     SeatToReset.bHasActedThisSubRound = false;
+                    UE_LOG(LogTemp, Verbose, TEXT("  Reset bHasActedThisSubRound for Seat %d"), SeatToReset.SeatIndex);
                 }
             }
         }
 
         // --- Логика после действия игрока ---
-        int32 ActivePlayersStillInHand = 0;
+        int32 ActivePlayersStillInHand = 0; // Игроки, которые не сфолдили и не сидят аут
         for (const FPlayerSeatData& Seat : GameStateData->Seats) {
-            if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded) {
+            if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded && Seat.Status != EPlayerStatus::SittingOut) {
                 ActivePlayersStillInHand++;
             }
         }
@@ -790,7 +822,7 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
         if (ActivePlayersStillInHand <= 1)
         {
             UE_LOG(LogTemp, Log, TEXT("ProcessPlayerAction: Hand ends with %d active player(s). Proceeding to Showdown logic to finalize."), ActivePlayersStillInHand);
-            ProceedToShowdown(); // ProceedToShowdown теперь сам обработает награждение и уведомление UI
+            ProceedToShowdown();
             return;
         }
 
@@ -807,16 +839,17 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
             else {
                 UE_LOG(LogTemp, Error, TEXT("ProcessPlayerAction CRITICAL: IsBettingRoundOver() is FALSE, but GetNextPlayerToAct returned -1! Stage: %s. Forcing stage advance."),
                     *UEnum::GetValueAsString(GameStateData->CurrentStage));
+                // Это аварийный переход, если логика зашла в тупик. Должно быть очень редким.
                 ProceedToNextGameStage();
             }
         }
-        return;
+        return; // Явный выход из функции после обработки действия и определения следующего шага
     }
-    else
+    else // Неизвестная или необрабатываемая стадия игры
     {
         UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Action %s received in unhandled game stage %s."),
             *UEnum::GetValueAsString(PlayerAction), *UEnum::GetValueAsString(GameStateData->CurrentStage));
-        RequestPlayerAction(ActingPlayerSeatIndex);
+        RequestPlayerAction(ActingPlayerSeatIndex); // Запросить действие у текущего игрока снова
     }
 }
 

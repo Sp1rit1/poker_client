@@ -214,46 +214,82 @@ EPlayerAction UPokerBotAI::GetBestAction(
     int64& OutDecisionAmount
 )
 {
+    // --- НАЧАЛО ЛОГИРОВАНИЯ ВХОДНЫХ ДАННЫХ ---
     OutDecisionAmount = 0;
+    FString AllowedActionsString = TEXT("None");
+    if (AllowedActions.Num() > 0) {
+        AllowedActionsString = TEXT("");
+        for (EPlayerAction Action : AllowedActions) { AllowedActionsString += UEnum::GetDisplayValueAsText(Action).ToString() + TEXT(" "); }
+        AllowedActionsString = AllowedActionsString.TrimEnd();
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("==================== BotAI %s (Seat %d) - GetBestAction START ===================="),
+        *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
+    UE_LOG(LogTemp, Warning, TEXT("  GameState Stage: %s, Bot Status: %s, Stack: %lld, CurrentBetInRound: %lld"),
+        GameState ? *UEnum::GetDisplayValueAsText(GameState->CurrentStage).ToString() : TEXT("NULL_GS"),
+        *UEnum::GetDisplayValueAsText(BotPlayerSeatData.Status).ToString(),
+        BotPlayerSeatData.Stack, BotPlayerSeatData.CurrentBet);
+    UE_LOG(LogTemp, Warning, TEXT("  AllowedActions: [%s] (Count: %d)"), *AllowedActionsString, AllowedActions.Num());
+    UE_LOG(LogTemp, Warning, TEXT("  CurrentBetToCallOnTable: %lld, MinValidPureRaiseAmount: %lld"), CurrentBetToCallOnTable, MinValidPureRaiseAmount);
+    if (GameState) {
+        UE_LOG(LogTemp, Warning, TEXT("  GS Pot: %lld, LastAggressor: %d (Amt: %lld), Opener: %d, SB: %lld, BB: %lld"),
+            GameState->Pot, GameState->LastAggressorSeatIndex, GameState->LastBetOrRaiseAmountInCurrentRound,
+            GameState->PlayerWhoOpenedBettingThisRound, GameState->SmallBlindAmount, GameState->BigBlindAmount);
+    }
+    // --- КОНЕЦ ЛОГИРОВАНИЯ ВХОДНЫХ ДАННЫХ ---
+
     if (!GameState || AllowedActions.IsEmpty()) {
-        UE_LOG(LogTemp, Error, TEXT("BotAI %s (S%d): GS null or No AllowedActions. Fold."), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
+        UE_LOG(LogTemp, Error, TEXT("BotAI %s (S%d): FATAL - GameState is null or No AllowedActions. Returning Fold."), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
         return EPlayerAction::Fold;
     }
 
-    // Обработка Постановки Блайндов (остается такой же)
     if (GameState->CurrentStage == EGameStage::WaitingForSmallBlind && BotPlayerSeatData.Status == EPlayerStatus::MustPostSmallBlind) {
         if (AllowedActions.Contains(EPlayerAction::PostBlind)) {
-            UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d): Action POST_SB"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
+            UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d) Path: BlindDecision. ChosenAction: PostBlind (SB)"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
             return EPlayerAction::PostBlind;
         }
+        UE_LOG(LogTemp, Error, TEXT("BotAI %s (S%d) State ERROR: WaitingForSmallBlind but PostBlind NOT in AllowedActions! Allowed: [%s]. Defaulting to first allowed."),
+            *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *AllowedActionsString);
+        return AllowedActions.IsEmpty() ? EPlayerAction::Fold : AllowedActions[0];
     }
     else if (GameState->CurrentStage == EGameStage::WaitingForBigBlind && BotPlayerSeatData.Status == EPlayerStatus::MustPostBigBlind) {
         if (AllowedActions.Contains(EPlayerAction::PostBlind)) {
-            UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d): Action POST_BB"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
+            UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d) Path: BlindDecision. ChosenAction: PostBlind (BB)"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
             return EPlayerAction::PostBlind;
         }
+        UE_LOG(LogTemp, Error, TEXT("BotAI %s (S%d) State ERROR: WaitingForBigBlind but PostBlind NOT in AllowedActions! Allowed: [%s]. Defaulting to first allowed."),
+            *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *AllowedActionsString);
+        return AllowedActions.IsEmpty() ? EPlayerAction::Fold : AllowedActions[0];
     }
 
-    EPlayerAction ChosenAction = EPlayerAction::Fold;
+    EPlayerAction ChosenAction = EPlayerAction::Fold; // Действие по умолчанию
     int32 NumActivePlayersInGame = 0;
     for (const auto& Seat : GameState->Seats) {
-        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded && Seat.Status != EPlayerStatus::SittingOut) { // Считаем всех, кто не сфолдил и не сидит аут
+        if (Seat.bIsSittingIn && Seat.Status != EPlayerStatus::Folded && Seat.Status != EPlayerStatus::SittingOut) {
             NumActivePlayersInGame++;
         }
     }
-    if (NumActivePlayersInGame == 0) NumActivePlayersInGame = GameState->Seats.Num();
+    if (NumActivePlayersInGame == 0 && GameState->Seats.Num() > 0) NumActivePlayersInGame = GameState->Seats.Num();
+    else if (NumActivePlayersInGame == 0 && GameState->Seats.Num() == 0) {
+        UE_LOG(LogTemp, Error, TEXT("BotAI %s (S%d): GameState->Seats is empty! Defaulting to Fold."), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
+        return EPlayerAction::Fold;
+    }
 
     EPlayerPokerPosition BotPosition = GetPlayerPosition(GameState, BotPlayerSeatData.SeatIndex, NumActivePlayersInGame);
     int32 NumOpponentsStillInHand = CountActiveOpponents(GameState, BotPlayerSeatData.SeatIndex);
-    float EffectiveHandStrength = 0.0f; // Оценка текущей ситуации [0.0 - 1.0]
-
+    float EffectiveHandStrength = 0.0f;
     bool bIsFacingBet = CurrentBetToCallOnTable > BotPlayerSeatData.CurrentBet;
     int64 AmountToCallAbsolute = bIsFacingBet ? (CurrentBetToCallOnTable - BotPlayerSeatData.CurrentBet) : 0;
-    if (AmountToCallAbsolute < 0) AmountToCallAbsolute = 0; // На всякий случай
+    if (AmountToCallAbsolute < 0) AmountToCallAbsolute = 0;
 
+    UE_LOG(LogTemp, Verbose, TEXT("BotAI %s (S%d): Context - Position: %s, NumOpponents: %d, IsFacingBet: %s, AmountToCallAbs: %lld"),
+        *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *UEnum::GetDisplayValueAsText(BotPosition).ToString(), NumOpponentsStillInHand,
+        bIsFacingBet ? TEXT("true") : TEXT("false"), AmountToCallAbsolute);
 
+    // --- НАЧАЛО ВАШЕЙ ЛОГИКИ ПРИНЯТИЯ РЕШЕНИЙ (ПРЕФЛОП И ПОСТФЛОП) ---
+    // --- С ДОБАВЛЕННЫМ МНОЙ ЛОГИРОВАНИЕМ ПУТЕЙ ---
     if (GameState->CurrentStage == EGameStage::Preflop) {
-        // --- ЛОГИКА ДЛЯ ПРЕФЛОПА (остается такой же, как вы предоставили, с вызовами CalculateBetSize/RaiseSize) ---
+        UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Path Preflop Logic"), *BotPlayerSeatData.PlayerName);
         if (BotPlayerSeatData.HoleCards.Num() == 2) {
             EffectiveHandStrength = CalculatePreflopHandStrength(BotPlayerSeatData.HoleCards[0], BotPlayerSeatData.HoleCards[1], BotPosition, NumActivePlayersInGame);
             UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d, Pos:%s, Stack:%lld) PreflopHS: %.2f. ToCallOnTable:%lld, MyBet:%lld, MinPureRaiseVal:%lld"),
@@ -266,48 +302,64 @@ EPlayerAction UPokerBotAI::GetBestAction(
                 (BotPosition == EPlayerPokerPosition::BB && CurrentBetToCallOnTable == GameState->BigBlindAmount && BotPlayerSeatData.CurrentBet == GameState->BigBlindAmount)) {
                 CallThreshold -= 0.15f; RaiseThreshold -= 0.10f;
             }
+            UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Preflop Thresholds - Raise: %.2f, Call: %.2f. EffHS: %.2f"),
+                *BotPlayerSeatData.PlayerName, RaiseThreshold, CallThreshold, EffectiveHandStrength);
 
             if (EffectiveHandStrength >= RaiseThreshold) {
+                UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Preflop Path - HS >= RaiseThreshold (%.2f >= %.2f)"), *BotPlayerSeatData.PlayerName, EffectiveHandStrength, RaiseThreshold);
                 if (AllowedActions.Contains(EPlayerAction::Raise)) {
-                    ChosenAction = EPlayerAction::Raise;
-                    OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength);
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Considering Raise"));
+                    ChosenAction = EPlayerAction::Raise; OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength);
                 }
                 else if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Bet)) {
-                    ChosenAction = EPlayerAction::Bet;
-                    OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength);
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Considering Bet (Raise not allowed)"));
+                    ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength);
                 }
                 else if (AllowedActions.Contains(EPlayerAction::Call)) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Considering Call (Raise/Bet not allowed)"));
                     ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0;
                 }
-                else { ChosenAction = EPlayerAction::Fold; }
+                else {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Strong hand, but no Raise/Bet/Call allowed. Choosing Fold."));
+                    ChosenAction = EPlayerAction::Fold;
+                }
             }
             else if (EffectiveHandStrength >= CallThreshold) {
+                UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Preflop Path - HS >= CallThreshold (%.2f >= %.2f)"), *BotPlayerSeatData.PlayerName, EffectiveHandStrength, CallThreshold);
                 if (!bIsFacingBet) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Not facing bet. Considering Bet/Check."));
                     if (AllowedActions.Contains(EPlayerAction::Bet) && FMath::FRand() < (0.05f + AggressivenessFactor * 0.25f)) {
-                        ChosenAction = EPlayerAction::Bet;
-                        OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, 0.5f);
+                        ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, 0.5f);
                     }
                     else if (AllowedActions.Contains(EPlayerAction::Check)) {
                         ChosenAction = EPlayerAction::Check; OutDecisionAmount = 0;
                     }
-                    else if (AllowedActions.Contains(EPlayerAction::Call)) { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; }
+                    else if (AllowedActions.Contains(EPlayerAction::Call)) { // Fallback if Check not allowed (e.g. must complete SB)
+                        ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0;
+                    }
                     else { ChosenAction = EPlayerAction::Fold; }
                 }
                 else if (AllowedActions.Contains(EPlayerAction::Call)) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Decision Branch: Facing bet. Considering Call."));
                     if (AmountToCallAbsolute > 0 && GameState->Pot > 0) {
                         float PotOddsRatio = static_cast<float>(AmountToCallAbsolute) / static_cast<float>(GameState->Pot + AmountToCallAbsolute);
-                        if (PotOddsRatio < (0.4f + TightnessFactor * 0.1f)) {
-                            ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0;
-                        }
+                        if (PotOddsRatio < (0.4f + TightnessFactor * 0.1f)) { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; }
                         else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; }
-                        else { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; }
+                        else { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; } // Forced Call if no Fold
                     }
-                    else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; }
-                    else { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; }
+                    else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; } // No pot odds, no bet to call, but facing "something"
+                    else { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; } // Forced Call
                 }
-                else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; }
+                else if (AllowedActions.Contains(EPlayerAction::Fold)) {
+                    ChosenAction = EPlayerAction::Fold;
+                }
+                else {
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Preflop Path - Medium hand, facing bet, no Call/Fold. Unusual. Defaulting to Fold (or first available)."), *BotPlayerSeatData.PlayerName);
+                    ChosenAction = AllowedActions.IsEmpty() ? EPlayerAction::Fold : AllowedActions[0];
+                }
             }
             else {
+                UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Preflop Path - Weak Hand (HS: %.2f)"), *BotPlayerSeatData.PlayerName, EffectiveHandStrength);
                 if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) {
                     ChosenAction = EPlayerAction::Check; OutDecisionAmount = 0;
                 }
@@ -318,30 +370,36 @@ EPlayerAction UPokerBotAI::GetBestAction(
                     }
                     else { ChosenAction = EPlayerAction::Fold; }
                 }
-                else if (AllowedActions.Contains(EPlayerAction::Call)) { ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0; }
+                else if (AllowedActions.Contains(EPlayerAction::Call)) { // Forced call if fold not allowed
+                    ChosenAction = EPlayerAction::Call; OutDecisionAmount = 0;
+                }
+                else {
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Preflop Path - Weak hand, no Check/Fold/Call. Unusual. Defaulting to Fold (or first available)."), *BotPlayerSeatData.PlayerName);
+                    ChosenAction = AllowedActions.IsEmpty() ? EPlayerAction::Fold : AllowedActions[0];
+                }
             }
         }
-        else { ChosenAction = EPlayerAction::Fold; }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("BotAI %s (S%d): Preflop, but bot has %d hole cards! Choosing Fold."), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, BotPlayerSeatData.HoleCards.Num());
+            ChosenAction = EPlayerAction::Fold;
+        }
+        UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Preflop decision logic resulted in: %s, AmountBeforeValidation: %lld"),
+            *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
     }
-    else if (GameState->CurrentStage >= EGameStage::Flop && GameState->CurrentStage <= EGameStage::River)
-    {
-        if (BotPlayerSeatData.HoleCards.Num() != 2) { /* ... Fold ... */ ChosenAction = EPlayerAction::Fold; }
+    else if (GameState->CurrentStage >= EGameStage::Flop && GameState->CurrentStage <= EGameStage::River) {
+        UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Path Postflop Logic. Stage: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(GameState->CurrentStage).ToString());
+        if (BotPlayerSeatData.HoleCards.Num() != 2) {
+            UE_LOG(LogTemp, Warning, TEXT("BotAI %s (S%d): Postflop, but bot has %d hole cards! Choosing Fold."), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, BotPlayerSeatData.HoleCards.Num());
+            ChosenAction = EPlayerAction::Fold;
+        }
         else {
             FPokerHandResult MadeHand = EvaluateCurrentMadeHand(BotPlayerSeatData.HoleCards, GameState->CommunityCards);
             float MadeHandScore = GetScoreForMadeHand(MadeHand.HandRank);
             float DrawScoreValue = CalculateDrawStrength(BotPlayerSeatData.HoleCards, GameState->CommunityCards, GameState->Pot, AmountToCallAbsolute);
 
-            // Комбинируем силу готовой руки и дро
-            if (DrawScoreValue > 0.65f && MadeHandScore < 0.4f) { // Очень сильное дро, слабая готовая рука
-                EffectiveHandStrength = DrawScoreValue; // Играем как сильное дро
-            }
-            else if (MadeHandScore >= 0.05f) { // Есть какая-то готовая рука
-                // Увеличиваем силу готовой руки на часть силы дро, но не слишком сильно, если готовая рука уже хороша
-                EffectiveHandStrength = MadeHandScore + DrawScoreValue * FMath::Lerp(0.5f, 0.1f, MadeHandScore);
-            }
-            else { // Только дро или совсем мусор
-                EffectiveHandStrength = DrawScoreValue;
-            }
+            if (DrawScoreValue > 0.65f && MadeHandScore < 0.4f) { EffectiveHandStrength = DrawScoreValue; }
+            else if (MadeHandScore >= 0.05f) { EffectiveHandStrength = MadeHandScore + DrawScoreValue * FMath::Lerp(0.5f, 0.1f, MadeHandScore); }
+            else { EffectiveHandStrength = DrawScoreValue; }
             EffectiveHandStrength = FMath::Clamp(EffectiveHandStrength, 0.0f, 1.0f);
 
             UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d, Pos:%s, Stage:%s, Stack:%lld) PostflopHS: %.2f (Made: %s [%.2f], Draw: %.2f). ToCall:%lld, MyBet:%lld, MinPureRaise:%lld, Pot: %lld"),
@@ -351,167 +409,181 @@ EPlayerAction UPokerBotAI::GetBestAction(
                 CurrentBetToCallOnTable, BotPlayerSeatData.CurrentBet, MinValidPureRaiseAmount, GameState->Pot);
 
             bool bIsBluffing = false;
-            if (EffectiveHandStrength < 0.30f && // Действительно слабая рука (даже с учетом дро)
-                !bIsFacingBet && AllowedActions.Contains(EPlayerAction::Bet) &&
-                ShouldAttemptBluff(GameState, BotPlayerSeatData, BotPosition, NumOpponentsStillInHand))
-            {
+            if (EffectiveHandStrength < 0.30f && !bIsFacingBet && AllowedActions.Contains(EPlayerAction::Bet) &&
+                ShouldAttemptBluff(GameState, BotPlayerSeatData, BotPosition, NumOpponentsStillInHand)) {
                 bIsBluffing = true;
-                UE_LOG(LogTemp, Log, TEXT("BotAI %s: Attempting BLUFF on Postflop!"), *BotPlayerSeatData.PlayerName);
+                UE_LOG(LogTemp, Log, TEXT("BotAI %s: Path Postflop - Attempting BLUFF!"), *BotPlayerSeatData.PlayerName);
             }
 
-            // Пороги для постфлопа
-            float PostflopRaiseMonsterThreshold = 0.80f; // Натсы и очень сильные руки/дро
-            float PostflopRaiseStrongThreshold = 0.65f; // Сильные руки/дро
-            float PostflopBetValueThreshold = 0.50f;   // Руки, с которыми можно ставить для вэлью или как полу-блеф с дро
-            float PostflopCallThreshold = 0.30f;   // Руки/дро, с которыми можно коллировать по шансам или если дешево
+            float PostflopRaiseMonsterThreshold = 0.80f - (0.1f * (1.0f - AggressivenessFactor));
+            float PostflopRaiseStrongThreshold = 0.65f - (0.1f * (1.0f - AggressivenessFactor));
+            float PostflopBetValueThreshold = 0.50f - (0.1f * (1.0f - AggressivenessFactor));
+            float PostflopCallThreshold = 0.30f;
+            UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop Thresholds - MonsterR: %.2f, StrongR: %.2f, BetV: %.2f, Call: %.2f, Bluff: %s"),
+                *BotPlayerSeatData.PlayerName, PostflopRaiseMonsterThreshold, PostflopRaiseStrongThreshold, PostflopBetValueThreshold, PostflopCallThreshold, bIsBluffing ? TEXT("true") : TEXT("false"));
 
             if (bIsBluffing) {
+                UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop Path - Bluffing Logic"), *BotPlayerSeatData.PlayerName);
                 if (AllowedActions.Contains(EPlayerAction::Bet)) {
-                    ChosenAction = EPlayerAction::Bet;
-                    OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, 0.5f + FMath::FRandRange(0.0f, 0.1f), true, FMath::FRandRange(0.4f, 0.6f)); // Блеф 40-60% пота
+                    ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, 0.55f, true, FMath::FRandRange(0.4f, 0.6f));
                 }
-                else { /* ... логика фоллбека для блефа ... */ } // (оставляем как было)
+                else {
+                    UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop Bluff - Cannot Bet. Trying Check/Fold."), *BotPlayerSeatData.PlayerName);
+                    if (AllowedActions.Contains(EPlayerAction::Check) && !bIsFacingBet) ChosenAction = EPlayerAction::Check; // Блеф-чек, если бет невозможен
+                    else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold;
+                    else if (AllowedActions.Contains(EPlayerAction::Call) && bIsFacingBet) ChosenAction = EPlayerAction::Call;
+                    else { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Postflop Bluff Fallback - No valid action. Defaulting to Fold."), *BotPlayerSeatData.PlayerName); ChosenAction = EPlayerAction::Fold; }
+                }
             }
             else { // Не блефуем
-                if (EffectiveHandStrength >= PostflopRaiseMonsterThreshold) { // Монстр
+                UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop Path - Value/Draw Logic, EffHS: %.2f"), *BotPlayerSeatData.PlayerName, EffectiveHandStrength);
+                if (EffectiveHandStrength >= PostflopRaiseMonsterThreshold) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Path Monster Hand (>=%.2f)"), PostflopRaiseMonsterThreshold);
                     if (AllowedActions.Contains(EPlayerAction::Raise)) {
-                        ChosenAction = EPlayerAction::Raise;
-                        OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength, false, FMath::FRandRange(0.75f, 1.2f)); // Большой рейз
+                        ChosenAction = EPlayerAction::Raise; OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength, false, FMath::FRandRange(0.75f, 1.2f));
                     }
                     else if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Bet)) {
-                        ChosenAction = EPlayerAction::Bet;
-                        OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, FMath::FRandRange(0.66f, 1.0f)); // Большой бет
+                        ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, FMath::FRandRange(0.66f, 1.0f));
                     }
                     else if (AllowedActions.Contains(EPlayerAction::Call)) { ChosenAction = EPlayerAction::Call; }
                     else { ChosenAction = EPlayerAction::Check; }
                 }
-                else if (EffectiveHandStrength >= PostflopRaiseStrongThreshold) { // Сильная рука
+                else if (EffectiveHandStrength >= PostflopRaiseStrongThreshold) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Path Strong Hand (>=%.2f)"), PostflopRaiseStrongThreshold);
                     if (AllowedActions.Contains(EPlayerAction::Raise) && FMath::FRand() < (0.3f + AggressivenessFactor * 0.5f)) {
-                        ChosenAction = EPlayerAction::Raise;
-                        OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength, false, FMath::FRandRange(0.5f, 0.75f)); // Средний рейз
+                        ChosenAction = EPlayerAction::Raise; OutDecisionAmount = CalculateRaiseSize(GameState, BotPlayerSeatData, CurrentBetToCallOnTable, MinValidPureRaiseAmount, EffectiveHandStrength, false, FMath::FRandRange(0.5f, 0.75f));
                     }
                     else if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Bet)) {
-                        ChosenAction = EPlayerAction::Bet;
-                        OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, FMath::FRandRange(0.5f, 0.75f)); // Средний бет
+                        ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, FMath::FRandRange(0.5f, 0.75f));
                     }
                     else if (AllowedActions.Contains(EPlayerAction::Call)) { ChosenAction = EPlayerAction::Call; }
                     else { ChosenAction = EPlayerAction::Check; }
                 }
-                else if (EffectiveHandStrength >= PostflopBetValueThreshold) { // Вэлью-бет / полу-блеф с дро
+                else if (EffectiveHandStrength >= PostflopBetValueThreshold) {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Path Value Bet Hand (>=%.2f)"), PostflopBetValueThreshold);
                     if (!bIsFacingBet) {
                         if (AllowedActions.Contains(EPlayerAction::Bet) && FMath::FRand() < (0.5f + AggressivenessFactor * 0.4f)) {
-                            ChosenAction = EPlayerAction::Bet;
-                            // Если это сильное дро, бет может быть больше
                             float BetFraction = (DrawScoreValue > 0.5f) ? FMath::FRandRange(0.5f, 0.75f) : FMath::FRandRange(0.33f, 0.6f);
-                            OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, BetFraction);
+                            ChosenAction = EPlayerAction::Bet; OutDecisionAmount = CalculateBetSize(GameState, BotPlayerSeatData, EffectiveHandStrength, false, BetFraction);
                         }
                         else if (AllowedActions.Contains(EPlayerAction::Check)) { ChosenAction = EPlayerAction::Check; }
                         else if (AllowedActions.Contains(EPlayerAction::Call)) { ChosenAction = EPlayerAction::Call; }
                         else { ChosenAction = EPlayerAction::Fold; }
                     }
-                    else { // Столкнулись со ставкой
+                    else {
                         if (AllowedActions.Contains(EPlayerAction::Call)) {
-                            // Коллим, если шансы банка оправдывают или рука/дро достаточно сильны
                             bool bGoodPotOdds = false;
                             if (AmountToCallAbsolute > 0 && GameState->Pot > 0) {
                                 float PotOddsRatio = static_cast<float>(AmountToCallAbsolute) / static_cast<float>(GameState->Pot + AmountToCallAbsolute);
-                                float RequiredEquity = PotOddsRatio; // Грубо
-                                if (EffectiveHandStrength * (1.5f - TightnessFactor) > RequiredEquity) { // Играем чуть лузовее по шансам
-                                    bGoodPotOdds = true;
-                                }
+                                float RequiredEquity = PotOddsRatio;
+                                if (EffectiveHandStrength * (1.5f - TightnessFactor) > RequiredEquity) { bGoodPotOdds = true; }
                             }
                             if (bGoodPotOdds) { ChosenAction = EPlayerAction::Call; }
                             else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; }
                             else { ChosenAction = EPlayerAction::Call; }
                         }
                         else if (AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Fold; }
+                        else { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Postflop ValueBet FacingBet - No Call/Fold. Unusual. Defaulting to Fold."), *BotPlayerSeatData.PlayerName); ChosenAction = EPlayerAction::Fold; }
                     }
                 }
-                else { // EffectiveHandStrength < PostflopCallThreshold (слабая рука/дро без хороших шансов)
+                else {
+                    UE_LOG(LogTemp, Verbose, TEXT("    Path Weak Hand (<%.2f)"), PostflopCallThreshold);
                     if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) {
                         ChosenAction = EPlayerAction::Check;
                     }
                     else if (AllowedActions.Contains(EPlayerAction::Fold)) {
                         ChosenAction = EPlayerAction::Fold;
                     }
-                    else if (AllowedActions.Contains(EPlayerAction::Call)) { // Вынужденный колл (например, очень маленькая ставка)
-                        if (AmountToCallAbsolute <= GameState->BigBlindAmount * 0.5f && FMath::FRand() < 0.2f) { // Очень дешевый колл
+                    else if (AllowedActions.Contains(EPlayerAction::Call)) {
+                        if (AmountToCallAbsolute <= GameState->BigBlindAmount * 0.5f && FMath::FRand() < 0.2f) {
                             ChosenAction = EPlayerAction::Call;
                         }
                         else {
-                            // Если и фолд недоступен, тогда только колл (маловероятно)
-                            if (!AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Call;
-                            else ChosenAction = EPlayerAction::Fold; // Добавил явный фолд если он есть
+                            if (!AllowedActions.Contains(EPlayerAction::Fold)) { ChosenAction = EPlayerAction::Call; UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop Weak Hand FacingBet - No Fold, forced Call."), *BotPlayerSeatData.PlayerName); }
+                            else ChosenAction = EPlayerAction::Fold;
                         }
                     }
+                    else { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Postflop Weak Hand - No Check/Fold/Call. Unusual. Defaulting to Fold."), *BotPlayerSeatData.PlayerName); ChosenAction = EPlayerAction::Fold; }
                 }
             }
         }
+        UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop decision logic resulted in: %s, AmountBeforeValidation: %lld"),
+            *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
     }
+    // --- КОНЕЦ ВАШЕЙ СУЩЕСТВУЮЩЕЙ ЛОГИКИ ---
 
     // --- Финальная Проверка и Коррекция OutDecisionAmount ---
-    // (Этот блок остается таким же, как вы предоставили в Части 2, с небольшими уточнениями)
+    UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d): Before Final Validation - ChosenAction: %s, OutAmount: %lld"),
+        *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
+
     if (!AllowedActions.Contains(ChosenAction) && !AllowedActions.IsEmpty()) {
-        UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Chosen action %s NOT in AllowedActions! Fallback."), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString());
-        if (AllowedActions.Contains(EPlayerAction::Check) && !bIsFacingBet) ChosenAction = EPlayerAction::Check; // Check если можно и нет ставки
-        else if (AllowedActions.Contains(EPlayerAction::Call) && bIsFacingBet) ChosenAction = EPlayerAction::Call; // Call если есть ставка
+        UE_LOG(LogTemp, Warning, TEXT("BotAI %s: ChosenAction %s (EffHS: %.2f) NOT in AllowedActions! Activating Fallback. Allowed: [%s]"),
+            *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), EffectiveHandStrength, *AllowedActionsString);
+        if (AllowedActions.Contains(EPlayerAction::Check) && !bIsFacingBet) ChosenAction = EPlayerAction::Check;
+        else if (AllowedActions.Contains(EPlayerAction::Call) && bIsFacingBet) ChosenAction = EPlayerAction::Call;
         else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold;
-        else ChosenAction = AllowedActions[0]; // Берем первое доступное, если что-то пошло не так
-        OutDecisionAmount = 0; // Сбрасываем сумму, так как действие изменилось
+        else { ChosenAction = AllowedActions[0]; UE_LOG(LogTemp, Error, TEXT("BotAI %s: Fallback took first available: %s from [%s]"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), *AllowedActionsString); }
+        OutDecisionAmount = 0;
+        UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString());
     }
 
     if (ChosenAction == EPlayerAction::Bet || ChosenAction == EPlayerAction::Raise) {
         int64 MaxPossibleTotalBet = BotPlayerSeatData.CurrentBet + BotPlayerSeatData.Stack;
-        if (OutDecisionAmount <= BotPlayerSeatData.CurrentBet && OutDecisionAmount < MaxPossibleTotalBet)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Calculated Bet/Raise total amount %lld not greater than current bet %lld. Fallback."),
+        if (OutDecisionAmount <= BotPlayerSeatData.CurrentBet && OutDecisionAmount < MaxPossibleTotalBet) {
+            UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Calculated Bet/Raise total amount %lld is <= current bet %lld and not All-In Max. Activating Fallback."),
                 *BotPlayerSeatData.PlayerName, OutDecisionAmount, BotPlayerSeatData.CurrentBet);
             if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) ChosenAction = EPlayerAction::Check;
             else if (bIsFacingBet && AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call;
             else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold;
-            else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0]; // крайний случай
+            else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0];
             OutDecisionAmount = 0;
+            UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet/Raise Amount Fallback (not > CurrentBet) Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString());
         }
         else if (OutDecisionAmount > MaxPossibleTotalBet) {
-            OutDecisionAmount = MaxPossibleTotalBet; // Коррекция на All-In
+            UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Correcting OutDecisionAmount %lld to All-In amount %lld"), *BotPlayerSeatData.PlayerName, OutDecisionAmount, MaxPossibleTotalBet);
+            OutDecisionAmount = MaxPossibleTotalBet;
         }
 
-        // Финальная валидация суммы для Bet/Raise
         if (ChosenAction == EPlayerAction::Bet) {
             int64 ActualBetAmountAdded = OutDecisionAmount - BotPlayerSeatData.CurrentBet;
-            if ((ActualBetAmountAdded < GameState->BigBlindAmount && ActualBetAmountAdded < BotPlayerSeatData.Stack) || ActualBetAmountAdded <= 0) {
+            // Проверяем, что добавляемая сумма положительна и не меньше минимального бета (если это не олл-ин)
+            if (((ActualBetAmountAdded < GameState->BigBlindAmount && ActualBetAmountAdded < BotPlayerSeatData.Stack) || ActualBetAmountAdded <= 0) && OutDecisionAmount < MaxPossibleTotalBet) {
                 if (!(ChosenAction == EPlayerAction::Check || ChosenAction == EPlayerAction::Call || ChosenAction == EPlayerAction::Fold)) {
-                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet total amount %lld (adds %lld) too small. Final Fallback to Check/Fold."), *BotPlayerSeatData.PlayerName, OutDecisionAmount, ActualBetAmountAdded);
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet total amount %lld (adds %lld) too small for non-all-in. Final Bet Fallback."), *BotPlayerSeatData.PlayerName, OutDecisionAmount, ActualBetAmountAdded);
                     if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) ChosenAction = EPlayerAction::Check;
                     else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold;
                     else if (bIsFacingBet && AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call;
+                    else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0];
                     OutDecisionAmount = 0;
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet Amount Final Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString());
                 }
             }
         }
         else if (ChosenAction == EPlayerAction::Raise) {
             int64 PureRaise = OutDecisionAmount - CurrentBetToCallOnTable;
-            if ((OutDecisionAmount <= CurrentBetToCallOnTable || PureRaise < MinValidPureRaiseAmount) && OutDecisionAmount < MaxPossibleTotalBet) {
+            if (((OutDecisionAmount <= CurrentBetToCallOnTable || PureRaise < MinValidPureRaiseAmount) && OutDecisionAmount < MaxPossibleTotalBet) && MaxPossibleTotalBet > CurrentBetToCallOnTable) {
                 if (!(ChosenAction == EPlayerAction::Call || ChosenAction == EPlayerAction::Fold)) {
-                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Raise total amount %lld invalid. PureRaise %lld vs MinPure %lld. Final Fallback to Call/Fold."),
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Raise total amount %lld invalid. PureRaise %lld vs MinPure %lld for non-all-in. Final Raise Fallback."),
                         *BotPlayerSeatData.PlayerName, OutDecisionAmount, PureRaise, MinValidPureRaiseAmount);
                     if (AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call;
                     else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold;
+                    else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0];
                     OutDecisionAmount = 0;
+                    UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Raise Amount Final Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString());
                 }
             }
         }
     }
     else {
-        OutDecisionAmount = 0; // Для Call, Check, Fold, PostBlind
+        OutDecisionAmount = 0;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d) FINAL DECISION: Action=%s, OutAmountForAction=%lld"),
+    UE_LOG(LogTemp, Warning, TEXT("BotAI %s (S%d) FINAL DECISION: Action=%s, OutAmountForProcessAction=%lld"),
         *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
+    UE_LOG(LogTemp, Warning, TEXT("==================== BotAI %s (Seat %d) - GetBestAction END ===================="),
+        *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
     return ChosenAction;
 }
-
-
 
 int64 UPokerBotAI::CalculateBetSize(const UOfflinePokerGameState* GameState, const FPlayerSeatData& BotPlayerSeatData, float CalculatedHandStrength, bool bIsBluff, float PotFractionOverride) const
 {
