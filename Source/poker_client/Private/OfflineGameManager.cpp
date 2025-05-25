@@ -19,26 +19,24 @@ void UOfflineGameManager::InitializeGame(int32 NumRealPlayers, int32 NumBots, in
     UE_LOG(LogTemp, Log, TEXT("UOfflineGameManager::InitializeGame: NumRealPlayers=%d, NumBots=%d, InitialStack=%lld, SB=%lld"),
         NumRealPlayers, NumBots, InitialStack, InSmallBlindAmount);
 
-    if (!GetOuter()) // Важно, чтобы UObject имел "владельца" для корректного управления памятью
+    if (!GetOuter())
     {
         UE_LOG(LogTemp, Error, TEXT("InitializeGame: GetOuter() is null! Cannot create UObjects without an outer."));
         return;
     }
 
-    // Создаем GameState и Deck, GetOuter() обычно GameInstance
     GameStateData = NewObject<UOfflinePokerGameState>(GetOuter());
     Deck = NewObject<UDeck>(GetOuter());
 
-    if (!GameStateData || !Deck) // Проверка TObjectPtr
+    if (!GameStateData || !Deck)
     {
         UE_LOG(LogTemp, Error, TEXT("InitializeGame: Failed to create GameState or Deck objects!"));
         return;
     }
 
-    // --- НОВОЕ: Инициализация BotAIInstance ---
-    if (!BotAIInstance) // Создаем, только если еще не создан (на случай повторного вызова InitializeGame)
+    if (!BotAIInstance)
     {
-        BotAIInstance = NewObject<UPokerBotAI>(this); // "this" (OfflineGameManager) будет владельцем
+        BotAIInstance = NewObject<UPokerBotAI>(this);
         if (BotAIInstance)
         {
             UE_LOG(LogTemp, Log, TEXT("InitializeGame: BotAIInstance created successfully."));
@@ -46,69 +44,90 @@ void UOfflineGameManager::InitializeGame(int32 NumRealPlayers, int32 NumBots, in
         else
         {
             UE_LOG(LogTemp, Error, TEXT("InitializeGame: Failed to create BotAIInstance! Bots will not function."));
-            // Решите, является ли это критической ошибкой. Для MVP без ботов можно продолжать.
-            // Если боты обязательны, можно здесь return;
         }
     }
     else
     {
         UE_LOG(LogTemp, Log, TEXT("InitializeGame: BotAIInstance already exists."));
     }
-    // --- КОНЕЦ НОВОГО ---
 
-    GameStateData->ResetState(); // Сброс всех полей GameState к начальным значениям
+    GameStateData->ResetState();
 
-    // Установка размеров блайндов
-    GameStateData->SmallBlindAmount = (InSmallBlindAmount <= 0) ? 5 : InSmallBlindAmount; // Базовый SB, если невалидный ввод
+    GameStateData->SmallBlindAmount = (InSmallBlindAmount <= 0) ? 5 : InSmallBlindAmount;
     if (InSmallBlindAmount <= 0) UE_LOG(LogTemp, Warning, TEXT("InitializeGame: Invalid SmallBlindAmount (%lld), defaulted to 5."), InSmallBlindAmount);
-    GameStateData->BigBlindAmount = GameStateData->SmallBlindAmount * 2; // BB обычно в два раза больше SB
+    GameStateData->BigBlindAmount = GameStateData->SmallBlindAmount * 2;
 
-    Deck->Initialize(); // Убедимся, что колода инициализирована при старте игры
+    Deck->Initialize();
 
-    // Валидация и корректировка количества игроков
     int32 TotalActivePlayers = NumRealPlayers + NumBots;
     const int32 MinPlayers = 2;
-    const int32 MaxPlayers = 9; // Максимальное количество мест за столом
+    const int32 MaxPlayers = 9;
 
     if (TotalActivePlayers < MinPlayers || TotalActivePlayers > MaxPlayers)
     {
         UE_LOG(LogTemp, Warning, TEXT("InitializeGame: Player count %d out of range [%d, %d]. Clamping."), TotalActivePlayers, MinPlayers, MaxPlayers);
         TotalActivePlayers = FMath::Clamp(TotalActivePlayers, MinPlayers, MaxPlayers);
-        if (NumRealPlayers > TotalActivePlayers) NumRealPlayers = TotalActivePlayers; // Убедимся, что реальных игроков не больше, чем всего мест
+        if (NumRealPlayers > TotalActivePlayers) NumRealPlayers = TotalActivePlayers;
         NumBots = TotalActivePlayers - NumRealPlayers;
-        if (NumBots < 0) NumBots = 0; // На всякий случай
+        if (NumBots < 0) NumBots = 0;
     }
 
-    // Получение данных реального игрока (если используется)
     FString PlayerActualName = TEXT("Player");
     int64 PlayerActualId = -1;
-    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetOuter())) {
-        if (GI->bIsLoggedIn || GI->bIsInOfflineMode) {
+    TArray<FBotPersonalitySettings> BotPersonalitiesFromGI; // <<< НОВОЕ ИЗМЕНЕНИЕ
+
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetOuter());
+    if (GI)
+    {
+        if (GI->bIsLoggedIn || GI->bIsInOfflineMode)
+        {
             PlayerActualName = GI->LoggedInUsername.IsEmpty() ? TEXT("Player") : GI->LoggedInUsername;
             PlayerActualId = GI->LoggedInUserId;
         }
+        BotPersonalitiesFromGI = GI->PendingBotPersonalities; // <<< НОВОЕ ИЗМЕНЕНИЕ: Получаем настройки личностей
     }
-    else { UE_LOG(LogTemp, Warning, TEXT("InitializeGame: Could not get GameInstance. Using default player name.")); }
+    else { UE_LOG(LogTemp, Warning, TEXT("InitializeGame: Could not get GameInstance. Using default player name and bot personalities.")); }
 
-    // Заполнение информации о местах игроков
-    GameStateData->Seats.Empty(); // Очищаем на случай повторной инициализации
+
+    GameStateData->Seats.Empty();
     GameStateData->Seats.Reserve(TotalActivePlayers);
     for (int32 i = 0; i < TotalActivePlayers; ++i) {
         FPlayerSeatData Seat;
         Seat.SeatIndex = i;
-        Seat.bIsBot = (i >= NumRealPlayers); // Первые NumRealPlayers - это реальные игроки
-        Seat.PlayerName = Seat.bIsBot ? FString::Printf(TEXT("Bot %d"), (i - NumRealPlayers) + 1) : PlayerActualName; // Нумерация ботов с 1
+        Seat.bIsBot = (i >= NumRealPlayers);
+        Seat.PlayerName = Seat.bIsBot ? FString::Printf(TEXT("Bot %d"), (i - NumRealPlayers) + 1) : PlayerActualName;
         Seat.PlayerId = Seat.bIsBot ? -1 : PlayerActualId;
         Seat.Stack = InitialStack;
-        Seat.bIsSittingIn = true; // Все игроки начинают "в игре"
-        Seat.Status = EPlayerStatus::Waiting; // Начальный статус до первой раздачи
+        Seat.bIsSittingIn = true;
+        Seat.Status = EPlayerStatus::Waiting;
+
+        // <<< НОВОЕ ИЗМЕНЕНИЕ: Установка личности для бота >>>
+        if (Seat.bIsBot)
+        {
+            int32 BotArrayIndex = i - NumRealPlayers; // Индекс бота в массиве личностей (0 для первого бота, 1 для второго и т.д.)
+            if (BotPersonalitiesFromGI.IsValidIndex(BotArrayIndex))
+            {
+                Seat.BotPersonality = BotPersonalitiesFromGI[BotArrayIndex];
+                UE_LOG(LogTemp, Log, TEXT("InitializeGame: Bot %s (Seat %d) initialized with custom personality - Aggro: %.2f, Bluff: %.2f, Tight: %.2f"),
+                    *Seat.PlayerName, Seat.SeatIndex,
+                    Seat.BotPersonality.Aggressiveness, Seat.BotPersonality.BluffFrequency, Seat.BotPersonality.Tightness);
+            }
+            else
+            {
+                // Используем личность по умолчанию, если настройки не найдены (например, ботов больше, чем настроек в GI)
+                Seat.BotPersonality = FBotPersonalitySettings(); // Конструктор по умолчанию FBotPersonalitySettings
+                UE_LOG(LogTemp, Warning, TEXT("InitializeGame: Bot %s (Seat %d) initialized with DEFAULT personality (settings not found in GameInstance for bot index %d). Using defaults: Aggro: %.2f, Bluff: %.2f, Tight: %.2f"),
+                    *Seat.PlayerName, Seat.SeatIndex, BotArrayIndex,
+                    Seat.BotPersonality.Aggressiveness, Seat.BotPersonality.BluffFrequency, Seat.BotPersonality.Tightness);
+            }
+        }
+        // <<< КОНЕЦ НОВОГО ИЗМЕНЕНИЯ >>>
+
         GameStateData->Seats.Add(Seat);
     }
     BuildTurnOrderMap();
-    // Начальные значения для состояния игры (многие из них уже в ResetState)
-    GameStateData->CurrentStage = EGameStage::WaitingForPlayers; // Готовы к StartNewHand
-    GameStateData->DealerSeat = -1; // Дилер будет определен в первой StartNewHand
-    // Остальные поля, такие как CurrentTurnSeat, CurrentBetToCall и т.д., будут установлены в StartNewHand.
+    GameStateData->CurrentStage = EGameStage::WaitingForPlayers;
+    GameStateData->DealerSeat = -1;
 
     UE_LOG(LogTemp, Log, TEXT("Offline game initialized. SB: %lld, BB: %lld. Active Seats: %d."),
         GameStateData->SmallBlindAmount, GameStateData->BigBlindAmount, GameStateData->Seats.Num());
@@ -1980,73 +1999,119 @@ UOfflineGameManager::FActionDecisionContext UOfflineGameManager::GetActionContex
 // --- НОВАЯ Приватная Функция для Вызова Решения Бота по Таймеру ---
 void UOfflineGameManager::TriggerBotDecision(int32 BotSeatIndex)
 {
+    // 1. Проверка предусловий
     if (!GameStateData || !BotAIInstance || !GameStateData->Seats.IsValidIndex(BotSeatIndex) || !GameStateData->Seats[BotSeatIndex].bIsBot)
     {
         UE_LOG(LogTemp, Error, TEXT("TriggerBotDecision: Prerequisites not met for BotSeatIndex %d. (GameState: %d, BotAI: %d, ValidIndex: %d, IsBot: %d)"),
-            BotSeatIndex, IsValid(GameStateData.Get()), IsValid(BotAIInstance.Get()),
-            GameStateData ? GameStateData->Seats.IsValidIndex(BotSeatIndex) : 0,
-            (GameStateData && GameStateData->Seats.IsValidIndex(BotSeatIndex)) ? GameStateData->Seats[BotSeatIndex].bIsBot : 0
+            BotSeatIndex,
+            GameStateData.Get() ? 1 : 0,                       // bool -> int (1 for true, 0 for false)
+            BotAIInstance.Get() ? 1 : 0,                       // bool -> int (1 for true, 0 for false)
+            (GameStateData.Get() && GameStateData->Seats.IsValidIndex(BotSeatIndex)) ? 1 : 0, // bool -> int
+            (GameStateData.Get() && GameStateData->Seats.IsValidIndex(BotSeatIndex) && GameStateData->Seats[BotSeatIndex].bIsBot) ? 1 : 0 // bool -> int
         );
+        // Если что-то не так, и у нас есть текущий ход, лучше его не терять, а запросить снова
+        // или обработать как ошибку, чтобы игра не зависла.
+        if (GameStateData && GameStateData->CurrentTurnSeat != -1) {
+            RequestPlayerAction(GameStateData->CurrentTurnSeat);
+        }
         return;
     }
 
-    // Проверяем, действительно ли сейчас ход этого бота, на случай если состояние изменилось, пока тикал таймер
+    // 2. Проверяем, действительно ли сейчас ход этого бота
     if (GameStateData->CurrentTurnSeat != BotSeatIndex)
     {
-        UE_LOG(LogTemp, Warning, TEXT("TriggerBotDecision: CurrentTurnSeat (%d) is not BotSeatIndex (%d). Bot will not act."), GameStateData->CurrentTurnSeat, BotSeatIndex);
+        UE_LOG(LogTemp, Warning, TEXT("TriggerBotDecision: CurrentTurnSeat (%d) is not BotSeatIndex (%d). Bot will not act now. Timer might have fired late."),
+            GameStateData->CurrentTurnSeat, BotSeatIndex);
+        // Не вызываем ProcessPlayerAction, так как ход уже мог перейти к другому
+        // или ситуация изменилась. RequestPlayerAction для CurrentTurnSeat должен был быть уже вызван.
         return;
     }
 
     const FPlayerSeatData& BotPlayer = GameStateData->Seats[BotSeatIndex];
 
-    // Получаем контекст действий для бота
+    // 3. Получаем контекст действий для бота
     FActionDecisionContext BotActionContext = GetActionContextForSeat(BotSeatIndex);
 
-    if (BotActionContext.AvailableActions.IsEmpty())
+    // 4. Проверяем, есть ли у бота доступные действия
+    // (Учитываем, что AllIn игрок может не иметь действий, но раунд еще не окончен для других)
+    if (BotActionContext.AvailableActions.IsEmpty() && BotPlayer.Status != EPlayerStatus::AllIn)
     {
-        UE_LOG(LogTemp, Log, TEXT("TriggerBotDecision: Bot %s (Seat %d) has no available actions. Betting round might be over or player cannot act."),
-            *BotPlayer.PlayerName, BotSeatIndex);
-        // Если нет действий, возможно, нужно проверить конец раунда или передать ход.
-        // Но ProcessPlayerAction с EPlayerAction::None или пропуск хода должны быть обработаны в основной логике.
-        // Можно просто залогировать и ничего не делать, полагаясь, что ProcessPlayerAction разберется.
-        // На данный момент, если IsBettingRoundOver() вызывается после каждого ProcessPlayerAction, это должно быть нормально.
-        // Это может случиться, если бот уже AllIn и не может дальше влиять на ставки.
+        UE_LOG(LogTemp, Log, TEXT("TriggerBotDecision: Bot %s (Seat %d) has no available actions (and not AllIn). Current Status: %s. Attempting to advance game state."),
+            *BotPlayer.PlayerName, BotSeatIndex, *UEnum::GetValueAsString(BotPlayer.Status));
+
+        // Если у бота нет действий (и он не AllIn), это может означать, что он должен был бы
+        // автоматически пропустить ход (например, уже сфолдил, или это ошибка в GetActionContextForSeat).
+        // Пытаемся определить, окончен ли раунд, или передать ход следующему.
         if (IsBettingRoundOver()) {
             ProceedToNextGameStage();
         }
         else {
-            // Этого не должно происходить, если GetActionContextForSeat правильно определяет, что игрок не может ходить
-            // и возвращает пустой AllowedActions, который потом не приведет к вызову ProcessPlayerAction.
-            // Но на всякий случай, если мы сюда попали, и раунд не окончен, передаем ход.
-            RequestPlayerAction(GetNextPlayerToAct(BotSeatIndex, true));
+            // Если раунд не окончен, но у текущего бота нет действий (что странно, если он не AllIn/Folded)
+            // пытаемся передать ход следующему. GetNextPlayerToAct должен пропустить этого бота.
+            int32 NextPlayer = GetNextPlayerToAct(BotSeatIndex, true);
+            if (NextPlayer != -1) {
+                RequestPlayerAction(NextPlayer);
+            }
+            else {
+                // Это критическая ситуация, если раунд не окончен, а следующего игрока нет.
+                UE_LOG(LogTemp, Error, TEXT("TriggerBotDecision: No available actions for bot %d, IsBettingRoundOver is false, but no next player found! Forcing stage advance."), BotSeatIndex);
+                ProceedToNextGameStage(); // Аварийный переход
+            }
         }
         return;
     }
+    BotAIInstance->SetPersonalityFactors(BotPlayer.BotPersonality);
+    // <<< КОНЕЦ НОВОГО ИЗМЕНЕНИЯ >>>
 
-    int64 BotChosenAmount = 0; // Сумма, которую бот решит поставить (общая сумма для Bet/Raise, 0 для Call/Check/Fold/PostBlind)
+    int64 BotChosenAmount = 0; // Сумма, которую бот решит поставить (общая сумма для Bet/Raise)
 
-    EPlayerAction ChosenAction = BotAIInstance->GetBestAction(
-        GameStateData.Get(),
-        BotPlayer,
-        BotActionContext.AvailableActions,
-        BotActionContext.CurrentBetToCallOnTable, // Это GameStateData->CurrentBetToCall
-        BotActionContext.MinPureRaiseUI,          // Минимальный чистый рейз или мин. бет
-        BotChosenAmount                           // Выходной параметр суммы
-    );
+    EPlayerAction ChosenAction = EPlayerAction::None; // Инициализируем
 
-    UE_LOG(LogTemp, Log, TEXT("Bot %s (Seat %d) AI decided: %s with Amount: %lld"),
+    // Если бот AllIn и не может больше делать ставки, его действие по сути "Check" или "None"
+    // Однако, если он еще не поставил блайнд и у него All-In, то его действие - PostBlind (All-In).
+    bool bBotIsEffectivelyAllInAndCannotActFurther =
+        (BotPlayer.Status == EPlayerStatus::AllIn &&
+            BotPlayer.Stack == 0 &&
+            BotPlayer.CurrentBet >= BotActionContext.CurrentBetToCallOnTable && // Его ставка уже покрывает или равна текущей
+            GameStateData->CurrentStage >= EGameStage::Preflop); // Не на стадии постановки блайндов
+
+    if (bBotIsEffectivelyAllInAndCannotActFurther)
+    {
+        UE_LOG(LogTemp, Log, TEXT("TriggerBotDecision: Bot %s (Seat %d) is All-In and cannot act further. Treating as effective Check/Pass."),
+            *BotPlayer.PlayerName, BotSeatIndex);
+        ChosenAction = BotActionContext.AvailableActions.Contains(EPlayerAction::Check) ? EPlayerAction::Check : EPlayerAction::None;
+        // Если Check не доступен (т.е. есть ставка для колла, которую он уже покрыл своим олл-ином),
+        // то его действие фактически "None" для ProcessPlayerAction.
+        // ProcessPlayerAction должен корректно обработать EPlayerAction::None для такого игрока (пропустить ход).
+    }
+    else if (BotActionContext.AvailableActions.Num() > 0) // Если есть доступные действия
+    {
+        ChosenAction = BotAIInstance->GetBestAction(
+            GameStateData.Get(),
+            BotPlayer,
+            BotActionContext.AvailableActions,
+            BotActionContext.CurrentBetToCallOnTable,
+            BotActionContext.MinPureRaiseUI,
+            BotChosenAmount
+        );
+    }
+    else // Нет доступных действий, но он и не AllIn, который не может влиять (странная ситуация)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("TriggerBotDecision: Bot %s (Seat %d) has NO available actions, but not clearly All-In/Done. Status: %s. Defaulting to Fold if possible."),
+            *BotPlayer.PlayerName, BotSeatIndex, *UEnum::GetValueAsString(BotPlayer.Status));
+        ChosenAction = EPlayerAction::Fold; // Безопасное действие по умолчанию в странной ситуации
+    }
+
+
+    UE_LOG(LogTemp, Log, TEXT("Bot %s (Seat %d) AI decided: %s with Amount (total bet): %lld"),
         *BotPlayer.PlayerName, BotSeatIndex, *UEnum::GetValueAsString(ChosenAction), BotChosenAmount);
 
-    // Для PostBlind и Call, Amount передаваемый в ProcessPlayerAction должен быть 0,
-    // так как сама функция ProcessPlayerAction вычисляет нужную сумму.
-    // Для Bet и Raise, Amount должен быть итоговой суммой ставки.
     int64 AmountForProcessAction = 0;
     if (ChosenAction == EPlayerAction::Bet || ChosenAction == EPlayerAction::Raise)
     {
-        AmountForProcessAction = BotChosenAmount;
+        AmountForProcessAction = BotChosenAmount; // Передаем ОБЩУЮ сумму ставки
     }
-    // Для PostBlind сумма будет взята из GameStateData->Small/BigBlindAmount внутри ProcessPlayerAction->PostBlinds.
-    // Для Call сумма будет вычислена в ProcessPlayerAction на основе CurrentBetToCall.
+    // Для PostBlind, Call, Check, Fold, None - Amount = 0, т.к. ProcessPlayerAction сам рассчитает/проигнорирует.
 
     ProcessPlayerAction(BotSeatIndex, ChosenAction, AmountForProcessAction);
 }

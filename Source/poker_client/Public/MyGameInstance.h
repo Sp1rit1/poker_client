@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "PokerDataTypes.h"
 #include "Engine/GameInstance.h"
 // Прямые объявления для менеджеров и виджетов, чтобы не включать их .h здесь
 class UStartScreenUIManager;
@@ -101,6 +102,8 @@ public:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Offline Game Settings")
     int64 PendingSmallBlind = 50;
 
+    UPROPERTY(BlueprintReadWrite, Category = "Offline Game Settings")
+    TArray<FBotPersonalitySettings> PendingBotPersonalities;
 
     // --- Делегаты для событий аутентификации ---
 // Виджеты будут подписываться на них

@@ -11,11 +11,24 @@
 
 UPokerBotAI::UPokerBotAI()
 {
-    AggressivenessFactor = FMath::FRandRange(0.2f, 0.6f); // Менее агрессивные по умолчанию
-    BluffFrequency = FMath::FRandRange(0.05f, 0.15f);
-    TightnessFactor = FMath::FRandRange(0.4f, 0.8f); // От средне-лузовых до тайтовых
+    // Устанавливаем дефолтные значения, которые будут переопределены через SetPersonalityFactors
+    AggressivenessFactor = 0.5f;
+    BluffFrequency = 0.1f;
+    TightnessFactor = 0.5f;
 
-    UE_LOG(LogTemp, Log, TEXT("UPokerBotAI instance created. Personality - Aggro: %.2f, BluffFreq: %.2f, Tightness: %.2f"),
+    bIsTesting = false; // Оставляем
+    TestFixedRandValue = 0.5f; // Оставляем
+
+    UE_LOG(LogTemp, Log, TEXT("UPokerBotAI instance created with DEFAULT personality."));
+}
+
+void UPokerBotAI::SetPersonalityFactors(const FBotPersonalitySettings& Settings)
+{
+    AggressivenessFactor = FMath::Clamp(Settings.Aggressiveness, 0.0f, 1.0f);
+    BluffFrequency = FMath::Clamp(Settings.BluffFrequency, 0.0f, 1.0f); // Можно ограничить верхний предел, если 1.0 это слишком много
+    TightnessFactor = FMath::Clamp(Settings.Tightness, 0.0f, 1.0f);
+
+    UE_LOG(LogTemp, Log, TEXT("UPokerBotAI Personality SET for next action - Aggro: %.2f, BluffFreq: %.2f, Tightness: %.2f"),
         AggressivenessFactor, BluffFrequency, TightnessFactor);
 }
 

@@ -35,6 +35,8 @@ public:
 
     UPokerBotAI();
 
+    void SetPersonalityFactors(const FBotPersonalitySettings& Settings);
+
     // Флаг для переключения на детерминированное поведение в тестах
     bool bIsTesting = false;
     // Значение, которое будет возвращать FRand() в тестовом режиме

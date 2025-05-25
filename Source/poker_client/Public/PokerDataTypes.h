@@ -158,6 +158,31 @@ struct POKER_CLIENT_API FPokerHandResult
 	FPokerHandResult() = default;
 };
 
+
+USTRUCT(BlueprintType)
+struct FBotPersonalitySettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bot Personality")
+	float Aggressiveness = 0.5f; // Значение по умолчанию
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bot Personality")
+	float BluffFrequency = 0.1f; // Значение по умолчанию
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bot Personality")
+	float Tightness = 0.5f; // Значение по умолчанию
+
+	FBotPersonalitySettings() = default;
+
+	FBotPersonalitySettings(float InAggro, float InBluff, float InTight)
+		: Aggressiveness(FMath::Clamp(InAggro, 0.0f, 1.0f)),
+		BluffFrequency(FMath::Clamp(InBluff, 0.0f, 1.0f)), // Можно и до 0.5, если хотите
+		Tightness(FMath::Clamp(InTight, 0.0f, 1.0f))
+	{
+	}
+};
+
 // Структура, хранящая данные об одном игроке (или месте) за столом
 USTRUCT(BlueprintType)
 struct POKER_CLIENT_API  FPlayerSeatData
@@ -205,6 +230,9 @@ struct POKER_CLIENT_API  FPlayerSeatData
 
 	UPROPERTY(BlueprintReadWrite, Category = "Player Seat")
 	bool bHasActedThisSubRound = false; // Сделал ли игрок ход в текущем "под-раунде" ставок
+
+	UPROPERTY(BlueprintReadWrite, Category = "Player Seat|Bot") // Доступно для чтения/записи из BP
+	FBotPersonalitySettings BotPersonality;
 
 	FPlayerSeatData() = default;
 
