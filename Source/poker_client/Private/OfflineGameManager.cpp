@@ -437,61 +437,6 @@ void UOfflineGameManager::BuildTurnOrderMap()
     UE_LOG(LogTemp, Log, TEXT("BuildTurnOrderMap: Turn order map successfully built with %d entries."), CurrentTurnOrderMap_Internal.Num());
 }
 
-
-// Вспомогательная функция для постановки блайндов. Вызывается из ProcessPlayerAction.
-void UOfflineGameManager::PostBlinds()
-{
-    if (!GameStateData) return;
-
-    // Постановка Small Blind
-    if (GameStateData->Seats.IsValidIndex(GameStateData->PendingSmallBlindSeat))
-    {
-        FPlayerSeatData& SBPlayer = GameStateData->Seats[GameStateData->PendingSmallBlindSeat];
-        if (SBPlayer.Status == EPlayerStatus::MustPostSmallBlind) // Двойная проверка
-        {
-            int64 ActualSB = FMath::Min(GameStateData->SmallBlindAmount, SBPlayer.Stack);
-            SBPlayer.Stack -= ActualSB;
-            SBPlayer.CurrentBet = ActualSB;
-            SBPlayer.bIsSmallBlind = true;
-            SBPlayer.Status = EPlayerStatus::Playing; // Поставил блайнд, теперь в игре
-            GameStateData->Pot += ActualSB;
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Small Blind: %lld. Стек: %lld"), *SBPlayer.PlayerName, ActualSB, SBPlayer.Stack));
-        }
-    }
-    else { UE_LOG(LogTemp, Error, TEXT("PostBlinds: Invalid PendingSmallBlindSeat index: %d"), GameStateData->PendingSmallBlindSeat); }
-
-    // Постановка Big Blind
-    if (GameStateData->Seats.IsValidIndex(GameStateData->PendingBigBlindSeat))
-    {
-        FPlayerSeatData& BBPlayer = GameStateData->Seats[GameStateData->PendingBigBlindSeat];
-        if (BBPlayer.Status == EPlayerStatus::MustPostBigBlind) // Двойная проверка
-        {
-            int64 ActualBB = FMath::Min(GameStateData->BigBlindAmount, BBPlayer.Stack);
-            BBPlayer.Stack -= ActualBB;
-            BBPlayer.CurrentBet = ActualBB;
-            BBPlayer.bIsBigBlind = true;
-            BBPlayer.Status = EPlayerStatus::Playing;
-            GameStateData->Pot += ActualBB;
-            GameStateData->CurrentBetToCall = GameStateData->BigBlindAmount; // Устанавливаем начальную ставку для колла
-            // Игрок, поставивший ББ, является первым агрессором в этом раунде (до других действий)
-            GameStateData->LastAggressorSeatIndex = GameStateData->PendingBigBlindSeat;
-            GameStateData->LastBetOrRaiseAmountInCurrentRound = GameStateData->BigBlindAmount;
-            // Первый, кто должен будет походить после BB, "открывает" торги для других
-            GameStateData->PlayerWhoOpenedBettingThisRound = DetermineFirstPlayerToActAtPreflop();
-
-
-            OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Big Blind: %lld. Стек: %lld"), *BBPlayer.PlayerName, ActualBB, BBPlayer.Stack));
-        }
-    }
-    else { UE_LOG(LogTemp, Error, TEXT("PostBlinds: Invalid PendingBigBlindSeat index: %d"), GameStateData->PendingBigBlindSeat); }
-
-    // Обновляем информацию о столе для UI после постановки блайндов
-    FString BlindsPosterName = TEXT("Blinds"); // Общее имя для события
-    if (GameStateData->Seats.IsValidIndex(GameStateData->PendingBigBlindSeat)) BlindsPosterName = GameStateData->Seats[GameStateData->PendingBigBlindSeat].PlayerName;
-    else if (GameStateData->Seats.IsValidIndex(GameStateData->PendingSmallBlindSeat)) BlindsPosterName = GameStateData->Seats[GameStateData->PendingSmallBlindSeat].PlayerName;
-    OnTableStateInfoDelegate.Broadcast(BlindsPosterName, GameStateData->Pot);
-}
-
 void UOfflineGameManager::RequestPlayerAction(int32 SeatIndex)
 {
     if (!GameStateData || !GameStateData->Seats.IsValidIndex(SeatIndex)) {
@@ -601,23 +546,73 @@ void UOfflineGameManager::ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlay
         GameStateData->LastAggressorSeatIndex, GameStateData->LastBetOrRaiseAmountInCurrentRound, GameStateData->PlayerWhoOpenedBettingThisRound,
         Player.bHasActedThisSubRound ? TEXT("true") : TEXT("false"));
 
-    // --- Обработка Постановки Блайндов ---
-    if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind) {
-        if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingSmallBlindSeat) {
-            PostBlinds(); // Эта функция теперь вызывается только ОДИН РАЗ после того, как ОБА блайнда подтвердили свое действие
-            RequestBigBlind();
+    if (PlayerAction == EPlayerAction::PostBlind) // Убрали проверку стадии здесь, будем проверять внутри
+    {
+        bool bBlindPostedSuccessfully = false;
+        if (GameStateData->CurrentStage == EGameStage::WaitingForSmallBlind && ActingPlayerSeatIndex == GameStateData->PendingSmallBlindSeat)
+        {
+            FPlayerSeatData& SBPlayer = Player; // Player уже является ссылкой на GameStateData->Seats[ActingPlayerSeatIndex]
+            int64 ActualSBToPost = FMath::Min(GameStateData->SmallBlindAmount, SBPlayer.Stack);
+            SBPlayer.Stack -= ActualSBToPost;
+            SBPlayer.CurrentBet = ActualSBToPost;
+            SBPlayer.bIsSmallBlind = true;
+            GameStateData->Pot += ActualSBToPost;
+
+            if (SBPlayer.Stack == 0) {
+                SBPlayer.Status = EPlayerStatus::AllIn;
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s идёт All-In на малом блайнде (%lld)."), *PlayerName, ActualSBToPost));
+            }
+            else {
+                SBPlayer.Status = EPlayerStatus::Playing;
+            }
+            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Small Blind: %lld. Стек: %lld"), *PlayerName, ActualSBToPost, SBPlayer.Stack));
+
+            bBlindPostedSuccessfully = true;
+            Player.bHasActedThisSubRound = true; // SB сделал свое обязательное действие
+            Player.bIsTurn = false; // Его ход на этом этапе завершен
+            RequestBigBlind(); // Переходим к запросу BB
         }
-        else { /* ... re-request ... */ RequestPlayerAction(ActingPlayerSeatIndex); }
-        return;
-    }
-    else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind) {
-        if (PlayerAction == EPlayerAction::PostBlind && ActingPlayerSeatIndex == GameStateData->PendingBigBlindSeat) {
-            PostBlinds(); // Поставит BB, обновит Pot, CurrentBetToCall, LastAggressor etc.
+        else if (GameStateData->CurrentStage == EGameStage::WaitingForBigBlind && ActingPlayerSeatIndex == GameStateData->PendingBigBlindSeat)
+        {
+            FPlayerSeatData& BBPlayer = Player;
+            int64 ActualBBToPost = FMath::Min(GameStateData->BigBlindAmount, BBPlayer.Stack);
+            BBPlayer.Stack -= ActualBBToPost;
+            BBPlayer.CurrentBet = ActualBBToPost;
+            BBPlayer.bIsBigBlind = true;
+            GameStateData->Pot += ActualBBToPost;
+
+            // Устанавливаем состояние для начала префлоп-торгов
+            GameStateData->CurrentBetToCall = GameStateData->BigBlindAmount;
+            GameStateData->LastAggressorSeatIndex = ActingPlayerSeatIndex; // BB - последний "агрессор"
+            GameStateData->LastBetOrRaiseAmountInCurrentRound = GameStateData->BigBlindAmount;
+            GameStateData->PlayerWhoOpenedBettingThisRound = ActingPlayerSeatIndex; // BB "открыл" торги
+
+            if (BBPlayer.Stack == 0) {
+                BBPlayer.Status = EPlayerStatus::AllIn;
+                if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s идёт All-In на большом блайнде (%lld)."), *PlayerName, ActualBBToPost));
+            }
+            else {
+                BBPlayer.Status = EPlayerStatus::Playing;
+            }
+            if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("%s поставил Big Blind: %lld. Стек: %lld"), *PlayerName, ActualBBToPost, BBPlayer.Stack));
             if (OnGameHistoryEventDelegate.IsBound()) OnGameHistoryEventDelegate.Broadcast(FString::Printf(TEXT("Блайнды поставлены. Банк: %lld"), GameStateData->Pot));
-            DealHoleCardsAndStartPreflop();
+
+            bBlindPostedSuccessfully = true;
+            Player.bHasActedThisSubRound = true; // BB сделал свое обязательное действие
+            Player.bIsTurn = false; // Его ход на этом этапе завершен
+            DealHoleCardsAndStartPreflop(); // Начинаем раздачу карт и префлоп
         }
-        else { /* ... re-request ... */ RequestPlayerAction(ActingPlayerSeatIndex); }
-        return;
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ProcessPlayerAction: Invalid action/player/stage for PostBlind. Player: %s (Seat %d), Action: PostBlind, Stage: %s. Re-requesting action."),
+                *PlayerName, ActingPlayerSeatIndex, *UEnum::GetValueAsString(GameStateData->CurrentStage));
+            RequestPlayerAction(ActingPlayerSeatIndex); // Запросить действие у текущего игрока снова
+        }
+        // Обновляем TableStateInfo после каждого блайнда (или только после BB, если хотите)
+        if (bBlindPostedSuccessfully && OnTableStateInfoDelegate.IsBound()) {
+            OnTableStateInfoDelegate.Broadcast(PlayerName, GameStateData->Pot);
+        }
+        return; // Выход из ProcessPlayerAction после обработки PostBlind
     }
 
     // --- Обработка Игровых Действий (Preflop, Flop, Turn, River) ---

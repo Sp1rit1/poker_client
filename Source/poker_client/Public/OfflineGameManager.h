@@ -99,6 +99,13 @@ public:
     UFUNCTION(BlueprintPure, Category = "Offline Game|Getters")
     UDeck* GetDeck() const;
 
+    bool IsBettingRoundOver() const;
+    int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true, EPlayerStatus RequiredStatus = EPlayerStatus::MAX_None) const;
+    int32 DetermineFirstPlayerToActAtPreflop() const;
+    int32 DetermineFirstPlayerToActPostflop() const;
+    void ProceedToNextGameStage();
+    void ProceedToShowdown();
+
 private:
     UPROPERTY()
     TObjectPtr<UPokerBotAI> BotAIInstance;
@@ -112,17 +119,8 @@ private:
     void RequestPlayerAction(int32 SeatIndex);
     void RequestBigBlind();
     void DealHoleCardsAndStartPreflop();
-    void ProceedToNextGameStage();
-    void ProceedToShowdown();
     TMap<int32, int32> CurrentTurnOrderMap_Internal;
     TMap<int32, int64> AwardPotToWinner(const TArray<int32>& WinningSeatIndices);
-
-    // --- Вспомогательные Функции ---
-    int32 GetNextPlayerToAct(int32 StartSeatIndex, bool bExcludeStartSeat = true, EPlayerStatus RequiredStatus = EPlayerStatus::MAX_None) const;
-    int32 DetermineFirstPlayerToActAtPreflop() const;
-    int32 DetermineFirstPlayerToActPostflop() const;
-    bool IsBettingRoundOver() const;
-    void PostBlinds();
 
     UFUNCTION()
     void TriggerBotDecision(int32 BotSeatIndex);
