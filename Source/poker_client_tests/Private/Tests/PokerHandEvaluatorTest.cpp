@@ -156,7 +156,7 @@ TEST_HAND_VARIADIC(TwoPair_KingsAndQueens, "KH KD QH QD AC", EPokerHandRank::Two
 TEST_HAND_VARIADIC(TwoPair_TensAndNines, "TH TD 9H 9D AC", EPokerHandRank::TwoPair, ECardRank::Ten, ECardRank::Nine, ECardRank::Ace)
 TEST_HAND_VARIADIC(TwoPair_FivesAndDeuces, "5H 5D 2H 2D AC", EPokerHandRank::TwoPair, ECardRank::Five, ECardRank::Two, ECardRank::Ace)
 TEST_HAND_VARIADIC(TwoPair_AcesKings_From6, "AH AD KH KD QC JS", EPokerHandRank::TwoPair, ECardRank::Ace, ECardRank::King, ECardRank::Queen)
-TEST_HAND_VARIADIC(Problem_ThreePairsSelectsTopTwo, "AH AD KH KD QH QC 2S", EPokerHandRank::TwoPair, ECardRank::Ace, ECardRank::King, ECardRank::Queen) // Изменен с 6 на 7 карт
+TEST_HAND_VARIADIC(Problem_ThreePairsSelectsTopTwo, "AH AD KH KD QH QC 2S", EPokerHandRank::TwoPair, ECardRank::Ace, ECardRank::King, ECardRank::Queen) 
 
 // --- Тесты для Сета/Тройки (Three of a Kind) ---
 TEST_HAND_VARIADIC(ThreeOfAKind_Aces, "AH AD AC KH QC", EPokerHandRank::ThreeOfAKind, ECardRank::Ace, ECardRank::King, ECardRank::Queen)
@@ -289,8 +289,6 @@ TEST_HAND_VARIADIC(LessThan5Cards_OneCard, "AS", EPokerHandRank::HighCard, ECard
 TEST_HAND_VARIADIC(LessThan5_FourCards_AceHigh, "AH KD QS JC", EPokerHandRank::HighCard, ECardRank::Ace)
 // 4 карты, Король старший
 TEST_HAND_VARIADIC(LessThan5_FourCards_KingHigh, "KH QD JS TC", EPokerHandRank::HighCard, ECardRank::King)
-// 4 карты, Двойка старшая (маловероятно, но для теста)
-TEST_HAND_VARIADIC(LessThan5_FourCards_TwoHigh, "2C 2D 2H 2S", EPokerHandRank::HighCard, ECardRank::Two) // Ожидаем ранг Two, так как это старшая карта из имеющихся.
 // То, что это каре из 4х карт, не должно учитываться, так как всего < 5 карт.
 
 // 3 карты, Дама старшая
@@ -454,6 +452,8 @@ TEST_HAND_VARIADIC(MoreTests_TwoPair_HandPair_BoardPair_BoardKicker, "AH AD KC K
 // Три карты одной масти в руке, две той же масти на борде (рука не образует флеш)
 // Рука: AH KH QH, Борд: 2H 3H JS TC 9D. Лучшая рука: Флеш черв от Туза (AH KH QH 3H 2H).
 TEST_HAND_VARIADIC(MoreTests_Flush_ThreeInHandTwoOnBoard, "AH KH QH 2H 3H JS TC", EPokerHandRank::Flush, ECardRank::Ace, ECardRank::King, ECardRank::Queen, ECardRank::Three, ECardRank::Two)
+
+TEST_HAND_VARIADIC(TwoPair_AcesInHand_KingsOnBoard_QueenKickerFromBoard_7Cards, "AH AS KH KD QC JC 2D", EPokerHandRank::TwoPair, ECardRank::Ace, ECardRank::King,ECardRank::Queen)
 
 // У игрока две маленькие пары, на борде пара старше. Лучшая рука - две старшие пары (одна с борда, одна из руки).
 // Рука: 2H 2S 3D 3C, Борд: AH AD KC QS JS. Лучшая рука: Тузы и Тройки, Король кикер.

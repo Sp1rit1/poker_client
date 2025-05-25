@@ -1,4 +1,4 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "poker_client/Public/PokerBotAI.h"         // Замените PokerClient на имя вашего основного модуля
 #include "poker_client/Public/OfflinePokerGameState.h"

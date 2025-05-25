@@ -234,3 +234,106 @@ bool FDeckShuffleTest::RunTest(const FString& Parameters)
 
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDeckTest_IntegrityAfterShuffleAndPartialDeal, "PokerClient.UnitTests.Deck.IntegrityAfterShuffleAndPartialDeal", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FDeckTest_IntegrityAfterShuffleAndPartialDeal::RunTest(const FString& Parameters)
+{
+    AddInfo(TEXT("--- Test: Deck Integrity After Shuffle and Partial Deal ---"));
+
+    // 1. ARRANGE
+    UDeck* TestDeck = NewObject<UDeck>(GetTransientPackage());
+    if (!TestDeck)
+    {
+        AddError(TEXT("Failed to create UDeck instance."));
+        return false;
+    }
+
+    TestDeck->Initialize();
+    TestEqual(TEXT("Initial card count should be 52"), TestDeck->NumCardsLeft(), 52);
+
+    // 2. ACT: Несколько перемешиваний
+    TestDeck->Shuffle();
+    TestDeck->Shuffle();
+    TestDeck->Shuffle();
+    AddInfo(TEXT("Deck shuffled multiple times."));
+    TestEqual(TEXT("Card count should still be 52 after shuffles"), TestDeck->NumCardsLeft(), 52);
+
+
+    // 3. ACT: Частичная раздача (например, 10 карт)
+    int32 NumCardsToDealPartially = 10;
+    TArray<FCard> PartiallyDealtCards;
+    PartiallyDealtCards.Reserve(NumCardsToDealPartially);
+
+    for (int32 i = 0; i < NumCardsToDealPartially; ++i)
+    {
+        TOptional<FCard> CardOpt = TestDeck->DealCard();
+        if (!CardOpt.IsSet())
+        {
+            AddError(FString::Printf(TEXT("DealCard returned empty optional prematurely at card %d during partial deal."), i + 1));
+            TestDeck->ConditionalBeginDestroy();
+            return false;
+        }
+        PartiallyDealtCards.Add(CardOpt.GetValue());
+    }
+    AddInfo(FString::Printf(TEXT("Dealt %d cards partially."), NumCardsToDealPartially));
+    TestEqual(TEXT("Card count should be (52 - partial deal count) after partial deal"), TestDeck->NumCardsLeft(), 52 - NumCardsToDealPartially);
+
+    // 4. ASSERT: Проверка оставшихся карт + ранее розданных на общую уникальность и полноту
+    TSet<FCard> AllDealtCardsSet;
+    // Добавляем частично розданные карты в сет
+    for (const FCard& Card : PartiallyDealtCards)
+    {
+        AllDealtCardsSet.Add(Card);
+    }
+
+    // Раздаем оставшиеся карты и добавляем их в тот же сет
+    int32 RemainingCardsToDeal = TestDeck->NumCardsLeft();
+    AddInfo(FString::Printf(TEXT("Dealing remaining %d cards."), RemainingCardsToDeal));
+
+    for (int32 i = 0; i < RemainingCardsToDeal; ++i)
+    {
+        TOptional<FCard> CardOpt = TestDeck->DealCard();
+        if (!CardOpt.IsSet())
+        {
+            AddError(FString::Printf(TEXT("DealCard returned empty optional prematurely at remaining card %d."), i + 1));
+            TestDeck->ConditionalBeginDestroy();
+            return false;
+        }
+        AllDealtCardsSet.Add(CardOpt.GetValue());
+    }
+
+    TestTrue(TEXT("Deck should be empty after dealing all remaining cards"), TestDeck->IsEmpty());
+    TestEqual(TEXT("Number of unique cards from all dealt cards (partial + remaining) should be 52"), AllDealtCardsSet.Num(), 52);
+
+    // (Опционально, но полезно) Проверить, что все 52 стандартные карты присутствуют в AllDealtCardsSet
+    // Это дублирует часть логики из FDeckInitializationTest, но здесь проверяет после шаффлов и частичной раздачи.
+    if (AllDealtCardsSet.Num() == 52)
+    {
+        const UEnum* SuitEnum = StaticEnum<ECardSuit>();
+        const UEnum* RankEnum = StaticEnum<ECardRank>();
+        bool bAllPossibleCardsPresent = true;
+        if (SuitEnum && RankEnum)
+        {
+            for (int32 s = 0; s < SuitEnum->NumEnums() - 1; ++s)
+            {
+                ECardSuit ExpectedSuit = static_cast<ECardSuit>(SuitEnum->GetValueByIndex(s));
+                for (int32 r = 0; r < RankEnum->NumEnums() - 1; ++r)
+                {
+                    ECardRank ExpectedRank = static_cast<ECardRank>(RankEnum->GetValueByIndex(r));
+                    if (!AllDealtCardsSet.Contains(FCard(ExpectedSuit, ExpectedRank)))
+                    {
+                        AddError(FString::Printf(TEXT("Card %s%s not found in the set of all dealt cards after shuffle and partial deal."),
+                            *UEnum::GetDisplayValueAsText(ExpectedRank).ToString(), *UEnum::GetDisplayValueAsText(ExpectedSuit).ToString()));
+                        bAllPossibleCardsPresent = false;
+                    }
+                }
+            }
+        }
+        else { AddError(TEXT("Could not get Suit/Rank enums for full verification.")); bAllPossibleCardsPresent = false; }
+        TestTrue(TEXT("All 52 standard cards should be present among all dealt cards"), bAllPossibleCardsPresent);
+    }
+
+    // Очистка
+    TestDeck->ConditionalBeginDestroy();
+    return !HasAnyErrors();
+}
