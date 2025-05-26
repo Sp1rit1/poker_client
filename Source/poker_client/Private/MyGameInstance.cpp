@@ -25,7 +25,7 @@ UMyGameInstance::UMyGameInstance()
     NetworkAuthManagerInstance = nullptr;
     OfflineGameManager = nullptr;
     MenuScreenUIManagerInstance = nullptr;
-    LevelTransitionManagerInstance = nullptr; // Добавил инициализацию
+    LevelTransitionManagerInstance = nullptr;
 
     // Инициализация флагов и переменных состояния
     bIsInitialWindowSetupComplete = false;

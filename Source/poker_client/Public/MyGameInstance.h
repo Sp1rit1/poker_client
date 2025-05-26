@@ -45,7 +45,11 @@ public:
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "User Session")
     bool bIsInOfflineMode = false;
 
-    // --- Классы виджетов для стартовых экранов (настраиваются в Blueprint GameInstance) ---
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Settings", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+    float MenuLevelMusicVolume = 0.5f; 
+
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Settings", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+    float GameLevelMusicVolume = 0.5f;
 
     UPROPERTY(EditDefaultsOnly, Category = "UI|Start Screens")
     TSubclassOf<UUserWidget> StartScreenClass;
