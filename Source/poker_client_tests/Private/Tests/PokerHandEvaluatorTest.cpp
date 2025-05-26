@@ -1,13 +1,10 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
-#include <string>        // Для std::string в проверке __VA_ARGS__
-#include <type_traits>   // Для std::is_empty (хотя UE_ARRAY_COUNT лучше для C-массивов)
-
-// ЗАМЕНИТЕ "poker_client" НА ИМЯ ВАШЕГО ОСНОВНОГО ИГРОВОГО МОДУЛЯ, ЕСЛИ ОНО ДРУГОЕ
+#include <string>        
+#include <type_traits>   
 #include "poker_client/Public/PokerDataTypes.h"
 #include "poker_client/Public/PokerHandEvaluator.h"
 
-// --- Вспомогательная структура FTestCardParser (остается без изменений) ---
 struct FTestCardParser
 {
     static TOptional<ECardRank> CharToRank(TCHAR Char)
@@ -58,8 +55,6 @@ struct FTestCardParser
             if (!Str.IsEmpty())
             {
                 FCard ParsedCard = Card(Str);
-                // Проверка, что вернулась не дефолтная карта из-за ошибки парсинга
-                // (можно добавить более строгую проверку, если Card() будет возвращать TOptional<FCard>)
                 if (!(ParsedCard.Rank == ECardRank::Two && ParsedCard.Suit == ECardSuit::Clubs && Str.ToUpper() != TEXT("2C")))
                 {
                     OutCards.Add(ParsedCard);
@@ -70,7 +65,6 @@ struct FTestCardParser
     }
 };
 
-// --- ОБНОВЛЕННЫЙ Макрос TEST_HAND_VARIADIC ---
 #define TEST_HAND_VARIADIC(TestName, CardsString, ExpectedRank, ...) \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHandEvaluatorTest_##TestName, "PokerClient.UnitTests.HandEvaluator." #TestName, EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter) \
 bool FHandEvaluatorTest_##TestName::RunTest(const FString& Parameters) \
@@ -81,8 +75,6 @@ bool FHandEvaluatorTest_##TestName::RunTest(const FString& Parameters) \
     /* Создаем массив ожидаемых кикеров из вариативных аргументов */ \
     ECardRank TempExpectedKickers[] = { __VA_ARGS__ }; \
     TArray<ECardRank> ExpectedKickersList; \
-    /* Проверка, что __VA_ARGS__ не был полностью пустым (например, TEST_HAND_VARIADIC(Name, Cards, Rank) без кикеров) */ \
-    /* Эта проверка может быть не идеальна для всех компиляторов, но часто работает для GNU/Clang */ \
     const char* VaArgsStrContents = #__VA_ARGS__; \
     bool bHasActualVaArgs = false; \
     for (const char* Ptr = VaArgsStrContents; *Ptr; ++Ptr) { if (!isspace(static_cast<unsigned char>(*Ptr))) { bHasActualVaArgs = true; break; } } \
@@ -109,7 +101,6 @@ bool FHandEvaluatorTest_##TestName::RunTest(const FString& Parameters) \
     return !HasAnyErrors(); /* Тест пройден, если нет ошибок */ \
 }
 
-// --- ОБНОВЛЕННЫЙ Макрос TEST_COMPARE ---
 #define TEST_COMPARE(TestName, HandAString, HandBString, ExpectedComparisonResultSign) \
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHandEvaluatorTest_Compare_##TestName, "PokerClient.UnitTests.HandEvaluator.Compare." #TestName, EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter) \
 bool FHandEvaluatorTest_Compare_##TestName::RunTest(const FString& Parameters) \
@@ -228,10 +219,7 @@ TEST_COMPARE(SplitPot_StraightKingHigh, "KH QC JD TS 9H", "KS QD JH TC 9S", 0)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHandEvaluatorTest_Complex_AceHighFlush_From7Cards, "PokerClient.UnitTests.HandEvaluator.Complex.AceHighFlush7", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FHandEvaluatorTest_Complex_AceHighFlush_From7Cards::RunTest(const FString& Parameters)
 {
-    // Карманные карты: 2H 3H
-    // Общие карты:    AH KH QH JS TC
-    // Всего 7 карт:   2H 3H AH KH QH JS TC
-    // Лучшая рука: Флеш червей (AH KH QH 3H 2H)
+
     TArray<FCard> Hole1 = FTestCardParser::Cards(TEXT("2H 3H"));
     TArray<FCard> Community = FTestCardParser::Cards(TEXT("AH KH QH JS TC"));
     FPokerHandResult Result1 = UPokerHandEvaluator::EvaluatePokerHand(Hole1, Community);
@@ -257,11 +245,7 @@ bool FHandEvaluatorTest_Complex_AceHighFlush_From7Cards::RunTest(const FString& 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHandEvaluatorTest_SeparateStraightAndFlushNotStraightFlush, "PokerClient.UnitTests.HandEvaluator.Complex.SeparateStraightFlush", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FHandEvaluatorTest_SeparateStraightAndFlushNotStraightFlush::RunTest(const FString& Parameters)
 {
-    // Игрок: AH 2H (Пытается собрать Флеш черв)
-    // Борд:  3H 4H 5D 6D 7S (На борде есть 3-7 стрит разных мастей, и три червы)
-    // Лучшая рука игрока: Флеш черв (AH, 2H, 3H, 4H + старшая из 5D, 6D, 7S, если бы это было 5 карт для флеша)
-    // Нет, для флеша нужны 5 карт ОДНОЙ масти. AH 2H 3H 4H + любая_пятая_черва.
-    // Если на борде 3H 4H 8H KD QS -> у игрока флеш AH 8H 4H 3H 2H
+
     TArray<FCard> HoleCards = FTestCardParser::Cards(TEXT("AH 2H"));
     TArray<FCard> CommunityCards = FTestCardParser::Cards(TEXT("3H 4H 8H KD QS"));
     FPokerHandResult Result = UPokerHandEvaluator::EvaluatePokerHand(HoleCards, CommunityCards);
@@ -302,9 +286,6 @@ TEST_HAND_VARIADIC(LessThan5_TwoCards_JackHigh, "JH 2S", EPokerHandRank::HighCar
 TEST_HAND_VARIADIC(LessThan5_TwoCards_PairFives, "5H 5S", EPokerHandRank::HighCard, ECardRank::Five)
 
 
-// --- Тесты для сравнения рук < 5 карт (если CompareHandResults их как-то обрабатывает) ---
-// Обычно сравнение не имеет смысла для < 5 карт, так как это не полные покерные руки,
-// но если CompareHandResults просто сравнит по рангу HighCard и одному кикеру, то:
 
 // "AH KD" (Ace high) vs "KH QD" (King high) -> A > K
 TEST_COMPARE(LessThan5_Compare_AceHigh_vs_KingHigh, "AH KD", "KH QD", 1)

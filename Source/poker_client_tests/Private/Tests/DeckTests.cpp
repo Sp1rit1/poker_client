@@ -1,8 +1,7 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
-#include "Containers/Set.h" // Для проверки уникальности карт
+#include "Containers/Set.h" 
 
-// ВАЖНО: Укажите правильные пути к вашим заголовочным файлам из основного модуля!
 #include "poker_client/Public/Deck.h"
 #include "poker_client/Public/PokerDataTypes.h"
 
@@ -25,14 +24,8 @@ bool FDeckInitializationTest::RunTest(const FString& Parameters)
     // Проверка на уникальность всех карт (более сложная, но полезная)
     if (TestDeck->NumCardsLeft() == 52)
     {
-        TSet<FCard> UniqueCards; // Используем TSet для автоматической проверки уникальности (FCard должен иметь GetTypeHash и operator==)
-        // Если у FCard нет GetTypeHash, нужно будет реализовать его или использовать другой способ проверки.
-        // Предположим, FCard::operator== уже реализован.
-        // Для TSet нужен GetTypeHash. Если его нет, можно создать TArray и сортировать/сравнивать.
+        TSet<FCard> UniqueCards; 
 
-// Для простоты пока проверим первые и последние несколько карт или сделаем выборочную проверку,
-// если реализация GetTypeHash для FCard сейчас нежелательна.
-// Полная проверка уникальности:
         TArray<FCard> AllCardsInDeck;
         AllCardsInDeck.Reserve(52);
         UDeck* TempDeckForExtraction = NewObject<UDeck>(); // Временная колода, чтобы не портить TestDeck
@@ -61,9 +54,7 @@ bool FDeckEmptyStateTest::RunTest(const FString& Parameters)
 {
     // Arrange
     UDeck* TestDeck = NewObject<UDeck>();
-    // Не вызываем Initialize, чтобы проверить начальное состояние или состояние после очистки
 
-    // Assert (для свежесозданного объекта, если он не инициализируется в конструкторе)
     TestTrue(TEXT("Newly created deck should be empty"), TestDeck->IsEmpty());
     TestEqual(TEXT("Newly created deck should have 0 cards"), TestDeck->NumCardsLeft(), 0);
 
@@ -187,9 +178,6 @@ bool FDeckShuffleTest::RunTest(const FString& Parameters)
     Deck1->Shuffle();
     Deck1->Shuffle(); // Перемешиваем несколько раз для большей случайности
 
-    // Assert: после перемешивания, порядок карт в Deck1 очень маловероятно будет таким же, как начальный
-    // И он очень маловероятно будет таким же, как в Deck2 (который не перемешивался)
-    // Это не 100% гарантия, но для юнит-теста достаточно.
     if (Deck1->NumCardsLeft() == 52 && InitialOrderDeck2.Num() == 52) // Убедимся, что карты не пропали
     {
         bool bOrderChanged = false;
@@ -206,8 +194,7 @@ bool FDeckShuffleTest::RunTest(const FString& Parameters)
             if (ShuffledCard != InitialOrderDeck2[51 - i]) // Сравниваем с обратным порядком, так как DealCard берет с конца
             {
                 bOrderChanged = true;
-                // Можно выйти из цикла раньше, но для полноты можно проверить все
-                // break; 
+
             }
         }
         TestTrue(TEXT("After shuffling, the order of cards should likely be different from an un-shuffled deck"), bOrderChanged);

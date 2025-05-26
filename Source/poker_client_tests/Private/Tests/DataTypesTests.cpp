@@ -1,12 +1,8 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
-// ВАЖНО: Укажите правильный путь к вашему PokerDataTypes.h из основного модуля!
-// Если ваш основной модуль называется "PokerClient", то:
 #include "poker_client/Public/PokerDataTypes.h"
-// Если структура другая, исправьте путь.
 
-// --- Тесты для FCard::ToString() ---
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCardToStringTest_AceSpades, "PokerClient.UnitTests.DataTypes.FCard.ToString.AceSpades", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FCardToStringTest_AceSpades::RunTest(const FString& Parameters)
@@ -81,7 +77,6 @@ bool FCardToRussianStringTest_SevenDiamonds::RunTest(const FString& Parameters)
 }
 
 // --- Тесты для PokerRankToRussianString() ---
-// (Эта функция глобальная, поэтому мы можем тестировать ее напрямую)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPokerRankToRussianStringTest_HighCard, "PokerClient.UnitTests.DataTypes.PokerRankToRussianString.HighCard", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FPokerRankToRussianStringTest_HighCard::RunTest(const FString& Parameters)

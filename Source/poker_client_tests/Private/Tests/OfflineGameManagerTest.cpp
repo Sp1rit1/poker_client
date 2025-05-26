@@ -1,18 +1,13 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
-#include "Editor.h" // Для GEditor (если используется в CreateTestOfflineManagerForAutomation)
-#include "Engine/Engine.h" // Для GEngine (если используется в CreateTestOfflineManagerForAutomation)
-
-// Инклюды ваших классов
-#include "poker_client/Public/OfflineGameManager.h" // Замените PokerClient на имя вашего модуля
+#include "Editor.h" 
+#include "Engine/Engine.h" 
+#include "poker_client/Public/OfflineGameManager.h" 
 #include "poker_client/Public/OfflinePokerGameState.h"
 #include "poker_client/Public/Deck.h"
 #include "poker_client/Public/PokerDataTypes.h"
 #include "poker_client/Public/PokerBotAI.h"
-// #include "PokerClient/Public/MyGameInstance.h" // Не нужен напрямую в тестах, если Outer - это World
 
-// Вспомогательная функция для создания экземпляра OfflineGameManager для тестов
-// (Как была определена в предыдущем ответе)
 static UOfflineGameManager* CreateTestOfflineManagerForAutomation(FAutomationTestBase* TestRunner)
 {
     UWorld* TestWorld = nullptr;
@@ -208,8 +203,7 @@ bool FOfflineGM_InitializeGame_BasicCreation::RunTest(const FString& Parameters)
     }
 
     Manager->ConditionalBeginDestroy();
-    // Если CreateTestOfflineManagerForAutomation использовал GetTransientPackage(), нет необходимости удалять Outer.
-    // Если он использовал мир, мир удалять не нужно, он управляется движком.
+
     return true;
 }
 
@@ -525,11 +519,6 @@ bool FOfflineGM_StartNewHand_DealerRotation::RunTest(const FString& Parameters)
     int32 FirstDealer = GameState->DealerSeat;
     TestTrue(TEXT("First dealer should be valid"), FirstDealer != -1);
 
-    // Act 2: Вторая рука (нужно симулировать завершение первой руки до вызова StartNewHand снова,
-    // но для простого теста дилера, мы просто вызовем StartNewHand еще раз,
-    // предполагая, что внутренняя логика сброса работает)
-    // В реальной игре между StartNewHand были бы ProcessPlayerAction, ProceedToNextStage и т.д.
-    // Для этого теста мы проверяем только механику смены дилера.
     Manager->StartNewHand();
     int32 SecondDealer = GameState->DealerSeat;
     TestTrue(TEXT("Second dealer should be valid"), SecondDealer != -1);
@@ -537,10 +526,6 @@ bool FOfflineGM_StartNewHand_DealerRotation::RunTest(const FString& Parameters)
     // Assert
     TestNotEqual(TEXT("Dealer should rotate to a different player on the next hand"), FirstDealer, SecondDealer);
 
-    // Проверим, что дилер сдвинулся по вашему CurrentTurnOrderMap_Internal (косвенно через GetNextPlayerToAct)
-    // Это более сложная проверка, так как GetNextPlayerToAct зависит от активных игроков.
-    // Простой тест: он просто не тот же самый.
-    // Можно сделать 3 вызова и проверить, что он вернулся к первому или прошел полный круг (если игроков < 3)
 
     Manager->ConditionalBeginDestroy();
     return true;
@@ -560,9 +545,6 @@ bool FOfflineGM_StartNewHand_NotEnoughPlayers::RunTest(const FString& Parameters
     TestNotNull(TEXT("GameState should exist"), GameState);
     if (!GameState) { Manager->ConditionalBeginDestroy(); return false; }
 
-    // В InitializeGame количество игроков уже должно быть скорректировано до 2 (1 реальный + 1 бот)
-    // Если мы хотим протестировать StartNewHand с <2 активными Игроками, нужно это симулировать
-    // Например, установив Stack = 0 для одного из двух игроков после InitializeGame.
     if (GameState->Seats.Num() == 2)
     {
         GameState->Seats[1].Stack = 0; // Делаем одного из игроков неактивным для этой руки
@@ -817,9 +799,6 @@ bool FOfflineGM_ProcessAction_Preflop_UTGFolds_3Players::RunTest(const FString& 
     TestEqual(TEXT("UTG player status should be Folded"), GameState->Seats[UtgSeatIndex].Status, EPlayerStatus::Folded);
     TestNotEqual(TEXT("Turn should pass from UTG"), GameState->CurrentTurnSeat, UtgSeatIndex);
 
-    // В игре 3 игрока (0, 1, 2). Если SB=0, BB=1, UTG=2. UTG фолдит. Ход должен перейти к SB (0).
-    // Точный следующий игрок зависит от порядка, определенного GetNextPlayerToAct.
-    // Мы ожидаем, что IsBettingRoundOver() вернет false, и будет вызван RequestPlayerAction для следующего.
     TestFalse(TEXT("Betting round should not be over yet"), Manager->IsBettingRoundOver());
     TestTrue(TEXT("CurrentTurnSeat should be valid (not -1)"), GameState->CurrentTurnSeat != -1);
     if (GameState->Seats.IsValidIndex(GameState->CurrentTurnSeat))
@@ -834,8 +813,6 @@ bool FOfflineGM_ProcessAction_Preflop_UTGFolds_3Players::RunTest(const FString& 
     return true;
 }
 
-// TODO: Добавить тест FOfflineGM_ProcessAction_Preflop_Fold_LeadsToWinner
-// (например, 2 игрока, SB фолдит, BB выигрывает)
 
 
 // --- Тесты для CHECK ---
@@ -871,17 +848,6 @@ bool FOfflineGM_ProcessAction_Preflop_BBChecks_3Players::RunTest(const FString& 
     // Act: BB Checks
     Manager->ProcessPlayerAction(BbSeat, EPlayerAction::Check, 0);
 
-    // Assert
-    // 1. Проверяем состояние BB СРАЗУ ПОСЛЕ его действия (но ДО того, как ProceedToNextGameStage полностью изменит все)
-    // Это сложно сделать напрямую в юнит-тесте, если ProcessPlayerAction вызывает ProceedToNextGameStage синхронно.
-    // Однако, если ProcessPlayerAction для Check НЕ вызывает агрессию, то bHasActedThisSubRound для BB должен был установиться.
-    // Мы можем проверить это, если бы у нас был способ "заглянуть" внутрь ProcessPlayerAction или если бы IsBettingRoundOver
-    // проверялся ДО вызова ProceedToNextGameStage.
-
-    // Поскольку ProcessPlayerAction вызывает IsBettingRoundOver, а затем ProceedToNextGameStage,
-    // к моменту, когда ProcessPlayerAction завершится, стадия УЖЕ будет Flop, и флаги будут сброшены.
-
-    // Значит, нам нужно изменить ассерты, чтобы они проверяли состояние НАЧАЛА ФЛОПА.
     TestEqual(TEXT("Stage should be Flop after preflop betting ends with BB's check"), GameState->CurrentStage, EGameStage::Flop);
     TestEqual(TEXT("There should be 3 community cards for Flop"), GameState->CommunityCards.Num(), 3);
 
@@ -899,7 +865,6 @@ bool FOfflineGM_ProcessAction_Preflop_BBChecks_3Players::RunTest(const FString& 
     return true;
 }
 
-// TODO: Добавить тест FOfflineGM_ProcessAction_Preflop_InvalidCheck (попытка чека, когда есть ставка)
 
 // --- Тесты для CALL ---
 
@@ -963,7 +928,6 @@ bool FOfflineGM_ProcessAction_Preflop_CallAllIn::RunTest(const FString& Paramete
     TestEqual(TEXT("UTG Status should be AllIn"), GameState->Seats[UtgSeatIndex].Status, EPlayerStatus::AllIn);
     TestEqual(TEXT("Pot should increase by UTG's stack"), GameState->Pot, PotBefore + UtgStackBefore); // 15 + 7 = 22
     TestTrue(TEXT("UTG bHasActedThisSubRound should be true"), GameState->Seats[UtgSeatIndex].bHasActedThisSubRound);
-    // CurrentBetToCall все еще должен быть равен BB (10), так как олл-ин UTG был меньше.
     TestEqual(TEXT("CurrentBetToCall should remain BigBlindAmount"), GameState->CurrentBetToCall, BB);
 
 
@@ -1052,10 +1016,6 @@ bool FOfflineGM_ProcessAction_Preflop_UTGRaisesAllIn::RunTest(const FString& Par
 
     int64 PotBeforeUtgAction = GameState->Pot; // Должен быть SB_Amount + BB_Amount
 
-    // Act: UTG Raises All-In
-    // Сумма, передаваемая в ProcessPlayerAction для Raise - это ОБЩАЯ сумма ставки, до которой он рейзит.
-    // Если он идет олл-ин, то его общая ставка будет его текущий стек (UtgActualInitialStack)
-    // плюс то, что он, возможно, уже поставил в этом раунде (в данном случае 0, т.к. это его первый ход).
     int64 UtgTotalBetAmount = GameState->Seats[UtgSeatIndex].CurrentBet + GameState->Seats[UtgSeatIndex].Stack;
     Manager->ProcessPlayerAction(UtgSeatIndex, EPlayerAction::Raise, UtgTotalBetAmount);
 
@@ -1063,8 +1023,7 @@ bool FOfflineGM_ProcessAction_Preflop_UTGRaisesAllIn::RunTest(const FString& Par
     TestEqual(TEXT("UTG Stack should be 0 after All-In raise"), GameState->Seats[UtgSeatIndex].Stack, (int64)0);
     TestEqual(TEXT("UTG CurrentBet should be their initial stack before this action"), GameState->Seats[UtgSeatIndex].CurrentBet, UtgActualInitialStack); // Т.к. CurrentBet был 0 до этого.
     TestEqual(TEXT("UTG Status should be AllIn"), GameState->Seats[UtgSeatIndex].Status, EPlayerStatus::AllIn);
-    // Ассерт на bHasActedThisSubRound для UTG здесь уже может быть невалиден, если раунд сразу завершился.
-    // TestTrue(TEXT("UTG bHasActedThisSubRound should be true immediately after their all-in raise"), GameState->Seats[UtgSeatIndex].bHasActedThisSubRound); // <-- УДАЛЯЕМ ЭТОТ АССЕРТ ИЛИ ПЕРЕСМАТРИВАЕМ
+
 
     // Assert состояние стола ПОСЛЕ действия UTG
     TestEqual(TEXT("Pot should increase by UTG's initial stack"), GameState->Pot, PotBeforeUtgAction + UtgActualInitialStack);
@@ -1077,7 +1036,6 @@ bool FOfflineGM_ProcessAction_Preflop_UTGRaisesAllIn::RunTest(const FString& Par
     int32 SbSeatIndex = GameState->PendingSmallBlindSeat; // Получаем актуальные индексы
     int32 BbSeatIndex = GameState->PendingBigBlindSeat;
 
-    // Важно: CurrentTurnSeat изменится после действия UTG. Нужно получить актуального.
     int32 NextToActAfterUTG = GameState->CurrentTurnSeat;
     if (GameState->Seats.IsValidIndex(NextToActAfterUTG) && GameState->Seats[NextToActAfterUTG].Status != EPlayerStatus::Folded && GameState->Seats[NextToActAfterUTG].Status != EPlayerStatus::AllIn)
     {
@@ -1378,10 +1336,6 @@ bool FOfflineGM_ProcessAction_Flop_BetCallFold::RunTest(const FString& Parameter
     UE_LOG(LogTemp, Log, TEXT("Flop_BetCallFold_Test: Player %d Folds"), Player3_Seat);
     Manager->ProcessPlayerAction(Player3_Seat, EPlayerAction::Fold, 0);
 
-    // Assert: После того, как P3 сфолдил, P1 сделал бет, P2 заколлировал.
-    // Это должно завершить раунд ставок на флопе.
-    // ProcessPlayerAction для P3 (фолд) должен был вызвать IsBettingRoundOver() (которая вернет true),
-    // а затем ProceedToNextGameStage(), которая переведет игру на терн.
 
     TestEqual(TEXT("P3 Status should be Folded"), GameState->Seats[Player3_Seat].Status, EPlayerStatus::Folded);
     TestEqual(TEXT("Stage should NOW be Turn after flop betting concluded"), GameState->CurrentStage, EGameStage::Turn);
@@ -1429,10 +1383,6 @@ bool FOfflineGM_ProcessAction_Flop_TwoPlayersAllIn::RunTest(const FString& Param
     TestEqual(TEXT("FlopAllIn_Test: Should have 3 players"), GameState->Seats.Num(), 3);
     if (GameState->Seats.Num() != 3) { Manager->ConditionalBeginDestroy(); return false; }
 
-    // --- ЯВНО ОПРЕДЕЛЯЕМ ТЕСТОВЫЕ РОЛИ ДЛЯ SEATINDEX ---
-    // Пусть P1 = Seat 0, P2 = Seat 1, P3 = Seat 2
-    // Это упростит назначение карт и стеков, а также проверку.
-    // Нам нужно, чтобы эти трое дошли до флопа.
     const int32 TestP1_SeatIndex = 0; // Пойдет All-In на флопе с AA
     const int32 TestP2_SeatIndex = 1; // Пойдет All-In на флопе с KK
     const int32 TestP3_SeatIndex = 2; // Сфолдит на флопе, имеет большой стек
@@ -1440,9 +1390,6 @@ bool FOfflineGM_ProcessAction_Flop_TwoPlayersAllIn::RunTest(const FString& Param
     // 2. Начинаем новую руку
     Manager->StartNewHand(); // Дилер, SB, BB будут определены
 
-    // --- Симулируем префлоп: все коллируют BB, чтобы дойти до флопа ---
-    // Эта часть должна быть аккуратной, чтобы привести игру к флопу
-    // и чтобы все три наших тестовых игрока (0, 1, 2) остались в игре.
     int32 LoopGuardPreflop = 0;
     while (GameState->CurrentStage == EGameStage::WaitingForSmallBlind || GameState->CurrentStage == EGameStage::WaitingForBigBlind || GameState->CurrentStage == EGameStage::Preflop)
     {
@@ -1590,17 +1537,13 @@ bool FOfflineGM_ProcessAction_River_BetCall_ToShowdown::RunTest(const FString& P
         Manager->ConditionalBeginDestroy(); return false;
     }
 
-    // Устанавливаем конкретные карты: P1 (Ac Kc) > P2 (Qh Ts)
-    // Общие карты (5 штук) уже розданы SetupGameToPostflopStreet.
-    // Для определенности в тесте, давайте их зададим явно, чтобы знать победителя.
     GameState->CommunityCards = {
         FCard(ECardSuit::Diamonds, ECardRank::Ace), FCard(ECardSuit::Hearts, ECardRank::King), FCard(ECardSuit::Spades, ECardRank::Five), // У P1 две пары (Тузы и Короли)
         FCard(ECardSuit::Clubs, ECardRank::Two), FCard(ECardSuit::Diamonds, ECardRank::Seven)
     };
     GameState->Seats[Player1_Seat_Actual].HoleCards = { FCard(ECardSuit::Clubs, ECardRank::Ace), FCard(ECardSuit::Spades, ECardRank::King) }; // Ac Ks -> Две Пары (AA, KK)
     GameState->Seats[Player2_Seat_Actual].HoleCards = { FCard(ECardSuit::Hearts, ECardRank::Queen), FCard(ECardSuit::Diamonds, ECardRank::Queen) }; // Qh Qd -> Сет Дам (если на борде нет Q) или Две пары (QQ + AA/KK)
-    // С текущим бордом Ad Kh 5s 2c 7d: P1 (AK) имеет пару тузов и пару королей. P2 (QQ) имеет пару дам. P1 выигрывает.
-// Если мы хотим, чтобы P2 проиграл с худшей парой, дадим ему что-то типа QJ.
+
     GameState->Seats[Player2_Seat_Actual].HoleCards = { FCard(ECardSuit::Hearts, ECardRank::Queen), FCard(ECardSuit::Spades, ECardRank::Jack) }; // Qh Js -> у P2 только пара тузов со стола (если есть) или пара королей, или старшая дама.
     // На борде Ad Kh 5s 2c 7d: P1 = AA KK. P2 = A K Q J 7 (Старшая карта Туз, если борд общий). P1 выигрывает.
 
@@ -1619,7 +1562,6 @@ bool FOfflineGM_ProcessAction_River_BetCall_ToShowdown::RunTest(const FString& P
     Manager->ProcessPlayerAction(Player1_Seat_Actual, EPlayerAction::Bet, BetAmountOnRiver);
     Manager->ProcessPlayerAction(Player2_Seat_Actual, EPlayerAction::Call, 0);
 
-    // Assert: Состояние ПОСЛЕ ЗАВЕРШЕНИЯ РУКИ
     TestEqual(TEXT("River_BetCall_Test: Stage should be WaitingForPlayers"), GameState->CurrentStage, EGameStage::WaitingForPlayers);
     TestEqual(TEXT("River_BetCall_Test: Pot should be 0"), GameState->Pot, (int64)0);
     TestEqual(TEXT("River_BetCall_Test: CurrentTurnSeat should be -1"), GameState->CurrentTurnSeat, -1);

@@ -1,14 +1,11 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
-#include "poker_client/Public/PokerBotAI.h"         // Замените PokerClient на имя вашего основного модуля
+#include "poker_client/Public/PokerBotAI.h"         
 #include "poker_client/Public/OfflinePokerGameState.h"
 #include "poker_client/Public/PokerDataTypes.h"
-#include "poker_client/Public/Deck.h"              // Может понадобиться для FCard
+#include "poker_client/Public/Deck.h"              
 
-// Вспомогательная функция для создания и настройки GameState для тестов GetPlayerPosition
-// Возвращает TObjectPtr для автоматического управления памятью, если используется в UPROPERTY
-// Но для локальных переменных теста обычный указатель тоже подойдет.
-// Для простоты тестов, будем создавать его каждый раз.
+
 static UOfflinePokerGameState* CreateGameStateForPositionTest(int32 NumTotalSeatsInGS, int32 DealerSeatIndex, const TArray<int32>& ActivePlayingSeatIndices)
 {
     UOfflinePokerGameState* GameState = NewObject<UOfflinePokerGameState>(GetTransientPackage());
@@ -96,7 +93,6 @@ static UPokerBotAI* CreateTestBotAI(float Aggro = 0.5f, float Bluff = 0.1f, floa
         BotAI->AggressivenessFactor = Aggro;
         BotAI->BluffFrequency = Bluff;
         BotAI->TightnessFactor = Tight;
-        // UE_LOG(LogTemp, Log, TEXT("Created Test BotAI with Aggro:%.2f, Bluff:%.2f, Tight:%.2f"), Aggro, Bluff, Tight);
     }
     return BotAI;
 }
@@ -181,9 +177,6 @@ bool FPokerBotAITest_GetPlayerPosition_6Max::RunTest(const FString& Parameters)
     UOfflinePokerGameState* GameState = CreateGameStateForPositionTest(6, 0, { 0, 1, 2, 3, 4, 5 });
     if (!GameState) { AddError(TEXT("6Max Test S1: Failed to create GameState.")); return false; }
 
-    // Логика GetPlayerPosition: ActiveSeatsInOrder строится НАЧИНАЯ со следующего ПОСЛЕ дилера.
-    // Если Дилер=0, ActiveSeatsInOrder = [1(SB), 2(BB), 3(UTG), 4(HJ), 5(CO), 0(BTN)]
-    // Индексы в этом массиве:         0,      1,      2,      3,      4,      5
     EPlayerPokerPosition Pos;
 
     Pos = BotAI->GetPlayerPosition(GameState, 1, 6); // Бот на SB
@@ -199,9 +192,7 @@ bool FPokerBotAITest_GetPlayerPosition_6Max::RunTest(const FString& Parameters)
     TestEqual(TEXT("6M S3: D=0, Bot=3 (UTG)"), Pos, EPlayerPokerPosition::UTG);
 
     Pos = BotAI->GetPlayerPosition(GameState, 4, 6); // Бот на HJ (или MP1 по вашей логике для <=6max)
-    // Ваша логика для <=6max: SeatsBeforeButton. BotPosInOrder для места 4 будет 3 (т.к. ActiveSeatsInOrder[3] = 4)
-    // NumActivePlayers=6. SeatsBeforeButton = 6 - 1 - 3 = 2.
-    // if (SeatsBeforeButton <= 1) return CO; else return MP1;  Здесь SeatsBeforeButton = 2, значит MP1.
+
     AddInfo(FString::Printf(TEXT("6M S4: D=0, Bot=4, N=6. Exp MP1 (or HJ), Got %s"), *UEnum::GetDisplayValueAsText(Pos).ToString()));
     TestEqual(TEXT("6M S4: D=0, Bot=4 (MP1/HJ)"), Pos, EPlayerPokerPosition::MP1); // Проверяем на MP1 согласно вашей логике
 
@@ -218,8 +209,7 @@ bool FPokerBotAITest_GetPlayerPosition_6Max::RunTest(const FString& Parameters)
     // Проверка с другим дилером
     GameState->DealerSeat = 3;
     AddInfo(TEXT("--- 6-Max Test, Dealer shifted to 3 ---"));
-    // Если Дилер=3, ActiveSeatsInOrder = [4(SB), 5(BB), 0(UTG), 1(MP1/HJ), 2(CO), 3(BTN)]
-    // Индексы в этом массиве:         0,      1,      2,      3,      4,      5
+
     Pos = BotAI->GetPlayerPosition(GameState, 4, 6); // Бот на SB
     AddInfo(FString::Printf(TEXT("6M S7: D=3, Bot=4, N=6. Exp SB, Got %s"), *UEnum::GetDisplayValueAsText(Pos).ToString()));
     TestEqual(TEXT("6M S7: D=3, Bot=4 (SB)"), Pos, EPlayerPokerPosition::SB);
@@ -281,8 +271,7 @@ bool FPokerBotAITest_GetPlayerPosition_InvalidCases::RunTest(const FString& Para
 
 
 // --- ТЕСТЫ ДЛЯ CalculatePreflopHandStrength ---
-// Для этих тестов мы установим фиксированные "черты характера" бота,
-// чтобы коррекции на позицию/игроков были предсказуемы.
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPokerBotAITest_PreflopStrength_BasicHands, "PokerClient.UnitTests.BotAI.PreflopStrength.Basic", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FPokerBotAITest_PreflopStrength_BasicHands::RunTest(const FString& Parameters)
@@ -373,9 +362,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPokerBotAITest_GB_Preflop_AA_UTG_Open, "PokerC
 bool FPokerBotAITest_GB_Preflop_AA_UTG_Open::RunTest(const FString& Parameters)
 {
     AddInfo(TEXT("--- Test: Preflop, AA UTG, Unopened Pot ---"));
-    // Используем бота со средними настройками, bIsTesting = true для предсказуемости FRand()
-    // Параметры личности бота из вашего лога: Aggro: 0.38, BluffFreq: 0.13, Tightness: 0.43
-    // Но CreateTestBotAIForActionTest использовал Aggro=0.6, Tight=0.6. Используем их для консистентности с предыдущим расчетом.
+
     UPokerBotAI* BotAI = CreateBotAIForActionTest(true, 0.6f, 0.1f, 0.6f);
     if (!BotAI) { AddError(TEXT("Failed to create BotAI.")); return false; }
 
@@ -454,12 +441,6 @@ bool FPokerBotAITest_GB_Preflop_72o_BB_vs_UTGRaise::RunTest(const FString& Param
     // Чистый рейз UTG сверх BB (если BB был единственной предыдущей ставкой)
     const int64 UTGPureRaiseAmount = UTGRaiseTotalBet - BBAmount;
 
-    // Настройка GameState: 6 игроков. Дилер = 0 (BTN). SB = 1. Бот (BB) = 2. UTG (рейзер) = 3.
-    // Пот после фолда SB и рейза UTG = SB_внес (5) + BB_внес (10) + UTG_добавил_сверх_BB (20) = 35
-    // Но если SB сфолдил, его ставка уже в поте. UTG ставит 30. BB еще не ходил, его 10 в поте.
-    // Итак, пот перед ходом BB = 5 (SB) + 30 (ставка UTG) = 35.
-    // CurrentBetToCall для BB = 30 (ставка UTG).
-    // LastBetOrRaiseAmountInCurrentRound (чистый рейз UTG) = 30 (общая ставка UTG) - 10 (сумма, которую он должен был бы коллировать от BB) = 20.
     UOfflinePokerGameState* GameState = SetupGameStateForBotAction(
         EGameStage::Preflop,
         SBAmount + UTGRaiseTotalBet, /* Pot = 5 (SB) + 30 (UTG) = 35 */
@@ -657,9 +638,6 @@ bool FPokerBotAITest_GB_Flop_FlushDrawOvers_FacingHalfPotBet::RunTest(const FStr
 
     if (Action == EPlayerAction::Call)
     {
-        // ИЗМЕНЕНИЕ ЗДЕСЬ:
-        // Для действия Call, GetBestAction возвращает OutDecisionAmount = 0,
-        // так как сумма колла определяется OfflineGameManager на основе GameState.
         TestEqual(TEXT("Flop NFD+Overs vs 1/2 Pot Bet: DecisionAmount for Call should be 0"), DecisionAmount, (int64)0);
         AddInfo(FString::Printf(TEXT("Bot chose to CALL. OutDecisionAmount (expected 0): %lld"), DecisionAmount));
     }
@@ -672,7 +650,6 @@ bool FPokerBotAITest_GB_Flop_FlushDrawOvers_FacingHalfPotBet::RunTest(const FStr
         TestTrue(TEXT("Raise amount should not exceed stack (total bet considering current bet is 0)"), DecisionAmount <= BotData.Stack);
     }
 
-    // AddInfo(FString::Printf(TEXT("Bot Chose: %s, TotalBetAmount: %lld"), *UEnum::GetDisplayValueAsText(Action).ToString(), DecisionAmount)); // Уже есть в if/else if
     return true;
 }
 
