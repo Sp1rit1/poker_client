@@ -4,10 +4,9 @@
 #include "PokerHandEvaluator.h"
 #include "Math/UnrealMathUtility.h"
 #include "Logging/LogMacros.h"
-#include "Algo/Sort.h" // Для сортировки карт
+#include "Algo/Sort.h" 
 
-// Можете определить свою лог категорию
-// DEFINE_LOG_CATEGORY_STATIC(LogPokerBotAI, Log, All);
+
 
 UPokerBotAI::UPokerBotAI()
 {
@@ -32,7 +31,7 @@ void UPokerBotAI::SetPersonalityFactors(const FBotPersonalitySettings& Settings)
         AggressivenessFactor, BluffFrequency, TightnessFactor);
 }
 
-// --- ИТЕРАЦИЯ 2: УЧЕТ ПОЗИЦИИ ---
+
 EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState* GameState, int32 BotSeatIndex, int32 NumActivePlayers) const
 {
     if (!GameState || !GameState->Seats.IsValidIndex(BotSeatIndex) || NumActivePlayers < 2 || GameState->DealerSeat == -1)
@@ -45,10 +44,7 @@ EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState
     int32 CurrentSeat = GameState->DealerSeat;
     for (int32 i = 0; i < GameState->Seats.Num(); ++i) // Проходим не более чем всего мест
     {
-        // Ищем следующего активного игрока (bIsSittingIn)
-        // GetNextPlayerToAct из OfflineGameManager может быть полезен, если адаптировать его для поиска
-        // просто следующего сидящего, а не следующего для хода.
-        // Пока сделаем простой поиск по кругу.
+
         bool bFoundNextSitting = false;
         for (int32 attempts = 0; attempts < GameState->Seats.Num(); ++attempts) {
             CurrentSeat = (CurrentSeat + 1) % GameState->Seats.Num();
@@ -71,8 +67,6 @@ EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState
         if (ActiveSeatsInOrder.Num() == NumActivePlayers) break;
     }
 
-    // ActiveSeatsInOrder теперь содержит индексы активных игроков в порядке хода ПОСЛЕ дилера
-    // Т.е., ActiveSeatsInOrder[0] = SB, ActiveSeatsInOrder[1] = BB, ... ActiveSeatsInOrder.Last() = BTN (дилер)
 
     if (ActiveSeatsInOrder.Num() != NumActivePlayers || !ActiveSeatsInOrder.Contains(BotSeatIndex)) {
         UE_LOG(LogTemp, Warning, TEXT("GetPlayerPosition: Mismatch in active players or bot not found. NumActive: %d, OrderSize: %d"), NumActivePlayers, ActiveSeatsInOrder.Num());
@@ -82,11 +76,7 @@ EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState
     int32 BotPosInOrder = ActiveSeatsInOrder.Find(BotSeatIndex);
 
     if (NumActivePlayers == 2) { // Heads-up
-        // В хедз-апе дилер (BTN) является SB. Другой игрок - BB.
-        // ActiveSeatsInOrder[0] будет игрок, который НЕ дилер (т.е. BB по правилам хедз-апа, т.к. он ходит вторым на префлопе)
-        // ActiveSeatsInOrder[1] будет игрок, который дилер (т.е. SB по правилам хедз-апа, т.к. он ходит первым на префлопе)
 
-        // Если BotSeatIndex совпадает с DealerSeat, то бот = SB. Иначе он BB.
         if (BotSeatIndex == GameState->DealerSeat) 
         {
             // Логируем, что BotPosInOrder должно соответствовать последнему элементу ActiveSeatsInOrder
@@ -101,17 +91,11 @@ EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState
         }
     }
 
-    // Для >2 игроков:
-    // SB = ActiveSeatsInOrder[0]
-    // BB = ActiveSeatsInOrder[1]
-    // BTN = ActiveSeatsInOrder.Last()
 
     if (BotSeatIndex == ActiveSeatsInOrder[0]) return EPlayerPokerPosition::SB;
     if (BotSeatIndex == ActiveSeatsInOrder[1]) return EPlayerPokerPosition::BB;
     if (BotSeatIndex == ActiveSeatsInOrder.Last()) return EPlayerPokerPosition::BTN;
 
-    // Более точное определение для столов разного размера
-    // (Это примерная логика, можно улучшить)
     int32 SeatsBeforeButton = ActiveSeatsInOrder.Num() - 1 - BotPosInOrder; // Сколько игроков будет ходить после бота до баттона
 
     if (NumActivePlayers <= 6) { // Столы до 6-max
@@ -134,12 +118,9 @@ EPlayerPokerPosition UPokerBotAI::GetPlayerPosition(const UOfflinePokerGameState
 }
 
 
-// --- ИТЕРАЦИЯ 1: СИЛА СТАРТОВОЙ РУКИ (ПРЕФЛОП) ---
 float UPokerBotAI::CalculatePreflopHandStrength(const FCard& Card1, const FCard& Card2, EPlayerPokerPosition BotPosition, int32 NumActivePlayers) const
 {
-    // Упрощенная таблица силы рук, модифицированная из различных источников + Chen Formula элементы
-    // Возвращает значение примерно от 0.0 (мусор) до 1.0 (AA)
-    // Реальная сила также сильно зависит от контекста, который здесь не полностью учтен.
+
 
     int32 RankVal1 = static_cast<int32>(Card1.Rank); // Two=0, ..., Ace=12
     int32 RankVal2 = static_cast<int32>(Card2.Rank);
@@ -231,9 +212,6 @@ float UPokerBotAI::CalculatePreflopHandStrength(const FCard& Card1, const FCard&
 }
 
 
-// ... (код из Части 1: конструктор, GetPlayerPosition, CalculatePreflopHandStrength) ...
-
-// --- ИСПОЛЬЗОВАНИЕ НОВЫХ ФУНКЦИЙ ДЛЯ ПРИНЯТИЯ РЕШЕНИЙ в GetBestAction (ПРЕФЛОП ЧАСТЬ ОБНОВЛЕНА) ---
 EPlayerAction UPokerBotAI::GetBestAction(
     const UOfflinePokerGameState* GameState,
     const FPlayerSeatData& BotPlayerSeatData,
@@ -414,8 +392,6 @@ EPlayerAction UPokerBotAI::GetBestAction(
             *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
     }
 
-    // ... (Начало файла UPokerBotAI.cpp, включая конструктор, GetPlayerPosition, 
-//      CalculatePreflopHandStrength и префлоп-часть GetBestAction из предыдущего ответа) ...
 
     else if (GameState->CurrentStage >= EGameStage::Flop && GameState->CurrentStage <= EGameStage::River) {
         UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Path Postflop Logic. Stage: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(GameState->CurrentStage).ToString());
@@ -599,23 +575,17 @@ EPlayerAction UPokerBotAI::GetBestAction(
                     else { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Postflop Weak Hand - No Check/Fold/Call. Unusual. Defaulting to Fold."), *BotPlayerSeatData.PlayerName); ChosenAction = EPlayerAction::Fold; }
                 }
             }
-        } // End if has 2 hole cards
+        } 
         UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Postflop decision logic resulted in: %s, AmountBeforeValidation: %lld"),
             *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount);
     } // End Postflop Logic
 
-    // --- Финальная Проверка и Коррекция OutDecisionAmount ---
-    // ... (ваш код финальной валидации без изменений) ...
     UE_LOG(LogTemp, Log, TEXT("BotAI %s (S%d): Before Final Validation - ChosenAction: %s, OutAmount: %lld"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount); if (!AllowedActions.Contains(ChosenAction) && !AllowedActions.IsEmpty()) { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: ChosenAction %s (EffHS: %.2f) NOT in AllowedActions! Activating Fallback. Allowed: [%s]"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), EffectiveHandStrength, *AllowedActionsString); if (AllowedActions.Contains(EPlayerAction::Check) && !bIsFacingBet) ChosenAction = EPlayerAction::Check; else if (AllowedActions.Contains(EPlayerAction::Call) && bIsFacingBet) ChosenAction = EPlayerAction::Call; else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold; else { ChosenAction = AllowedActions[0]; UE_LOG(LogTemp, Error, TEXT("BotAI %s: Fallback took first available: %s from [%s]"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), *AllowedActionsString); } OutDecisionAmount = 0; UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString()); } if (ChosenAction == EPlayerAction::Bet || ChosenAction == EPlayerAction::Raise) { int64 MaxPossibleTotalBet = BotPlayerSeatData.CurrentBet + BotPlayerSeatData.Stack; if (OutDecisionAmount <= BotPlayerSeatData.CurrentBet && OutDecisionAmount < MaxPossibleTotalBet) { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Calculated Bet/Raise total amount %lld is <= current bet %lld and not All-In Max. Activating Fallback."), *BotPlayerSeatData.PlayerName, OutDecisionAmount, BotPlayerSeatData.CurrentBet); if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) ChosenAction = EPlayerAction::Check; else if (bIsFacingBet && AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call; else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold; else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0]; OutDecisionAmount = 0; UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet/Raise Amount Fallback (not > CurrentBet) Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString()); } else if (OutDecisionAmount > MaxPossibleTotalBet) { UE_LOG(LogTemp, Verbose, TEXT("BotAI %s: Correcting OutDecisionAmount %lld to All-In amount %lld"), *BotPlayerSeatData.PlayerName, OutDecisionAmount, MaxPossibleTotalBet); OutDecisionAmount = MaxPossibleTotalBet; } if (ChosenAction == EPlayerAction::Bet) { int64 ActualBetAmountAdded = OutDecisionAmount - BotPlayerSeatData.CurrentBet; if (((ActualBetAmountAdded < GameState->BigBlindAmount && ActualBetAmountAdded < BotPlayerSeatData.Stack) || ActualBetAmountAdded <= 0) && OutDecisionAmount < MaxPossibleTotalBet) { if (!(ChosenAction == EPlayerAction::Check || ChosenAction == EPlayerAction::Call || ChosenAction == EPlayerAction::Fold)) { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet total amount %lld (adds %lld) too small for non-all-in. Final Bet Fallback."), *BotPlayerSeatData.PlayerName, OutDecisionAmount, ActualBetAmountAdded); if (!bIsFacingBet && AllowedActions.Contains(EPlayerAction::Check)) ChosenAction = EPlayerAction::Check; else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold; else if (bIsFacingBet && AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call; else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0]; OutDecisionAmount = 0; UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Bet Amount Final Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString()); } } } else if (ChosenAction == EPlayerAction::Raise) { int64 PureRaise = OutDecisionAmount - CurrentBetToCallOnTable; if (((OutDecisionAmount <= CurrentBetToCallOnTable || PureRaise < MinValidPureRaiseAmount) && OutDecisionAmount < MaxPossibleTotalBet) && MaxPossibleTotalBet > CurrentBetToCallOnTable) { if (!(ChosenAction == EPlayerAction::Call || ChosenAction == EPlayerAction::Fold)) { UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Raise total amount %lld invalid. PureRaise %lld vs MinPure %lld for non-all-in. Final Raise Fallback."), *BotPlayerSeatData.PlayerName, OutDecisionAmount, PureRaise, MinValidPureRaiseAmount); if (AllowedActions.Contains(EPlayerAction::Call)) ChosenAction = EPlayerAction::Call; else if (AllowedActions.Contains(EPlayerAction::Fold)) ChosenAction = EPlayerAction::Fold; else if (!AllowedActions.IsEmpty()) ChosenAction = AllowedActions[0]; OutDecisionAmount = 0; UE_LOG(LogTemp, Warning, TEXT("BotAI %s: Raise Amount Final Fallback Chose: %s"), *BotPlayerSeatData.PlayerName, *UEnum::GetDisplayValueAsText(ChosenAction).ToString()); } } } }
     else { OutDecisionAmount = 0; } UE_LOG(LogTemp, Warning, TEXT("BotAI %s (S%d) FINAL DECISION: Action=%s, OutAmountForProcessAction=%lld"), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex, *UEnum::GetDisplayValueAsText(ChosenAction).ToString(), OutDecisionAmount); UE_LOG(LogTemp, Warning, TEXT("==================== BotAI %s (Seat %d) - GetBestAction END ===================="), *BotPlayerSeatData.PlayerName, BotPlayerSeatData.SeatIndex);
 
     return ChosenAction;
 }
 
-// --- CalculateBetSize, CalculateRaiseSize, EvaluateCurrentMadeHand, GetScoreForMadeHand ---
-// --- ShouldAttemptBluff, CountActiveOpponents, GetActiveOpponentData, CalculateDrawStrength ---
-// --- bIsOpenRaiserSituation ---
-// (Эти функции я адаптирую для bIsTesting ниже, если они используют FRand/FRandRange)
 
 int64 UPokerBotAI::CalculateBetSize(const UOfflinePokerGameState* GameState, const FPlayerSeatData& BotPlayerSeatData, float CalculatedHandStrength, bool bIsBluffArgument, float PotFractionOverride) const
 {
@@ -671,7 +641,6 @@ int64 UPokerBotAI::CalculateRaiseSize(const UOfflinePokerGameState* GameState, c
 
 
 
-// --- ИТЕРАЦИЯ 3: БАЗОВАЯ ЛОГИКА НА ПОСТФЛОПЕ ---
 FPokerHandResult UPokerBotAI::EvaluateCurrentMadeHand(const TArray<FCard>& HoleCards, const TArray<FCard>& CommunityCards) const
 {
     if (HoleCards.Num() < 2) // Нужны карманные карты для оценки руки бота
@@ -689,12 +658,12 @@ float UPokerBotAI::GetScoreForMadeHand(EPokerHandRank HandRank) const
     case EPokerHandRank::RoyalFlush:    return 1.0f;
     case EPokerHandRank::StraightFlush: return 0.98f;
     case EPokerHandRank::FourOfAKind:   return 0.90f;
-    case EPokerHandRank::FullHouse:     return 0.85f; // Немного повысил
-    case EPokerHandRank::Flush:         return 0.78f; // Немного повысил
-    case EPokerHandRank::Straight:      return 0.72f; // Немного повысил
+    case EPokerHandRank::FullHouse:     return 0.85f; 
+    case EPokerHandRank::Flush:         return 0.78f;
+    case EPokerHandRank::Straight:      return 0.72f; 
     case EPokerHandRank::ThreeOfAKind:  return 0.60f;
-    case EPokerHandRank::TwoPair:       return 0.45f; // Немного понизил, т.к. две пары часто уязвимы
-    case EPokerHandRank::OnePair:       return 0.30f; // Особенно уязвима, зависит от кикера и силы пары
+    case EPokerHandRank::TwoPair:       return 0.45f; 
+    case EPokerHandRank::OnePair:       return 0.30f; 
     case EPokerHandRank::HighCard:      return 0.10f;
     default:                            return 0.0f;
     }
@@ -825,7 +794,6 @@ int32 UPokerBotAI::CountActiveOpponents(const UOfflinePokerGameState* GameState,
 
 TArray<FPlayerSeatData> UPokerBotAI::GetActiveOpponentData(const UOfflinePokerGameState* GameState, int32 BotSeatIndex) const
 {
-    // ... (код без изменений из Части 2) ...
     TArray<FPlayerSeatData> Opponents;
     if (!GameState) return Opponents;
     for (const FPlayerSeatData& Seat : GameState->Seats)
@@ -874,8 +842,6 @@ float UPokerBotAI::CalculateDrawStrength(const TArray<FCard>& HoleCards, const T
     }
 
     int32 StraightDrawOuts = 0;
-    // Проверяем на стрит, начиная с самой высокой возможной карты (Туз-хай стрит: 10,J,Q,K,A -> LowCard = 10)
-    // до самой низкой (А-5 стрит: A,2,3,4,5 -> LowCard = 1 (Туз))
     for (int32 LowCardPotential = 1; LowCardPotential <= 10; ++LowCardPotential) {
         int32 CardsInSequence = 0;
         TArray<int32> MissingCardsInSequence;
@@ -890,8 +856,7 @@ float UPokerBotAI::CalculateDrawStrength(const TArray<FCard>& HoleCards, const T
 
         if (CardsInSequence == 4 && MissingCardsInSequence.Num() == 1) { // Есть 4 из 5 карт
             int32 MissingRank = MissingCardsInSequence[0];
-            // OESD: дырка с краю (но не тупиковая для самой низкой/высокой карты)
-            // Пример: у нас 6,7,8,9. Не хватает 5 или T.
+
             if (MissingRank == LowCardPotential && LowCardPotential > 1) { // Дырка снизу, не туз
                 StraightDrawOuts = FMath::Max(StraightDrawOuts, 4); // Гатшот, если T-9-8-7 (нужен J)
                 if (KnownRanksForStraight.Contains(LowCardPotential + 5)) {} // это для проверки что нет второй дырки с другой стороны
@@ -913,10 +878,6 @@ float UPokerBotAI::CalculateDrawStrength(const TArray<FCard>& HoleCards, const T
     }
 
     int32 TotalOuts = FlushDrawOuts + StraightDrawOuts;
-    // Убираем пересекающиеся ауты (для стрит-флеш дро)
-    // TODO: Более точный подсчет для стрит-флеш дро, если есть и флеш-дро и стрит-дро,
-    // то ауты на стрит-флеш (обычно 1 или 2) не должны считаться дважды.
-    // Пока для MVP это можно опустить.
 
     if (TotalOuts == 0) return 0.0f;
 
@@ -933,10 +894,7 @@ float UPokerBotAI::CalculateDrawStrength(const TArray<FCard>& HoleCards, const T
 
     if (CommunityCards.Num() == 3) { // На флопе, есть две карты до вскрытия
         if (UnknownCardsInDeck > 1) {
-            // P(не улучшиться на терне) = (UC-O)/UC
-            // P(не улучшиться на ривере, если не улучшился на терне) = (UC-1-O)/(UC-1)
-            // P(не улучшиться ни на терне, ни на ривере) = P1 * P2
-            // P(улучшиться хотя бы раз) = 1 - P(не улучшиться)
+
             float ProbNotHittingTurn = static_cast<float>(UnknownCardsInDeck - TotalOuts) / UnknownCardsInDeck;
             float ProbNotHittingRiver = static_cast<float>(UnknownCardsInDeck - 1 - TotalOuts) / (UnknownCardsInDeck - 1);
             RelevantHandOdds = 1.0f - (ProbNotHittingTurn * ProbNotHittingRiver);
@@ -956,7 +914,6 @@ float UPokerBotAI::CalculateDrawStrength(const TArray<FCard>& HoleCards, const T
 
 bool UPokerBotAI::bIsOpenRaiserSituation(const UOfflinePokerGameState* GameState, const FPlayerSeatData& BotPlayerSeatData) const
 {
-    // ... (код без изменений из Части 2) ...
     if (GameState->CurrentStage != EGameStage::Preflop) return false;
     bool bNoRealAggressionYet = (GameState->LastAggressorSeatIndex == -1 ||
         GameState->LastAggressorSeatIndex == GameState->PendingSmallBlindSeat ||

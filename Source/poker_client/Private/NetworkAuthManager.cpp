@@ -1,16 +1,15 @@
 ﻿#include "NetworkAuthManager.h"
-#include "MyGameInstance.h" // Включаем заголовок нашего GameInstance
+#include "MyGameInstance.h" 
 
-// Инклуды для HTTP и JSON (как были в вашем MyGameInstance.cpp)
 #include "HttpModule.h"
-#include "Interfaces/IHttpResponse.h" // IHttpRequest уже включен через NetworkAuthManager.h
+#include "Interfaces/IHttpResponse.h" 
 #include "Json.h"
 #include "Serialization/JsonSerializer.h"
 
 UNetworkAuthManager::UNetworkAuthManager()
 {
     OwningGameInstance = nullptr;
-    // ApiBaseUrl будет инициализирован в Initialize()
+
 }
 
 void UNetworkAuthManager::Initialize(UMyGameInstance* InGameInstance, const FString& InApiBaseUrl)
@@ -52,7 +51,7 @@ void UNetworkAuthManager::RequestLogin(const FString& Username, const FString& P
     if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer))
     {
         UE_LOG(LogTemp, Error, TEXT("UNetworkAuthManager::RequestLogin: Failed to serialize JSON body."));
-        // Возможно, стоит вызвать делегат с ошибкой здесь
+
         OwningGameInstance->OnLoginAttemptCompleted.Broadcast(false, TEXT("Внутренняя ошибка: не удалось создать запрос."));
         return;
     }
@@ -61,7 +60,7 @@ void UNetworkAuthManager::RequestLogin(const FString& Username, const FString& P
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/login")); // Используем сохраненный ApiBaseUrl
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/login")); 
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
@@ -111,7 +110,7 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("POST"));
-    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/register")); // Используем сохраненный ApiBaseUrl
+    HttpRequest->SetURL(ApiBaseUrl + TEXT("/auth/register")); 
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
 
@@ -159,7 +158,7 @@ void UNetworkAuthManager::RequestAddFriend(const FString& FriendCode)
         }
         return;
     }
-    // Проверяем только флаг bIsLoggedIn, так как токен теперь не хранится явно на клиенте
+
     if (!OwningGameInstance->bIsLoggedIn)
     {
         UE_LOG(LogTemp, Warning, TEXT("RequestAddFriend: User not logged in."));
@@ -193,8 +192,7 @@ void UNetworkAuthManager::RequestAddFriend(const FString& FriendCode)
     HttpRequest->SetVerb(TEXT("POST"));
     HttpRequest->SetURL(ApiBaseUrl + TEXT("/friends/add"));
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-    // Заголовок Authorization с токеном больше НЕ НУЖЕН, если используются сессии и Cookies
-    // HttpRequest->SetHeader(TEXT("Authorization"), TEXT("Bearer ") + OwningGameInstance->LoggedInAuthToken); 
+
     HttpRequest->SetContentAsString(RequestBodyString);
 
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnAddFriendResponseReceived);
@@ -247,12 +245,12 @@ void UNetworkAuthManager::OnLoginResponseReceived(FHttpRequestPtr Request, FHttp
         {
             int64 ReceivedUserId = -1;
             FString ReceivedUsername;
-            FString ReceivedFriendCode; // Добавлено для кода друга
+            FString ReceivedFriendCode; 
 
             // Извлекаем friendCode из ответа сервера (предполагается, что он там есть)
             if (ResponseJson->TryGetNumberField(TEXT("userId"), ReceivedUserId) &&
                 ResponseJson->TryGetStringField(TEXT("username"), ReceivedUsername) &&
-                ResponseJson->TryGetStringField(TEXT("friendCode"), ReceivedFriendCode)) // Изменил с token на friendCode
+                ResponseJson->TryGetStringField(TEXT("friendCode"), ReceivedFriendCode)) 
             {
                 UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::OnLoginResponseReceived: Login successful for user: %s (ID: %lld, FriendCode: %s)"), *ReceivedUsername, ReceivedUserId, *ReceivedFriendCode);
                 // Обновляем глобальное состояние через GameInstance
@@ -301,16 +299,16 @@ void UNetworkAuthManager::OnLoginResponseReceived(FHttpRequestPtr Request, FHttp
                     if (ErrorValue->TryGetObject(ErrorObject))
                     {
                         FString FieldError;
-                        (*ErrorObject)->TryGetStringField(TEXT("defaultMessage"), FieldError); // Стандартное поле для @Valid
+                        (*ErrorObject)->TryGetStringField(TEXT("defaultMessage"), FieldError); 
                         ValidationErrors += FieldError + TEXT("; ");
                     }
-                    else if (ErrorValue->Type == EJson::String) { // Если ошибки просто строками
+                    else if (ErrorValue->Type == EJson::String) { 
                         ValidationErrors += ErrorValue->AsString() + TEXT("; ");
                     }
                 }
                 if (!ValidationErrors.IsEmpty())
                 {
-                    ResponseMessage = ValidationErrors.LeftChop(2); // Убираем последний "; "
+                    ResponseMessage = ValidationErrors.LeftChop(2); 
                 }
             }
         }
@@ -389,7 +387,7 @@ void UNetworkAuthManager::OnRegisterResponseReceived(FHttpRequestPtr Request, FH
                     {
                         (*ErrorObject)->TryGetStringField(TEXT("defaultMessage"), FieldError);
                     }
-                    else if (ErrorValue->Type == EJson::String) { // Простая строка
+                    else if (ErrorValue->Type == EJson::String) { 
                         FieldError = ErrorValue->AsString();
                     }
 
@@ -411,7 +409,7 @@ void UNetworkAuthManager::OnRegisterResponseReceived(FHttpRequestPtr Request, FH
     OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(bRegisterSuccess, ResultMessage);
 }
 
-// --- ИЗМЕНЕННАЯ ФУНКЦИЯ OnAddFriendResponseReceived ---
+
 void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
     if (!OwningGameInstance)
@@ -419,7 +417,6 @@ void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, F
         UE_LOG(LogTemp, Error, TEXT("OnAddFriendResponseReceived: OwningGameInstance is null. Cannot process response or broadcast."));
         return;
     }
-    // Делегат будет вызван в конце, поэтому проверку IsBound() лучше делать перед Broadcast
 
     bool bAddSuccess = false;
     FString ResultMessage = TEXT("Неизвестная ошибка при добавлении друга.");
@@ -463,7 +460,6 @@ void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, F
             {
                 if (!ServerErrorMsg.IsEmpty()) ResultMessage = ServerErrorMsg;
             }
-            // ... (обработка массива "errors", если нужно) ...
         }
         else if (!ResponseBody.IsEmpty())
         {

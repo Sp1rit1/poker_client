@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "PokerDataTypes.h"
 #include "Engine/GameInstance.h"
-// Прямые объявления для менеджеров и виджетов, чтобы не включать их .h здесь
+
 class UStartScreenUIManager;
 class UNetworkAuthManager;
 class UOfflineGameManager;
@@ -20,7 +20,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRegisterAttemptCompleted, bool, 
 
 
 UCLASS()
-class POKER_CLIENT_API UMyGameInstance : public UGameInstance // Замените YOURPROJECT_API
+class POKER_CLIENT_API UMyGameInstance : public UGameInstance 
 {
     GENERATED_BODY()
 
@@ -46,7 +46,7 @@ public:
     bool bIsInOfflineMode = false;
 
     // --- Классы виджетов для стартовых экранов (настраиваются в Blueprint GameInstance) ---
-// Они нужны здесь, чтобы их можно было назначить в редакторе и передать в StartScreenUIManager
+
     UPROPERTY(EditDefaultsOnly, Category = "UI|Start Screens")
     TSubclassOf<UUserWidget> StartScreenClass;
 
@@ -106,7 +106,7 @@ public:
     TArray<FBotPersonalitySettings> PendingBotPersonalities;
 
     // --- Делегаты для событий аутентификации ---
-// Виджеты будут подписываться на них
+
     UPROPERTY(BlueprintAssignable, Category = "Network|Authentication")
     FOnLoginAttemptCompleted OnLoginAttemptCompleted;
 
@@ -158,7 +158,7 @@ protected:
     UPROPERTY()
     TObjectPtr<UNetworkAuthManager> NetworkAuthManagerInstance; 
 
-    UPROPERTY() // OfflineGameManager остался здесь
+    UPROPERTY() 
         TObjectPtr<UOfflineGameManager> OfflineGameManager;
 
     UPROPERTY()
@@ -168,6 +168,6 @@ protected:
     TObjectPtr<ULevelTransitionManager> LevelTransitionManagerInstance;
 
     FTimerHandle ResizeTimerHandle;
-    FIntPoint DesiredWindowedResolution; // Для сохранения при выходе
+    FIntPoint DesiredWindowedResolution; 
     bool bDesiredResolutionCalculated = false;
 };

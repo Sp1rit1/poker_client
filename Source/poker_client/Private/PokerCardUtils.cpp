@@ -1,7 +1,5 @@
-﻿#include "PokerCardUtils.h" // или PokerBlueprintUtils.h
-#include "PokerDataTypes.h" // Для FShowdownPlayerInfo, FCard, FPokerHandResult
-
-// --- Функции для FShowdownPlayerInfo ---
+﻿#include "PokerCardUtils.h" 
+#include "PokerDataTypes.h" 
 
 int32 UPokerCardUtils::GetShowdownPlayerSeatIndex(const FShowdownPlayerInfo& ShowdownInfo)
 {
@@ -45,7 +43,7 @@ EPlayerStatus UPokerCardUtils::GetShowdownPlayerStatus(const FShowdownPlayerInfo
 
 FString UPokerCardUtils::Conv_CardToString(const FCard& Card)
 {
-    return Card.ToRussianString(); // Просто вызываем существующий метод структуры
+    return Card.ToRussianString(); 
 }
 
 EPokerHandRank UPokerCardUtils::GetHandRankFromResult(const FPokerHandResult& HandResult)

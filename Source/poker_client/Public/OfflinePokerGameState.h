@@ -6,7 +6,7 @@
 #include "OfflinePokerGameState.generated.h"
 
 UCLASS(BlueprintType)
-class POKER_CLIENT_API UOfflinePokerGameState : public UObject // Замените YOURPROJECT_API
+class POKER_CLIENT_API UOfflinePokerGameState : public UObject 
 {
     GENERATED_BODY()
 
@@ -35,14 +35,12 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     int64 CurrentBetToCall = 0;
 
-    // --- Новые Поля ---
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     int64 SmallBlindAmount = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     int64 BigBlindAmount = 0;
 
-    // Опционально: отслеживать, кто должен поставить следующий блайнд
     UPROPERTY(BlueprintReadOnly, Category = "Poker Game State")
     int32 PendingSmallBlindSeat = -1;
 
@@ -81,7 +79,6 @@ public:
         LastBetOrRaiseAmountInCurrentRound = 0;
     }
 
-    // --- Новые Геттеры (BlueprintCallable) ---
     UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
     int32 GetNumSeats() const { return Seats.Num(); }
 
@@ -92,7 +89,7 @@ public:
     FPlayerSeatData GetSeatData(int32 SeatIndex) const
     {
         if (Seats.IsValidIndex(SeatIndex)) return Seats[SeatIndex];
-        return FPlayerSeatData(); // Возвращаем пустую структуру в случае ошибки
+        return FPlayerSeatData(); 
     }
 
     UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
@@ -114,8 +111,8 @@ public:
     int64 GetCurrentBetToCall() const { return CurrentBetToCall; }
 
     UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
-    int64 GetSmallBlindDefineAmount() const { return SmallBlindAmount; } // Определенный SB
+    int64 GetSmallBlindDefineAmount() const { return SmallBlindAmount; } 
 
     UFUNCTION(BlueprintPure, Category = "Poker Game State|Getters")
-    int64 GetBigBlindDefineAmount() const { return BigBlindAmount; }   // Определенный BB
+    int64 GetBigBlindDefineAmount() const { return BigBlindAmount; }   
 };

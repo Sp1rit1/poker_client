@@ -20,7 +20,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActualHoleCardsDealtSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNewHandAboutToStartSignature);
 
 UCLASS(BlueprintType) // BlueprintType уже был, он позволяет создавать экземпляры этого класса в BP
-class POKER_CLIENT_API UOfflineGameManager : public UObject // Замените YOURPROJECT_API
+class POKER_CLIENT_API UOfflineGameManager : public UObject 
 {
     GENERATED_BODY()
 
@@ -60,40 +60,25 @@ public:
 
     UOfflineGameManager();
 
-    /**
-     * Инициализирует новую оффлайн игру.
-     * Создает GameState, Deck, рассаживает игроков/ботов, устанавливает размеры блайндов.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Offline Game|Setup") // ИЗМЕНЕНО: Добавлен BlueprintCallable
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Setup") 
     void InitializeGame(int32 NumRealPlayers, int32 NumBots, int64 InitialStack, int64 InSmallBlindAmount);
 
-    /**
-     * Возвращает текущее состояние игры (для чтения).
-     */
-    UFUNCTION(BlueprintPure, Category = "Offline Game State|Getters") // ИЗМЕНЕНО: Добавлен BlueprintPure
+
+    UFUNCTION(BlueprintPure, Category = "Offline Game State|Getters") 
     UOfflinePokerGameState* GetGameState() const;
 
-    /**
-     * Начинает новую покерную раздачу.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") // ИЗМЕНЕНО: Добавлен BlueprintCallable
+
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") 
     void StartNewHand();
 
-    /**
-     * Проверяет, можно ли начать новую руку.
-     * @param OutReasonIfNotPossible Выходной параметр, содержащий причину, если начать нельзя.
-     * @return true, если можно начать новую руку, иначе false.
-     */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Offline Game|Game Flow") // ИЗМЕНЕНО: Добавлен BlueprintCallable и BlueprintPure
-    bool CanStartNewHand(FString& OutReasonIfNotPossible); // FString& для Out параметра в BP должен быть настроен в деталях функции в BP
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Offline Game|Game Flow") 
+    bool CanStartNewHand(FString& OutReasonIfNotPossible); 
 
-    /**
-     * Вызывается UI (через PlayerController), когда игрок совершает действие.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") // Уже был BlueprintCallable
+ 
+    UFUNCTION(BlueprintCallable, Category = "Offline Game|Game Flow") 
     void ProcessPlayerAction(int32 ActingPlayerSeatIndex, EPlayerAction PlayerAction, int64 Amount);
 
-    UFUNCTION(BlueprintPure, Category = "Offline Game|Getters") // BlueprintPure, если хотите вызывать из BP
+    UFUNCTION(BlueprintPure, Category = "Offline Game|Getters") 
     UPokerBotAI* GetBotAIInstance() const;
 
     UFUNCTION(BlueprintPure, Category = "Offline Game|Getters")

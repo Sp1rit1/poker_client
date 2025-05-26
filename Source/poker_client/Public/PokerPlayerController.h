@@ -2,22 +2,22 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "PokerDataTypes.h" // Для EPlayerAction, FCard, TArray
-#include "Misc/Optional.h" // Для TOptional
+#include "PokerDataTypes.h" 
+#include "Misc/Optional.h" 
 #include "PokerPlayerController.generated.h"
 
 // Прямые объявления
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
-class IGameHUDInterface; // Используем C++ интерфейс
-class ICommunityCardDisplayInterface; // Интерфейс для общих карт
-class IPlayerSeatVisualizerInterface; // Интерфейс для карманных карт
+class IGameHUDInterface; 
+class ICommunityCardDisplayInterface; 
+class IPlayerSeatVisualizerInterface; 
 class UEnhancedInputLocalPlayerSubsystem;
-class UOfflinePokerGameState; // Для передачи в функции обновления UI
+class UOfflinePokerGameState; 
 
 UCLASS()
-class POKER_CLIENT_API APokerPlayerController : public APlayerController // Замените POKER_CLIENT_API
+class POKER_CLIENT_API APokerPlayerController : public APlayerController 
 {
     GENERATED_BODY()
 

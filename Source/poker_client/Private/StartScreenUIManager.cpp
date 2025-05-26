@@ -1,16 +1,14 @@
 ﻿#include "StartScreenUIManager.h"
-#include "MyGameInstance.h" // Для доступа к функциям GameInstance
+#include "MyGameInstance.h" 
 #include "LevelTransitionManager.h"
-// Инклуды из вашего MyGameInstance.cpp, необходимые для этой логики
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
-#include "UObject/Package.h" // Для LoadPackageAsync и UPackage
+#include "UObject/Package.h" 
 #include "MediaPlayer.h"
 #include "MediaSource.h"
-#include "UObject/UObjectGlobals.h" // Для FindField (если используется)
-#include "UObject/UnrealType.h"     // Для FProperty, FObjectProperty (если используется)
-
+#include "UObject/UObjectGlobals.h" 
+#include "UObject/UnrealType.h"     
 
 UStartScreenUIManager::UStartScreenUIManager()
 {
@@ -38,7 +36,6 @@ void UStartScreenUIManager::Initialize(
     {
         UE_LOG(LogTemp, Error, TEXT("UStartScreenUIManager::Initialize - OwningGameInstance is null!"));
     }
-    // Добавьте проверки для остальных параметров, если нужно
 }
 
 template <typename T>

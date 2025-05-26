@@ -2,31 +2,29 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PokerDataTypes.h"       // Для FPlayerSeatData, EPlayerAction, FCard и т.д.
-#include "PokerHandEvaluator.h"    // Для FPokerHandResult (используется в EvaluateCurrentMadeHand)
+#include "PokerDataTypes.h"       
+#include "PokerHandEvaluator.h"    
 #include "PokerBotAI.generated.h"
 
-// Прямые объявления для уменьшения зависимостей в .h
 class UOfflinePokerGameState;
 
-// Перечисление для позиции за столом (можно вынести в PokerDataTypes.h, если используется где-то еще)
 UENUM(BlueprintType)
 enum class EPlayerPokerPosition : uint8
 {
     BTN         UMETA(DisplayName = "Button (BTN)"),
     SB          UMETA(DisplayName = "Small Blind (SB)"),
     BB          UMETA(DisplayName = "Big Blind (BB)"),
-    UTG         UMETA(DisplayName = "Under The Gun (UTG)"), // Первая позиция после BB
+    UTG         UMETA(DisplayName = "Under The Gun (UTG)"), 
     UTG1        UMETA(DisplayName = "UTG+1"),
-    MP1         UMETA(DisplayName = "Middle Position 1 (MP1)"), // Средние позиции
+    MP1         UMETA(DisplayName = "Middle Position 1 (MP1)"), 
     MP2         UMETA(DisplayName = "Middle Position 2 (MP2)"),
-    HJ          UMETA(DisplayName = "Hijack (HJ)"),           // Поздняя позиция перед CO
-    CO          UMETA(DisplayName = "Cutoff (CO)"),           // Поздняя позиция перед BTN
-    Unknown     UMETA(DisplayName = "Unknown")                // Для случаев <3 игроков или ошибок
+    HJ          UMETA(DisplayName = "Hijack (HJ)"),           
+    CO          UMETA(DisplayName = "Cutoff (CO)"),           
+    Unknown     UMETA(DisplayName = "Unknown")               
 };
 
 UCLASS()
-class POKER_CLIENT_API UPokerBotAI : public UObject // Замените YOURPROJECT_API
+class POKER_CLIENT_API UPokerBotAI : public UObject 
 {
     GENERATED_BODY()
 
@@ -52,16 +50,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bot Personality", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
     float TightnessFactor;
 
-    /**
-     * Основная функция для принятия решения ботом.
-     * @param GameState Текущее состояние игры.
-     * @param BotPlayerSeatData Данные о месте бота.
-     * @param AllowedActions Список доступных действий.
-     * @param CurrentBetToCallOnTable Сумма, которую нужно доставить, чтобы уравнять текущую максимальную ставку на столе.
-     * @param MinValidPureRaiseAmount Минимальная чистая сумма для рейза (или минимальная сумма для бета, если ставок еще не было).
-     * @param OutDecisionAmount (Выходной параметр) Если действие Bet или Raise, это будет ОБЩАЯ сумма, до которой бот ставит/рейзит. Для Call/Check/Fold/PostBlind это значение игнорируется или 0.
-     * @return Выбранное действие.
-     */
     EPlayerAction GetBestAction(
         const UOfflinePokerGameState* GameState,
         const FPlayerSeatData& BotPlayerSeatData,

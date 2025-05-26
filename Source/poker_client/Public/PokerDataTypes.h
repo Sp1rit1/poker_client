@@ -1,9 +1,9 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/ObjectMacros.h" // Needed for UENUM, USTRUCT
+#include "UObject/ObjectMacros.h" 
 #include "Templates/TypeHash.h"
-#include "PokerDataTypes.generated.h" // MUST be the last include
+#include "PokerDataTypes.generated.h" 
 
 // Масть карты
 UENUM(BlueprintType)
@@ -142,18 +142,11 @@ struct POKER_CLIENT_API FPokerHandResult
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	EPokerHandRank HandRank = EPokerHandRank::HighCard; // Ранг комбинации
+	EPokerHandRank HandRank = EPokerHandRank::HighCard; 
 
-	// Кикеры - карты, определяющие силу руки при равных рангах
-	// Храним только ранги, т.к. масть в кикерах не важна для стандартного покера
 	UPROPERTY(BlueprintReadOnly, Category = "Poker")
 	TArray<ECardRank> Kickers;
 
-	// (Опционально) Можно добавить ранги ключевых карт комбинации
-	// UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	// ECardRank PrimaryRank = ECardRank::Two; // Ранг пары, тройки, каре, старшая карта стрита/флеша
-	// UPROPERTY(BlueprintReadOnly, Category = "Poker")
-	// ECardRank SecondaryRank = ECardRank::Two; // Ранг второй пары, пары в фулл-хаусе
 
 	FPokerHandResult() = default;
 };

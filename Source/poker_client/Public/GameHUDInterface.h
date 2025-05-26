@@ -2,11 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "PokerDataTypes.h" // Включаем для EPlayerAction и FPlayerSeatData (если будете использовать для инициализации)
+#include "PokerDataTypes.h" 
 #include "GameHUDInterface.generated.h"
 
-// This class does not need to be modified.
-UINTERFACE(MinimalAPI, Blueprintable) // Blueprintable чтобы интерфейс был виден в BP
+UINTERFACE(MinimalAPI, Blueprintable) 
 class UGameHUDInterface : public UInterface
 {
     GENERATED_BODY()
@@ -15,42 +14,25 @@ class UGameHUDInterface : public UInterface
 /**
  * Интерфейс для взаимодействия с игровым HUD.
  */
-class POKER_CLIENT_API IGameHUDInterface // Замените YOURPROJECT_API. Имя интерфейса обычно начинается с 'I'
+class POKER_CLIENT_API IGameHUDInterface 
 {
     GENERATED_BODY()
 
 public:
-    /**
-     * Инициализирует/обновляет основную информацию о состоянии игры и текущем ходе в HUD.
-     * Вызывается как при начальной настройке HUD, так и после каждого действия, чтобы показать, чей ход.
-     * @param ForPlayerSeatIndex Индекс места игрока, чей сейчас ход (или -1, если ход не определен/ожидание).
-     * @param CurrentPot Текущий размер общего банка.
-     * @param CurrentBetToCall Сумма, которую нужно доставить, чтобы остаться в игре (сделать колл).
-     * @param MinimumRaise Минимальная сумма для бета или рейза.
-     * @param PlayerStack Стек игрока, чей сейчас ход (или стек локального игрока, если ForPlayerSeatIndex = -1).
-     */
+
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
     void UpdateGameInfo(
-        const FString& MovingPlayerName,        // Имя игрока, чей ход
-        int64 CurrentPot,                       // Текущий банк
-        int64 LocalPlayerActualStack,           // Актуальный стек ЛОКАЛЬНОГО игрока
-        int64 LocalPlayerCurrentBetInRound,     // Сколько ЛОКАЛЬНЫЙ игрок уже поставил в этом раунде
-        int64 TotalBetToCallOnTableForLocal,    // Общая сумма ставки на столе, до которой нужно коллировать ЛОКАЛЬНОМУ ИГРОКУ
-        int64 MinPureRaiseAmountOnTableForLocal // ЧИСТЫЙ минимальный рейз, актуальный на столе для ЛОКАЛЬНОГО ИГРОКА
+        const FString& MovingPlayerName,        
+        int64 CurrentPot,                       
+        int64 LocalPlayerActualStack,           
+        int64 LocalPlayerCurrentBetInRound,     
+        int64 TotalBetToCallOnTableForLocal,    
+        int64 MinPureRaiseAmountOnTableForLocal 
     );
 
-    /**
-     * Обновляет состояние кнопок действий в HUD на основе доступных действий для текущего игрока.
-     * Вызывается, когда наступает ход локального игрока.
-     * @param AllowedActions Массив действий, доступных текущему игроку.
-     */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Update")
     void UpdateActionButtons(const TArray<EPlayerAction>& AllowedActions);
 
-    /**
-     * Деактивирует все кнопки действий игрока в HUD.
-     * Вызывается, когда не ход локального игрока или когда никакие действия невозможны.
-     */
     UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "HUD Interface|Controls")
     void DisableButtons();
 

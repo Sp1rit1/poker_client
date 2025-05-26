@@ -2,13 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "PokerDataTypes.h" // Убедитесь, что FCard и FPokerHandResult здесь
+#include "PokerDataTypes.h" 
 #include "Containers/Map.h" 
 #include "Containers/Set.h"
 #include "PokerHandEvaluator.generated.h"
 
 UCLASS()
-class POKER_CLIENT_API UPokerHandEvaluator : public UBlueprintFunctionLibrary // Замените YOURPROJECT_API
+class POKER_CLIENT_API UPokerHandEvaluator : public UBlueprintFunctionLibrary 
 {
     GENERATED_BODY()
 

@@ -188,15 +188,14 @@ FPokerHandResult UPokerHandEvaluator::EvaluateSingleFiveCardHand(const TArray<FC
     // 1. Стрит Флеш / Роял Флеш
     if (bIsStraight && bIsFlush)
     {
-        bool bIsActualStraightFlush = true; // Assume true, verify if all straight cards are of flush suit
-        for (const FCard& Card : SortedCards) // All 5 cards must be of the FlushSuit
+        bool bIsActualStraightFlush = true; 
+        for (const FCard& Card : SortedCards) 
         {
             if (Card.Suit != FlushSuit) { bIsActualStraightFlush = false; break; }
         }
-        // If it's a straight AND all 5 cards are the same suit, it's a straight flush.
         if (bIsActualStraightFlush)
         {
-            if (StraightHighRank == ECardRank::Ace && SortedCards[0].Rank == ECardRank::Ace) { // T-J-Q-K-A straight
+            if (StraightHighRank == ECardRank::Ace && SortedCards[0].Rank == ECardRank::Ace) { 
                 Result.HandRank = EPokerHandRank::RoyalFlush;
             }
             else {
@@ -229,19 +228,19 @@ FPokerHandResult UPokerHandEvaluator::EvaluateSingleFiveCardHand(const TArray<FC
     }
 
     // 3. Фулл Хаус (Full House)
-    if (RanksOfThree.Num() == 1 && RanksOfPairs.Num() >= 1) // One Three, One Pair
+    if (RanksOfThree.Num() == 1 && RanksOfPairs.Num() >= 1) 
     {
         Result.HandRank = EPokerHandRank::FullHouse;
         Result.Kickers.Add(RanksOfThree[0]);
-        Result.Kickers.Add(RanksOfPairs[0]); // Highest pair
+        Result.Kickers.Add(RanksOfPairs[0]); 
         UE_LOG(LogPokerEval, Log, TEXT("    Detected: FullHouse (%s over %s)"), *UEnum::GetDisplayValueAsText(Result.Kickers[0]).ToString(), *UEnum::GetDisplayValueAsText(Result.Kickers[1]).ToString());
         return Result;
     }
-    if (RanksOfThree.Num() >= 2) // Two Threes (e.g. from 7 cards, best 5 could be AAA KKK -> AAA KK)
+    if (RanksOfThree.Num() >= 2) 
     {
         Result.HandRank = EPokerHandRank::FullHouse;
-        Result.Kickers.Add(RanksOfThree[0]); // Higher three
-        Result.Kickers.Add(RanksOfThree[1]); // Lower three (as pair)
+        Result.Kickers.Add(RanksOfThree[0]); 
+        Result.Kickers.Add(RanksOfThree[1]); 
         UE_LOG(LogPokerEval, Log, TEXT("    Detected: FullHouse (Two Threes: %s over %s)"), *UEnum::GetDisplayValueAsText(Result.Kickers[0]).ToString(), *UEnum::GetDisplayValueAsText(Result.Kickers[1]).ToString());
         return Result;
     }
@@ -252,7 +251,7 @@ FPokerHandResult UPokerHandEvaluator::EvaluateSingleFiveCardHand(const TArray<FC
         Result.HandRank = EPokerHandRank::Flush;
         for (const FCard& Card : SortedCards) {
             if (Card.Suit == FlushSuit) Result.Kickers.Add(Card.Rank);
-        } // All 5 cards are kickers, already sorted by rank
+        } 
         UE_LOG(LogPokerEval, Log, TEXT("    Detected: Flush (Suit: %s, High: %s)"), *UEnum::GetDisplayValueAsText(FlushSuit).ToString(), Result.Kickers.Num() > 0 ? *UEnum::GetDisplayValueAsText(Result.Kickers[0]).ToString() : TEXT("N/A"));
         return Result;
     }

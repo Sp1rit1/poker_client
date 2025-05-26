@@ -1,4 +1,4 @@
-﻿// MyGameInstance.cpp
+﻿
 
 #include "MyGameInstance.h"
 #include "StartScreenUIManager.h"
@@ -6,16 +6,16 @@
 #include "OfflineGameManager.h"
 #include "MenuScreenUIManager.h"
 #include "LevelTransitionManager.h"
-#include "GameFramework/PlayerController.h" // Уже был, но важен для GetFirstLocalPlayerController
+#include "GameFramework/PlayerController.h" 
 #include "GameFramework/GameUserSettings.h"
 #include "Engine/Engine.h"
-#include "Kismet/GameplayStatics.h" // Для UGameplayStatics::GetCurrentLevelName
+#include "Kismet/GameplayStatics.h" 
 #include "TimerManager.h"
 #include "SlateBasics.h"
 #include "GenericPlatform/GenericApplication.h"
 #if PLATFORM_WINDOWS
 #include "Windows/WindowsHWrapper.h"
-#include "Windows/AllowWindowsPlatformTypes.h" // Убедитесь, что этот порядок инклюдов не конфликтует, если есть другой Allow/Hide
+#include "Windows/AllowWindowsPlatformTypes.h" 
 #endif
 
 UMyGameInstance::UMyGameInstance()
@@ -73,9 +73,9 @@ void UMyGameInstance::Init()
             ProfileScreenClass,
             SettingsClass
         );
-        UE_LOG(LogTemp, Log, TEXT("MenuScreenUIManager created and initialized.")); // Исправлено имя
+        UE_LOG(LogTemp, Log, TEXT("MenuScreenUIManager created and initialized.")); 
     }
-    else { UE_LOG(LogTemp, Error, TEXT("Failed to create MenuScreenUIManager!")); } // Исправлено имя
+    else { UE_LOG(LogTemp, Error, TEXT("Failed to create MenuScreenUIManager!")); } 
 
     NetworkAuthManagerInstance = NewObject<UNetworkAuthManager>(this);
     if (NetworkAuthManagerInstance) {
@@ -97,7 +97,7 @@ void UMyGameInstance::Init()
     else { UE_LOG(LogTemp, Error, TEXT("Failed to create LevelTransitionManagerInstance!")); }
 
     // Запуск таймера для DelayedInitialResize (будет выполняться всегда, но логика внутри DelayedInitialResize будет условной)
-    const float ResizeDelay = 0.1f; // Можно увеличить, если нужно больше времени на загрузку уровня
+    const float ResizeDelay = 0.1f; 
     GetTimerManager().SetTimer(ResizeTimerHandle, this, &UMyGameInstance::DelayedInitialResize, ResizeDelay, false);
     UE_LOG(LogTemp, Log, TEXT("Init: Timer scheduled for DelayedInitialResize in %.2f seconds."), ResizeDelay);
 
@@ -111,8 +111,7 @@ void UMyGameInstance::DelayedInitialResize()
     // Получаем имя текущего загруженного уровня
     FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(GetWorld(), true); // true - для удаления префикса PIE
 
-    // ИЗМЕНЕНИЕ: Выполняем изменение размера и стиля окна ТОЛЬКО для StartLevel
-    if (CurrentLevelName.Equals(TEXT("StartLevel"), ESearchCase::IgnoreCase)) // Замените "StartLevel" на точное имя вашего стартового уровня
+    if (CurrentLevelName.Equals(TEXT("StartLevel"), ESearchCase::IgnoreCase)) 
     {
         UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Current level is StartLevel. Proceeding with window modifications."));
 
@@ -145,7 +144,6 @@ void UMyGameInstance::DelayedInitialResize()
                 Settings->SetScreenResolution(TargetResolution);
                 Settings->SetFullscreenMode(TargetMode);
                 Settings->ApplySettings(false); // Применяем, но не подтверждаем, чтобы не мешать пользователю, если он изменит в игре
-                // Settings->SaveSettings(); // Сохраняем, чтобы при следующем запуске эти настройки были
 
                 TSharedPtr<SWindow> GameWindow = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWindow() : nullptr;
                 if (GameWindow.IsValid())
@@ -178,20 +176,13 @@ void UMyGameInstance::DelayedInitialResize()
         }
         else { UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Could not get GameUserSettings on StartLevel!")); }
 
-        // Вызов ShowStartScreen ТЕПЕРЬ ЗАВИСИТ от вашего StartLevelGameMode
-        // Этот флаг bIsInitialWindowSetupComplete может быть полезен для StartScreenUIManager, чтобы он знал, когда показывать UI
         bIsInitialWindowSetupComplete = true;
         UE_LOG(LogTemp, Warning, TEXT("DelayedInitialResize: Initial window setup for StartLevel complete flag set."));
-        // if (StartScreenUIManagerInstance)
-        // {
-        //     StartScreenUIManagerInstance->ShowStartScreen(); // Если вы хотите, чтобы GI инициировал показ
-        // }
 
     }
     else // Если это не StartLevel
     {
         UE_LOG(LogTemp, Log, TEXT("DelayedInitialResize: Current level is %s, not StartLevel. Skipping window modifications."), *CurrentLevelName);
-        // Здесь можно сбросить флаг или установить дефолтные разрешения для других уровней, если нужно
         bIsInitialWindowSetupComplete = true; // Считаем, что для других уровней настройка не нужна или уже сделана
     }
     UE_LOG(LogTemp, Warning, TEXT("--- UMyGameInstance::DelayedInitialResize() Finished ---"));
@@ -200,21 +191,12 @@ void UMyGameInstance::DelayedInitialResize()
 void UMyGameInstance::Shutdown()
 {
     UE_LOG(LogTemp, Log, TEXT("MyGameInstance Shutdown started."));
-    // Логика сохранения настроек окна при выходе остается,
-    // она полезна, если вы хотите, чтобы оконный режим и его размер сохранялись между сессиями
-    // только для StartLevel или для всех уровней.
-    // Если вы хотите, чтобы только настройки StartLevel сохранялись, добавьте проверку на текущий уровень здесь тоже.
-    // Но обычно настройки окна глобальны.
+
     if (bDesiredResolutionCalculated) // Этот флаг теперь будет true только если мы были на StartLevel и применили кастомный размер
     {
         UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
         if (Settings)
         {
-            // Если мы хотим, чтобы игра всегда закрывалась с нашим DesiredWindowedResolution,
-            // если оно было установлено для StartLevel.
-            // Если игра закрывается из полноэкранного режима на другом уровне, это вернет ее в оконный.
-            // Возможно, эту логику стоит пересмотреть, чтобы она была менее навязчивой.
-            // Пока оставим как есть: если мы меняли размер для StartLevel, пытаемся его сохранить.
             FIntPoint CurrentSavedResolution = Settings->GetScreenResolution();
             EWindowMode::Type CurrentSavedMode = Settings->GetFullscreenMode();
 
@@ -237,9 +219,7 @@ void UMyGameInstance::Shutdown()
     Super::Shutdown();
 }
 
-// --- УДАЛЕНА ФУНКЦИЯ SetupInputMode ---
 
-// --- Функция ApplyWindowMode остается, т.к. может использоваться из UI настроек ---
 void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
 {
     UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
@@ -274,9 +254,9 @@ void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
                 {
                     TargetResolution = Settings->GetDefaultResolution(); // Разрешение из настроек проекта
                 }
-                if (TargetResolution.X <= 0 || TargetResolution.Y <= 0) // Абсолютный крайний случай
+                if (TargetResolution.X <= 0 || TargetResolution.Y <= 0) 
                 {
-                    TargetResolution = FIntPoint(1280, 720); // Или ваши минимальные размеры
+                    TargetResolution = FIntPoint(1280, 720); 
                 }
             }
         }
@@ -291,7 +271,7 @@ void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
         if (bModeChanged)
         {
             Settings->ApplySettings(false); // Применяем без подтверждения, чтобы пользователь мог отменить из UI
-            // Settings->SaveSettings(); // Обычно SaveSettings вызывается после подтверждения пользователем в UI
+
             UE_LOG(LogTemp, Log, TEXT("ApplyWindowMode: Settings Applied (not saved yet)."));
         }
         else { UE_LOG(LogTemp, Verbose, TEXT("ApplyWindowMode: No change needed.")); }

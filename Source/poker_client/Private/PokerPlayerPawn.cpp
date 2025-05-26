@@ -31,10 +31,6 @@ APokerPlayerPawn::APokerPlayerPawn()
 		CameraComponent->SetupAttachment(RootComponent);
 		// Явно устанавливаем камеру как Movable (Перемещаемый)
 		CameraComponent->SetMobility(EComponentMobility::Movable);
-
-		// Здесь можно также задать начальное относительное положение/вращение камеры,
-		// но удобнее это делать в Blueprint редакторе.
-		// Например: CameraComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
 	}
 	else
 	{

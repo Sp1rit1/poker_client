@@ -5,10 +5,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h" // Для CreateWidget
 
-// Включите .h файлы ваших конкретных виджетов, если будете делать касты к ним
-// #include "WBP_MainMenu_InGame.h" 
-// #include "WBP_OfflineLobby_InGame.h"
-// ...
 
 UMenuScreenUIManager::UMenuScreenUIManager()
 {
@@ -116,7 +112,7 @@ void UMenuScreenUIManager::ShowOnlineLobby()
     {
         if (!OnlineLobbyClass) { UE_LOG(LogTemp, Error, TEXT("ShowOnlineLobby: OnlineLobbyClass is not set!")); return; }
 
-        UUserWidget* RawPtrInstance = OnlineLobbyInstance.Get(); // Убедитесь, что имя переменной правильное
+        UUserWidget* RawPtrInstance = OnlineLobbyInstance.Get(); 
         ChangeActiveMenuScreenWidget(OnlineLobbyClass, RawPtrInstance);
         if (RawPtrInstance != OnlineLobbyInstance.Get())
         {
@@ -169,7 +165,6 @@ void UMenuScreenUIManager::TriggerTransitionToGameLevel()
     }
 
     FString GameModeOptions = FString::Printf(TEXT("?Game=/Game/Blueprints/GameModes/BP_OfflineGameMode.BP_OfflineGameMode_C"));
-    // ^^^ ЗАМЕНИТЕ ПУТЬ НА ВАШ ПРАВИЛЬНЫЙ ПУТЬ к BP_OfflineGameMode (или BP_OnlinePokerGameMode для онлайна)
 
     UE_LOG(LogTemp, Log, TEXT("UMenuScreenUIManager: Triggering transition to GameLevel using 'LoadingVideo' assets."));
 
@@ -181,12 +176,11 @@ void UMenuScreenUIManager::TriggerTransitionToGameLevel()
     if (!WidgetClass || !MediaPlayer || !MediaSource)
     {
         UE_LOG(LogTemp, Error, TEXT("UMenuScreenUIManager: Missing 'LoadingVideo' assets in GameInstance for Menu->Game transition. Using fallback or default if available."));
-        // Опционально: можно попробовать использовать DefaultScreensaver...
-        return; // Или просто выходим
+        return; 
     }
 
     LTM->StartLoadLevelWithVideo(
-        FName("MainLevel"), // Или L_PokerTable, как называется ваш игровой уровень
+        FName("MainLevel"), 
         WidgetClass,
         MediaPlayer,
         MediaSource,

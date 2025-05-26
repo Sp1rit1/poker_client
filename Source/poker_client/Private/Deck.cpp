@@ -1,12 +1,10 @@
-﻿#include "Deck.h" // Замените на правильный путь, если нужно
+﻿#include "Deck.h" 
 #include "Algo/RandomShuffle.h"
-#include "Containers/EnumAsByte.h" // Для UEnum и итерации
-#include "UObject/Package.h"       // Для StaticEnum (если еще не включен в PokerDataTypes.cpp для FCard::ToString)
+#include "Containers/EnumAsByte.h" 
+#include "UObject/Package.h"       
 
 UDeck::UDeck()
 {
-	// Конструктор можно оставить пустым или добавить начальную инициализацию,
-	// но обычно Initialize() вызывается явно.
 }
 
 void UDeck::Initialize()

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "PokerDataTypes.h" // Убедитесь, что FCard здесь
+#include "PokerDataTypes.h" 
 #include "PokerCardUtils.generated.h"
 
 UCLASS()

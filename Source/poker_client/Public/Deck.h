@@ -2,17 +2,17 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "PokerDataTypes.h"     // Убедитесь, что FCard здесь определена
-#include "Misc/Optional.h" // <-- ВАЖНО: Включить для TOptional
+#include "PokerDataTypes.h"     
+#include "Misc/Optional.h" 
 #include "Deck.generated.h"
 
 UCLASS()
-class POKER_CLIENT_API UDeck : public UObject // Замените POKER_CLIENT_API на ваш API макрос
+class POKER_CLIENT_API UDeck : public UObject 
 {
 	GENERATED_BODY()
 
 private:
-	UPROPERTY() // Добавим UPROPERTY для корректной работы с GC, хотя для TArray<FCard> это может быть избыточно, но не повредит
+	UPROPERTY() 
 		TArray<FCard> Cards;
 
 public:

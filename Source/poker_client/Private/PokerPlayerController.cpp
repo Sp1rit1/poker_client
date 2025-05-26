@@ -1,7 +1,7 @@
 ﻿#include "PokerPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/Pawn.h"
-#include "GameFramework/GameModeBase.h" // Не используется напрямую, но может быть полезен для контекста
+#include "GameFramework/GameModeBase.h" 
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -12,10 +12,10 @@
 #include "OfflinePokerGameState.h"
 #include "GameHUDInterface.h"
 #include "LevelTransitionManager.h"
-#include "PlayerSeatVisualizerInterface.h" // Включаем интерфейс для мест
+#include "PlayerSeatVisualizerInterface.h" 
 #include "CommunityCardDisplayInterface.h"
-#include "Kismet/GameplayStatics.h"   // Для GetAllActorsWithInterface и GetActorOfClass
-#include "Misc/OutputDeviceNull.h"    // Для CallFunctionByNameWithArguments (если бы использовали)
+#include "Kismet/GameplayStatics.h"   
+#include "Misc/OutputDeviceNull.h"    
 
 APokerPlayerController::APokerPlayerController()
 {
@@ -58,13 +58,6 @@ void APokerPlayerController::BeginPlay()
     }
     else if (IsLocalPlayerController()) { UE_LOG(LogTemp, Warning, TEXT("APokerPlayerController: GameHUDClass not set.")); }
 
-    // Находим актора для отображения общих карт
-    // Рекомендуется искать по конкретному классу вашего BP_CommunityCardArea, если он есть,
-    // или если он один, можно оставить поиск по AActor и проверку интерфейса.
-    // Для большей надежности, если у вас есть C++ базовый класс для BP_CommunityCardArea, используйте его.
-    // AYourCommunityCardAreaBaseClass* FoundCCA = Cast<AYourCommunityCardAreaBaseClass>(UGameplayStatics::GetActorOfClass(GetWorld(), AYourCommunityCardAreaBaseClass::StaticClass()));
-    // if (FoundCCA && FoundCCA->GetClass()->ImplementsInterface(UCommunityCardDisplayInterface::StaticClass())) { ... }
-    // Пока оставим как было, но имейте в виду для улучшения:
     TArray<AActor*> FoundActors;
     UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UCommunityCardDisplayInterface::StaticClass(), FoundActors);
     if (FoundActors.Num() > 0)
@@ -193,19 +186,12 @@ void APokerPlayerController::HandlePlayerTurnStarted(int32 MovingPlayerSeatIndex
     OptCurrentPot.Reset(); OptMovingPlayerCurrentBet.Reset();
 
     OptMovingPlayerSeatIndex = MovingPlayerSeatIndex;
-
-    // Логика переключения режима ввода теперь более явно управляется в TryAggregateAndTriggerHUDUpdate
-    // на основе того, чей ход и есть ли доступные действия для локального игрока.
-    // Здесь мы только сбрасываем TOptional и сохраняем индекс ходящего.
 }
 
 void APokerPlayerController::HandlePlayerActionsAvailable(const TArray<EPlayerAction>& AllowedActions)
 {
     UE_LOG(LogTemp, Log, TEXT("APokerPlayerController::HandlePlayerActionsAvailable: Received %d actions."), AllowedActions.Num());
     OptAllowedActions = AllowedActions;
-    // Если это последний ожидаемый делегат до TryAggregate, можно вызвать его здесь,
-    // но так как у нас их несколько, лучше вызывать TryAggregate в том, который приходит последним.
-    // Либо, если порядок не гарантирован, вызывать TryAggregate в каждом, а он уже проверит все Opt.
 }
 
 void APokerPlayerController::HandleTableStateInfo(const FString& MovingPlayerName, int64 CurrentPot)
@@ -234,11 +220,11 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
     if (!(OptMovingPlayerSeatIndex.IsSet() &&
         OptMovingPlayerName.IsSet() &&
         OptAllowedActions.IsSet() &&
-        OptBetToCall.IsSet() &&             // Это ActualAmountToCallUI для ХОДЯЩЕГО игрока от RequestPlayerAction
-        OptMinRaiseAmount.IsSet() &&        // Это MinPureRaiseValueUI для ХОДЯЩЕГО игрока от RequestPlayerAction
-        OptMovingPlayerStack.IsSet() &&     // Стек ХОДЯЩЕГО игрока
+        OptBetToCall.IsSet() &&             
+        OptMinRaiseAmount.IsSet() &&        
+        OptMovingPlayerStack.IsSet() &&     
         OptCurrentPot.IsSet() &&
-        OptMovingPlayerCurrentBet.IsSet())) // Текущая ставка ХОДЯЩЕГО игрока в этом раунде
+        OptMovingPlayerCurrentBet.IsSet())) 
     {
         FString MissingOpts = TEXT("TryAggregateAndTriggerHUDUpdate: Not all optional values from delegates are set yet. Missing: ");
         if (!OptMovingPlayerSeatIndex.IsSet()) MissingOpts += TEXT("SeatIdx ");
@@ -271,7 +257,6 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
     const int64 StackOfMovingPlayer = OptMovingPlayerStack.GetValue();
     const int64 CurrentBetOfMovingPlayerInRound = OptMovingPlayerCurrentBet.GetValue();
 
-    // Значения, рассчитанные в RequestPlayerAction СПЕЦИАЛЬНО для ХОДЯЩЕГО игрока:
     const int64 CalculatedAmountToCallForMovingPlayer = OptBetToCall.GetValue();
     const int64 CalculatedMinPureRaiseForMovingPlayer = OptMinRaiseAmount.GetValue();
 
@@ -289,7 +274,6 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
         LocalPlayerCurrentBetInThisRound = CurrentGameState->Seats[LocalPlayerActualSeatIndex].CurrentBet;
     }
 
-    // --- ОПРЕДЕЛЯЕМ, ЧТО ПЕРЕДАВАТЬ В HUD для сумм Call/Raise ---
     int64 BetToCallForHUDDisplay;
     int64 MinRaiseForHUDDisplay;
 
@@ -331,8 +315,8 @@ void APokerPlayerController::TryAggregateAndTriggerHUDUpdate()
         CurrentPotOnTable,
         ActualLocalPlayerStack,
         LocalPlayerCurrentBetInThisRound,
-        BetToCallForHUDDisplay, // Обновленное значение
-        MinRaiseForHUDDisplay   // Обновленное значение
+        BetToCallForHUDDisplay, 
+        MinRaiseForHUDDisplay   
     );
     UE_LOG(LogTemp, Warning, TEXT("CONTROLLER TryAggregate: To HUD->UpdateGameInfo: MovingPlayerName=%s, Pot=%lld, LocalStack=%lld, LocalBet=%lld, HUD_BetToCall=%lld, HUD_MinRaise=%lld"),
         *MovingPlayerName, CurrentPotOnTable, ActualLocalPlayerStack, LocalPlayerCurrentBetInThisRound, BetToCallForHUDDisplay, MinRaiseForHUDDisplay);
@@ -375,10 +359,6 @@ void APokerPlayerController::UpdateAllSeatVisualizersFromGameState()
 
         if (FoundVisualizer)
         {
-            // ЗАДАЧА 1: Вызвать UpdatePlayerInfo для всех активных игроков
-            // Мы предполагаем, что если игрок есть в GameState->Seats, то его визуализатор должен быть видим
-            // и его информация (имя, стек) должна быть обновлена.
-            // Видимость самого актора BP_PlayerSeatVisualizer устанавливается один раз в BP_OfflineGameMode.
             UE_LOG(LogTemp, Verbose, TEXT("   Updating PlayerInfo for Seat %d (%s): Stack %lld"), SeatData.SeatIndex, *SeatData.PlayerName, SeatData.Stack);
             IPlayerSeatVisualizerInterface::Execute_UpdatePlayerInfo(FoundVisualizer, SeatData.PlayerName, SeatData.Stack);
 
@@ -388,10 +368,6 @@ void APokerPlayerController::UpdateAllSeatVisualizersFromGameState()
                 UE_LOG(LogTemp, Verbose, TEXT("   Seat %d (%s) is FOLDED. Hiding their hole cards."), SeatData.SeatIndex, *SeatData.PlayerName);
                 IPlayerSeatVisualizerInterface::Execute_HideHoleCards(FoundVisualizer);
             }
-            // Важно: Эта функция НЕ должна отвечать за ПОКАЗ карт (UpdateHoleCards).
-            // Показ карт (лицом для локального, рубашкой для других) происходит ОДИН РАЗ
-            // в APokerPlayerController::HandleActualHoleCardsDealt() после их раздачи.
-            // На шоудауне будет отдельная логика показа карт.
         }
         else
         {
@@ -434,8 +410,6 @@ void APokerPlayerController::HandleActualHoleCardsDealt()
             UE_LOG(LogTemp, Log, TEXT("HandleActualHoleCardsDealt: Processing Seat %d (%s). Status: %s. HoleCards.Num: %d"),
                 SeatData.SeatIndex, *SeatData.PlayerName, *UEnum::GetValueAsString(SeatData.Status), SeatData.HoleCards.Num());
 
-            // Карты показываем или скрываем в зависимости от статуса и количества карт
-            // Игрок должен быть в игре (не Folded, не SittingOut), и у него должно быть 2 карты
             if (SeatData.bIsSittingIn &&
                 SeatData.Status != EPlayerStatus::Folded &&
                 SeatData.Status != EPlayerStatus::SittingOut &&
@@ -526,9 +500,6 @@ void APokerPlayerController::HandleShowdownResults(const TArray<FShowdownPlayerI
 
         if (FoundVisualizer)
         {
-            // Показываем карты лицом, если они есть.
-            // Если игрок сфолдил, его PlayerResult.HoleCards все равно будут переданы,
-            // а UI (WBP_GameHUD) добавит пометку "(сфолдил)".
             if (PlayerResult.HoleCards.Num() > 0)
             {
                 IPlayerSeatVisualizerInterface::Execute_UpdateHoleCards(FoundVisualizer, PlayerResult.HoleCards, true);
@@ -665,13 +636,6 @@ void APokerPlayerController::RequestStartNewHandFromUI()
     {
         UE_LOG(LogTemp, Log, TEXT("RequestStartNewHandFromUI: CanStartNewHand returned true. Calling StartNewHand()."));
 
-        // Опционально: Скрыть элементы шоудауна, если они есть и интерфейс это поддерживает
-        if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
-        {
-            // IGameHUDInterface::Execute_ClearShowdownDisplay(GameHUDWidgetInstance); // Если вы добавили эту функцию
-        }
-        // OnNewHandAboutToStartDelegate в OfflineManager должен позаботиться о скрытии карт на столах
-
         OfflineManager->StartNewHand();
     }
     else
@@ -680,10 +644,7 @@ void APokerPlayerController::RequestStartNewHandFromUI()
         // Уведомить HUD о причине
         if (GameHUDWidgetInstance && GameHUDWidgetInstance->GetClass()->ImplementsInterface(UGameHUDInterface::StaticClass()))
         {
-            // Если у вас есть ShowNotificationMessage в интерфейсе
             IGameHUDInterface::Execute_ShowNotificationMessage(GameHUDWidgetInstance, ReasonWhyNot, 5.0f);
-            // Или используем историю, если нет отдельной функции уведомления
-            // IGameHUDInterface::Execute_AddGameHistoryMessage(GameHUDWidgetInstance, FString::Printf(TEXT("SYSTEM: %s"), *ReasonWhyNot));
         }
     }
 }
@@ -699,30 +660,25 @@ void APokerPlayerController::RequestReturnToMainMenu()
         return;
     }
 
-    ULevelTransitionManager* LTM = GI->GetLevelTransitionManager(); // Предполагаем, что у вас есть такой геттер
+    ULevelTransitionManager* LTM = GI->GetLevelTransitionManager(); 
     if (!LTM)
     {
         UE_LOG(LogTemp, Error, TEXT("RequestReturnToMainMenu: LevelTransitionManager is null!"));
         return;
     }
 
-    // Опционально: Уведомить OfflineGameManager о выходе из игры, если нужно что-то сбросить
+
     UOfflineGameManager* OfflineManager = GI->GetOfflineGameManager();
     if (OfflineManager)
     {
-        // OfflineManager->ResetGameForMenu(); // Создайте эту функцию в OfflineManager, если она нужна
-                                            // Например, для сброса GameStateData или отписки от делегатов,
-                                            // хотя GameInstance и его объекты обычно переживают смену уровня.
-                                            // Для простоты пока можно пропустить, но для чистоты может понадобиться.
         UE_LOG(LogTemp, Log, TEXT("RequestReturnToMainMenu: (Optional) OfflineManager exists, consider resetting it if needed."));
     }
 
-    // Вызываем переход на уровень меню с использованием ассетов заставки из GameInstance
     LTM->StartLoadLevelWithVideo(
-        FName("MenuLevel"),                     // Имя вашего уровня главного меню
-        GI->LoadingVideo_WidgetClass,      // Ассеты по умолчанию из GameInstance
+        FName("MenuLevel"),                     
+        GI->LoadingVideo_WidgetClass,      
         GI->LoadingVideo_MediaPlayer,
         GI->LoadingVideo_MediaSource,
-        TEXT("")                                // Опции GameMode для MenuLevel не нужны, он использует свой дефолтный
+        TEXT("")                                
     );
 }

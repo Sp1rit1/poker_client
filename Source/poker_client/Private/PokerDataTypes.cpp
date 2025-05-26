@@ -1,5 +1,5 @@
-﻿#include "PokerDataTypes.h" // Важно указать правильный путь к .h файлу
-#include "UObject/Package.h" // Для StaticEnum
+﻿#include "PokerDataTypes.h" 
+#include "UObject/Package.h" 
 
 // Реализация метода ToString для структуры FCard
 FString FCard::ToString() const
@@ -24,7 +24,6 @@ FString FCard::ToString() const
     case ECardRank::King:  RankStr = TEXT("K"); break;
     case ECardRank::Ace:   RankStr = TEXT("A"); break;
     default:
-        // Можно добавить логирование или оставить "?" если Rank невалиден
         UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardRank value: %d"), static_cast<int32>(Rank));
         break;
     }
