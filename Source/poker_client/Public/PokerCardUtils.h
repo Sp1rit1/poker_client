@@ -11,6 +11,9 @@ class POKER_CLIENT_API UPokerCardUtils : public UBlueprintFunctionLibrary
     GENERATED_BODY()
 
 public:
+    UFUNCTION(BlueprintPure, Category = "Poker|Card Utils", meta = (DisplayName = "To RussianString (Card)", CompactNodeTitle = "->S"))
+    static FString Conv_CardToRussianString(const FCard& Card);
+
     UFUNCTION(BlueprintPure, Category = "Poker|Card Utils", meta = (DisplayName = "To String (Card)", CompactNodeTitle = "->S"))
     static FString Conv_CardToString(const FCard& Card);
 

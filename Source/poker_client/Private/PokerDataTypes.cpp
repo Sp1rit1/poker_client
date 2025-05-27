@@ -4,44 +4,46 @@
 // Реализация метода ToString для структуры FCard
 FString FCard::ToString() const
 {
-    FString RankStr = TEXT("?");
-    FString SuitStr = TEXT("?");
+    FString SuitString = TEXT("UnknownSuit"); // Значение по умолчанию на случай ошибки
+    FString RankString = TEXT("UnknownRank"); // Значение по умолчанию на случай ошибки
 
-    // --- Обработка Ранга с помощью switch-case ---
-    switch (Rank)
-    {
-    case ECardRank::Two:   RankStr = TEXT("2"); break;
-    case ECardRank::Three: RankStr = TEXT("3"); break;
-    case ECardRank::Four:  RankStr = TEXT("4"); break;
-    case ECardRank::Five:  RankStr = TEXT("5"); break;
-    case ECardRank::Six:   RankStr = TEXT("6"); break;
-    case ECardRank::Seven: RankStr = TEXT("7"); break;
-    case ECardRank::Eight: RankStr = TEXT("8"); break;
-    case ECardRank::Nine:  RankStr = TEXT("9"); break;
-    case ECardRank::Ten:   RankStr = TEXT("T"); break;
-    case ECardRank::Jack:  RankStr = TEXT("J"); break;
-    case ECardRank::Queen: RankStr = TEXT("Q"); break;
-    case ECardRank::King:  RankStr = TEXT("K"); break;
-    case ECardRank::Ace:   RankStr = TEXT("A"); break;
-    default:
-        UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardRank value: %d"), static_cast<int32>(Rank));
-        break;
-    }
-
-    // --- Обработка Масти с помощью switch-case ---
+    // --- Формирование Строки для Масти ---
     switch (Suit)
     {
-    case ECardSuit::Clubs:    SuitStr = TEXT("c"); break;
-    case ECardSuit::Diamonds: SuitStr = TEXT("d"); break;
-    case ECardSuit::Hearts:   SuitStr = TEXT("h"); break;
-    case ECardSuit::Spades:   SuitStr = TEXT("s"); break;
+    case ECardSuit::Clubs:    SuitString = TEXT("Clubs");    break;
+    case ECardSuit::Diamonds: SuitString = TEXT("Diamonds"); break;
+    case ECardSuit::Hearts:   SuitString = TEXT("Hearts");   break;
+    case ECardSuit::Spades:   SuitString = TEXT("Spades");   break;
     default:
-        // Можно добавить логирование или оставить "?" если Suit невалиден
         UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardSuit value: %d"), static_cast<int32>(Suit));
+        // SuitString останется "UnknownSuit"
         break;
     }
 
-    return FString::Printf(TEXT("%s%s"), *RankStr, *SuitStr);
+    // --- Формирование Строки для Ранга (чтобы соответствовать вашим Row Names "Hearts_2", "Spades_Ace") ---
+    switch (Rank)
+    {
+    case ECardRank::Two:   RankString = TEXT("2");     break;
+    case ECardRank::Three: RankString = TEXT("3");     break;
+    case ECardRank::Four:  RankString = TEXT("4");     break;
+    case ECardRank::Five:  RankString = TEXT("5");     break;
+    case ECardRank::Six:   RankString = TEXT("6");     break;
+    case ECardRank::Seven: RankString = TEXT("7");     break;
+    case ECardRank::Eight: RankString = TEXT("8");     break;
+    case ECardRank::Nine:  RankString = TEXT("9");     break;
+    case ECardRank::Ten:   RankString = TEXT("10");    break; // Используем "10", как в вашем примере "Hearts_10"
+    case ECardRank::Jack:  RankString = TEXT("Jack");  break;
+    case ECardRank::Queen: RankString = TEXT("Queen"); break;
+    case ECardRank::King:  RankString = TEXT("King");  break;
+    case ECardRank::Ace:   RankString = TEXT("Ace");   break;
+    default:
+        UE_LOG(LogTemp, Warning, TEXT("FCard::ToString() - Unknown ECardRank value: %d"), static_cast<int32>(Rank));
+        // RankString останется "UnknownRank"
+        break;
+    }
+
+    // Собираем итоговую строку в формате "Масть_Ранг"
+    return FString::Printf(TEXT("%s_%s"), *SuitString, *RankString);
 }
 
 FString FCard::ToRussianString() const

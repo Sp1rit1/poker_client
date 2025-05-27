@@ -41,9 +41,14 @@ EPlayerStatus UPokerCardUtils::GetShowdownPlayerStatus(const FShowdownPlayerInfo
     return ShowdownInfo.PlayerStatusAtShowdown;
 }
 
-FString UPokerCardUtils::Conv_CardToString(const FCard& Card)
+FString UPokerCardUtils::Conv_CardToRussianString(const FCard& Card)
 {
     return Card.ToRussianString(); 
+}
+
+FString UPokerCardUtils::Conv_CardToString(const FCard& Card)
+{
+    return Card.ToString();
 }
 
 EPokerHandRank UPokerCardUtils::GetHandRankFromResult(const FPokerHandResult& HandResult)

@@ -1,3 +1,4 @@
+
 using UnrealBuildTool;
 
 public class poker_client_tests : ModuleRules
@@ -7,11 +8,13 @@ public class poker_client_tests : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
         PublicIncludePaths.AddRange(
-            new string[] {}
+            new string[] {
+            }
         );
 
         PrivateIncludePaths.AddRange(
-            new string[] {}
+            new string[] {
+            }
         );
 
         PublicDependencyModuleNames.AddRange(
@@ -25,23 +28,23 @@ public class poker_client_tests : ModuleRules
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
-                "CoreUObject",
-                "Engine",
-                "Slate",
-                "SlateCore",
                 "CoreUObject", 
                 "Engine",      
-                "UnrealEd",    
-                "AutomationController", 
-                "AutomationWindow",
-                "FunctionalTesting"
+                "Slate",       
+                "SlateCore",   
+                "AutomationController"  
             }
         );
 
         if (Target.bBuildEditor == true)
         {
             PrivateDependencyModuleNames.AddRange(
-                new string[] {}
+                new string[]
+                {
+                    "UnrealEd",         
+                    "AutomationWindow", 
+                    "FunctionalTesting"
+                }
             );
         }
     }

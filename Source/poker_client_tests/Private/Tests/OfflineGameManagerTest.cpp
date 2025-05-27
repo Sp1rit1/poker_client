@@ -1,6 +1,8 @@
 ﻿#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
+#if WITH_EDITOR 
 #include "Editor.h" 
+#endif 
 #include "Engine/Engine.h" 
 #include "poker_client/Public/OfflineGameManager.h" 
 #include "poker_client/Public/OfflinePokerGameState.h"
@@ -8,9 +10,12 @@
 #include "poker_client/Public/PokerDataTypes.h"
 #include "poker_client/Public/PokerBotAI.h"
 
-static UOfflineGameManager* CreateTestOfflineManagerForAutomation(FAutomationTestBase* TestRunner)
+static UOfflineGameManager* CreateTestOfflineManagerForAutomation(FAutomationTestBase* TestRunner = nullptr)
 {
     UWorld* TestWorld = nullptr;
+
+    // 1. Пытаемся получить игровой мир или мир PIE (Play In Editor)
+    // Этот способ должен работать как в редакторе, так и в Development сборках.
     if (GEngine)
     {
         for (const FWorldContext& Context : GEngine->GetWorldContexts())
@@ -18,26 +23,81 @@ static UOfflineGameManager* CreateTestOfflineManagerForAutomation(FAutomationTes
             if (Context.WorldType == EWorldType::PIE || Context.WorldType == EWorldType::Game)
             {
                 TestWorld = Context.World();
-                if (TestWorld) break;
+                if (TestWorld && TestWorld->IsValidLowLevel()) // Дополнительная проверка на валидность
+                {
+                    break;
+                }
+                else
+                {
+                    TestWorld = nullptr; // Сбрасываем, если невалиден
+                }
             }
         }
     }
-    if (!TestWorld && GIsEditor)
+
+    // 2. Если мир не найден и мы находимся в контексте редактора, пытаемся получить мир редактора
+    // Этот блок кода будет скомпилирован ТОЛЬКО для сборок редактора.
+#if WITH_EDITOR
+    if (!TestWorld && GIsEditor) // GIsEditor проверяет, запущена ли игра в редакторе
     {
-        if (GEditor)
+        if (GEditor) // Проверяем, что GEditor валиден
         {
-            UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-            if (EditorWorld) TestWorld = EditorWorld;
+            // Пытаемся получить текущий активный мир редактора
+            UWorld* EditorWorldContextWorld = GEditor->GetEditorWorldContext().World();
+            if (EditorWorldContextWorld && EditorWorldContextWorld->IsValidLowLevel())
+            {
+                TestWorld = EditorWorldContextWorld;
+            }
+            else
+            {
+                // Если не получилось, пытаемся получить мир PIE через GEditor (на случай, если PIE сессия активна)
+                UWorld* PlayInEditorWorld = GEditor->GetEditorWorldContext().World();
+                if (PlayInEditorWorld && PlayInEditorWorld->IsValidLowLevel())
+                {
+                    TestWorld = PlayInEditorWorld;
+                }
+            }
+        }
+    }
+#endif // WITH_EDITOR
+
+    // 3. Определяем Outer для NewObject
+    // Если мир найден, используем его как Outer. Иначе, используем GetTransientPackage().
+    UObject* OuterForNewObject = nullptr;
+    if (TestWorld && TestWorld->IsValidLowLevel())
+    {
+        OuterForNewObject = TestWorld;
+    }
+    else
+    {
+        OuterForNewObject = GetTransientPackage();
+        if (TestRunner) // Выводим предупреждение только если есть TestRunner (т.е. вызывается из теста)
+        {
+            TestRunner->AddWarning(TEXT("CreateTestOfflineManager: Could not obtain a valid UWorld for Outer. Using GetTransientPackage(). GameInstance-dependent features in OfflineGameManager might not work as expected."));
+        }
+        else // Если TestRunner не передан, просто логируем
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CreateTestOfflineManager: Could not obtain a valid UWorld for Outer. Using GetTransientPackage()."));
         }
     }
 
-    UObject* OuterForNewObject = TestWorld ? static_cast<UObject*>(TestWorld) : static_cast<UObject*>(GetTransientPackage());
-    if (!TestWorld && TestRunner) // Добавляем ошибку только если мир не найден и есть TestRunner
+    if (!OuterForNewObject) // На всякий случай, если даже GetTransientPackage() вернул null (крайне маловероятно)
     {
-        TestRunner->AddWarning(TEXT("Could not obtain a valid UWorld for test Outer. Using GetTransientPackage(). GameInstance-dependent features might not work."));
+        UE_LOG(LogTemp, Error, TEXT("CreateTestOfflineManager: OuterForNewObject is null! Cannot create OfflineGameManager."));
+        return nullptr;
     }
 
-    return NewObject<UOfflineGameManager>(OuterForNewObject);
+    // 4. Создаем экземпляр UOfflineGameManager
+    UOfflineGameManager* Manager = NewObject<UOfflineGameManager>(OuterForNewObject);
+
+    if (!Manager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CreateTestOfflineManager: NewObject<UOfflineGameManager> returned null!"));
+    }
+    else
+    {}
+
+    return Manager;
 }
 
 static void SetSpecificCards(UOfflinePokerGameState* GameState, int32 Player1Seat, ECardSuit P1C1S, ECardRank P1C1R, ECardSuit P1C2S, ECardRank P1C2R,
