@@ -29,6 +29,9 @@ public:
     virtual void Init() override;
     virtual void Shutdown() override;
 
+    UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "User Session")
+    FString AuthToken;
+
     // --- Глобальное Состояние Игры (Логин, Оффлайн Режим) ---
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "User Session")
     bool bIsLoggedIn = false;
@@ -138,15 +141,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Managers")
     ULevelTransitionManager* GetLevelTransitionManager() const { return LevelTransitionManagerInstance; }
 
-    // Обновленная функция для установки статуса логина
+
     UFUNCTION(BlueprintCallable, Category = "User Session")
-    void SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername, const FString& NewFriendCode);
+    void SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername, const FString& NewFriendCode, const FString& NewAuthToken);
 
     UFUNCTION(BlueprintCallable, Category = "User Session")
     void SetOfflineMode(bool bNewIsOffline);
 
     UFUNCTION(BlueprintCallable, Category = "Window Settings")
     void ApplyWindowMode(bool bWantFullscreen);
+
+    UFUNCTION(BlueprintPure, Category = "User Session")
+    FString GetAuthToken() const { return AuthToken; }
 
     UPROPERTY(BlueprintReadOnly, Category = "Window Settings")
     bool bIsInitialWindowSetupComplete = false;

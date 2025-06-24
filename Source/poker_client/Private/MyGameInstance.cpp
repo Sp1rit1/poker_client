@@ -33,6 +33,7 @@ UMyGameInstance::UMyGameInstance()
     bDesiredResolutionCalculated = false;
     bIsLoggedIn = false;
     LoggedInUsername = TEXT("");
+    AuthToken = TEXT("");
     LoggedInUserId = -1;
     LoggedInFriendCode = TEXT("");
     bIsInOfflineMode = true; // Начинаем в оффлайн режиме по умолчанию
@@ -279,25 +280,31 @@ void UMyGameInstance::ApplyWindowMode(bool bWantFullscreen)
     else { UE_LOG(LogTemp, Warning, TEXT("ApplyWindowMode: Could not get GameUserSettings.")); }
 }
 
-// --- Функции SetLoginStatus и SetOfflineMode остаются без изменений ---
-void UMyGameInstance::SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername, const FString& NewFriendCode)
+void UMyGameInstance::SetLoginStatus(bool bNewIsLoggedIn, int64 NewUserId, const FString& NewUsername, const FString& NewFriendCode, const FString& NewAuthToken)
 {
     bIsLoggedIn = bNewIsLoggedIn;
     LoggedInUserId = bNewIsLoggedIn ? NewUserId : -1;
     LoggedInUsername = bNewIsLoggedIn ? NewUsername : TEXT("");
     LoggedInFriendCode = bNewIsLoggedIn ? NewFriendCode : TEXT("");
+    AuthToken = bNewIsLoggedIn ? NewAuthToken : TEXT(""); // <--- СОХРАНЯЕМ/СБРАСЫВАЕМ ТОКЕН
+
     if (bIsLoggedIn) {
         bIsInOfflineMode = false;
     }
-    UE_LOG(LogTemp, Log, TEXT("Login Status Updated: LoggedIn=%s, UserID=%lld, Username='%s', FriendCode='%s'"),
-        bIsLoggedIn ? TEXT("true") : TEXT("false"), LoggedInUserId, *LoggedInUsername, *LoggedInFriendCode);
+
+    UE_LOG(LogTemp, Log, TEXT("UMyGameInstance::SetLoginStatus - LoggedIn: %s, UserID: %lld, Username: '%s', FriendCode: '%s', AuthToken set: %s"),
+        bIsLoggedIn ? TEXT("true") : TEXT("false"),
+        LoggedInUserId,
+        *LoggedInUsername,
+        *LoggedInFriendCode,
+        bIsLoggedIn && !AuthToken.IsEmpty() ? TEXT("YES") : TEXT("NO"));
 }
 
 void UMyGameInstance::SetOfflineMode(bool bNewIsOffline)
 {
     bIsInOfflineMode = bNewIsOffline;
     if (bIsInOfflineMode) {
-        SetLoginStatus(false, -1, TEXT(""), TEXT(""));
+        SetLoginStatus(false, -1, TEXT(""), TEXT(""), TEXT(""));
     }
     UE_LOG(LogTemp, Log, TEXT("Offline Mode Status Updated: IsOffline=%s"), bIsInOfflineMode ? TEXT("true") : TEXT("false"));
 }
