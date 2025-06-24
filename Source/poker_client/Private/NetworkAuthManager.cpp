@@ -158,12 +158,10 @@ void UNetworkAuthManager::OnLoginResponseReceived(FHttpRequestPtr Request, FHttp
 
 void UNetworkAuthManager::RequestRegister(const FString& Username, const FString& Password, const FString& Email)
 {
-    // Этот метод остается без изменений, так как регистрация обычно не включает возврат JWT.
-    // Если ваша логика сервера изменилась и регистрация сразу возвращает токен,
-    // то OnRegisterResponseReceived нужно будет обновить аналогично OnLoginResponseReceived.
-    if (!OwningGameInstance) { /* ... */ return; }
-    if (ApiBaseUrl.IsEmpty()) { /* ... */ return; }
-    // ... (остальная часть вашего существующего кода RequestRegister) ...
+
+    if (!OwningGameInstance) { return; }
+    if (ApiBaseUrl.IsEmpty()) {return; }
+
     UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestRegister for user: %s"), *Username);
     TSharedPtr<FJsonObject> RequestJson = MakeShareable(new FJsonObject);
     RequestJson->SetStringField(TEXT("username"), Username);
@@ -171,7 +169,7 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     RequestJson->SetStringField(TEXT("email"), Email);
     FString RequestBody;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
-    if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer)) { /* ... */ OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(false, TEXT("Ошибка создания запроса.")); return; }
+    if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer)) {  OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(false, TEXT("Ошибка создания запроса.")); return; }
     FHttpModule& HttpModule = FHttpModule::Get();
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
     HttpRequest->SetVerb(TEXT("POST"));
@@ -179,15 +177,14 @@ void UNetworkAuthManager::RequestRegister(const FString& Username, const FString
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     HttpRequest->SetContentAsString(RequestBody);
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnRegisterResponseReceived);
-    if (!HttpRequest->ProcessRequest()) { /* ... */ OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(false, TEXT("Ошибка сети.")); }
+    if (!HttpRequest->ProcessRequest()) { OwningGameInstance->OnRegisterAttemptCompleted.Broadcast(false, TEXT("Ошибка сети.")); }
     else { UE_LOG(LogTemp, Log, TEXT("RequestRegister: Request sent.")); }
 }
 
 void UNetworkAuthManager::OnRegisterResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-    // Этот метод остается без изменений, если сервер не возвращает токен при регистрации.
-    // ... (ваш существующий код OnRegisterResponseReceived) ...
-    if (!OwningGameInstance) { /* ... */ return; }
+
+    if (!OwningGameInstance) {  return; }
     bool bRegisterSuccess = false;
     FString ResultMessage = TEXT("Неизвестная ошибка регистрации.");
     if (bWasSuccessful && Response.IsValid()) {
@@ -199,7 +196,7 @@ void UNetworkAuthManager::OnRegisterResponseReceived(FHttpRequestPtr Request, FH
             ResultMessage = TEXT("Регистрация прошла успешно! Теперь вы можете войти.");
         }
         else {
-            // Улучшенный парсинг сообщения об ошибке
+
             TSharedPtr<FJsonObject> ErrorJson;
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
             if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid() && ErrorJson->HasTypedField<EJson::String>(TEXT("message"))) {
@@ -235,25 +232,25 @@ void UNetworkAuthManager::RequestAddFriend(const FString& FriendCode)
     RequestJson->SetStringField(TEXT("friendCode"), FriendCode);
     FString RequestBodyString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBodyString);
-    if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer)) { /* ... ошибка сериализации ... */ return; }
+    if (!FJsonSerializer::Serialize(RequestJson.ToSharedRef(), Writer)) {  return; }
 
     FHttpModule& HttpModule = FHttpModule::Get();
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
     HttpRequest->SetVerb(TEXT("POST"));
     HttpRequest->SetURL(ApiBaseUrl + TEXT("/friends/add"));
     HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); // <--- ДОБАВЛЯЕМ JWT
+    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); 
     HttpRequest->SetContentAsString(RequestBodyString);
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnAddFriendResponseReceived);
 
-    if (!HttpRequest->ProcessRequest()) { /* ... ошибка отправки ... */ }
+    if (!HttpRequest->ProcessRequest()) { }
     else { UE_LOG(LogTemp, Log, TEXT("RequestAddFriend: Request sent.")); }
 }
 
 void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-    // Логика остается прежней, но теперь запрос был аутентифицирован через JWT
-    // ... (ваш существующий код OnAddFriendResponseReceived, который уже должен хорошо парсить ошибки и успех) ...
+
+
     if (!OwningGameInstance) { /* ... */ return; }
     bool bAddSuccess = false;
     FString ResultMessage = TEXT("Неизвестная ошибка при добавлении друга.");
@@ -263,7 +260,6 @@ void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, F
         UE_LOG(LogTemp, Log, TEXT("OnAddFriendResponseReceived: Code: %d, Body: %s"), ResponseCode, *ResponseBody);
         if (ResponseCode == 200 || ResponseCode == 201) {
             bAddSuccess = true;
-            // Пытаемся извлечь "message" из JSON ответа, если есть
             TSharedPtr<FJsonObject> JsonObject;
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
             if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid() && JsonObject->HasTypedField<EJson::String>(TEXT("message"))) {
@@ -274,7 +270,7 @@ void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, F
             }
         }
         else {
-            // Улучшенный парсинг сообщения об ошибке
+
             TSharedPtr<FJsonObject> ErrorJson;
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
             if (FJsonSerializer::Deserialize(Reader, ErrorJson) && ErrorJson.IsValid() && ErrorJson->HasTypedField<EJson::String>(TEXT("message"))) {
@@ -294,27 +290,25 @@ void UNetworkAuthManager::OnAddFriendResponseReceived(FHttpRequestPtr Request, F
 
 void UNetworkAuthManager::RequestFriendList()
 {
-    if (!OwningGameInstance || !OwningGameInstance->bIsLoggedIn) { /* ... ошибка, пользователь не залогинен ... */ if (OnFriendListReceivedDelegate.IsBound()) OnFriendListReceivedDelegate.Broadcast(false, {}, TEXT("Необходимо войти.")); return; }
-    if (ApiBaseUrl.IsEmpty()) { /* ... ошибка URL ... */ if (OnFriendListReceivedDelegate.IsBound()) OnFriendListReceivedDelegate.Broadcast(false, {}, TEXT("Ошибка URL API.")); return; }
+    if (!OwningGameInstance || !OwningGameInstance->bIsLoggedIn) {  if (OnFriendListReceivedDelegate.IsBound()) OnFriendListReceivedDelegate.Broadcast(false, {}, TEXT("Необходимо войти.")); return; }
+    if (ApiBaseUrl.IsEmpty()) { if (OnFriendListReceivedDelegate.IsBound()) OnFriendListReceivedDelegate.Broadcast(false, {}, TEXT("Ошибка URL API.")); return; }
 
     UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestFriendList..."));
     FHttpModule& HttpModule = FHttpModule::Get();
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
     HttpRequest->SetVerb(TEXT("GET"));
     HttpRequest->SetURL(ApiBaseUrl + TEXT("/friends/list"));
-    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); // <--- ДОБАВЛЯЕМ JWT
+    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); 
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnFriendListResponseReceived);
 
-    if (!HttpRequest->ProcessRequest()) { /* ... ошибка отправки ... */ }
+    if (!HttpRequest->ProcessRequest()) {  }
     else { UE_LOG(LogTemp, Log, TEXT("RequestFriendList: Request sent.")); }
 }
 
 void UNetworkAuthManager::OnFriendListResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-    // Этот код вы уже должны были написать ранее, он остается практически таким же.
-    // Главное, что запрос теперь идет с JWT.
-    // ... (ваш существующий код OnFriendListResponseReceived для парсинга массива FPlayerFriendInfo) ...
-    if (!OwningGameInstance) { /* ... */ return; }
+
+    if (!OwningGameInstance) {  return; }
     TArray<FPlayerFriendInfo> ReceivedFriends;
     FString ErrorMessage = TEXT("Неизвестная ошибка при получении списка друзей.");
     bool bSuccess = false;
@@ -338,7 +332,7 @@ void UNetworkAuthManager::OnFriendListResponseReceived(FHttpRequestPtr Request, 
         }
         else { ErrorMessage = TEXT("Ошибка парсинга JSON списка друзей."); }
     }
-    else { /* ... обработка ошибок сети или кода ответа ... */
+    else { 
         if (!Response.IsValid()) { ErrorMessage = TEXT("Сервер не доступен."); }
         else { ErrorMessage = FString::Printf(TEXT("Ошибка сервера (Код: %d) (список друзей)."), Response->GetResponseCode()); }
     }
@@ -347,25 +341,23 @@ void UNetworkAuthManager::OnFriendListResponseReceived(FHttpRequestPtr Request, 
 
 void UNetworkAuthManager::RequestPlayerStats()
 {
-    if (!OwningGameInstance || !OwningGameInstance->bIsLoggedIn) { /* ... ошибка, пользователь не залогинен ... */ if (OnPlayerStatsReceivedDelegate.IsBound()) OnPlayerStatsReceivedDelegate.Broadcast(false, FPlayerStatsInfo(), TEXT("Необходимо войти.")); return; }
-    if (ApiBaseUrl.IsEmpty()) { /* ... ошибка URL ... */ if (OnPlayerStatsReceivedDelegate.IsBound()) OnPlayerStatsReceivedDelegate.Broadcast(false, FPlayerStatsInfo(), TEXT("Ошибка URL API.")); return; }
+    if (!OwningGameInstance || !OwningGameInstance->bIsLoggedIn) { if (OnPlayerStatsReceivedDelegate.IsBound()) OnPlayerStatsReceivedDelegate.Broadcast(false, FPlayerStatsInfo(), TEXT("Необходимо войти.")); return; }
+    if (ApiBaseUrl.IsEmpty()) {  if (OnPlayerStatsReceivedDelegate.IsBound()) OnPlayerStatsReceivedDelegate.Broadcast(false, FPlayerStatsInfo(), TEXT("Ошибка URL API.")); return; }
 
     UE_LOG(LogTemp, Log, TEXT("UNetworkAuthManager::RequestPlayerStats..."));
     FHttpModule& HttpModule = FHttpModule::Get();
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
     HttpRequest->SetVerb(TEXT("GET"));
     HttpRequest->SetURL(ApiBaseUrl + TEXT("/stats/me"));
-    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); // <--- ДОБАВЛЯЕМ JWT
+    AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); 
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnPlayerStatsResponseReceived);
 
-    if (!HttpRequest->ProcessRequest()) { /* ... ошибка отправки ... */ }
+    if (!HttpRequest->ProcessRequest()) { }
     else { UE_LOG(LogTemp, Log, TEXT("RequestPlayerStats: Request sent.")); }
 }
 
 void UNetworkAuthManager::OnPlayerStatsResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-    // Этот код вы уже должны были написать ранее, он остается практически таким же.
-    // ... (ваш существующий код OnPlayerStatsResponseReceived для парсинга FPlayerStatsInfo) ...
     if (!OwningGameInstance) { /* ... */ return; }
     FPlayerStatsInfo ReceivedStats;
     FString ErrorMessage = TEXT("Неизвестная ошибка при получении статистики.");
@@ -399,7 +391,7 @@ void UNetworkAuthManager::RequestRemoveFriendByCode(const FString& FriendCodeToR
         }
         return;
     }
-    if (ApiBaseUrl.IsEmpty()) { /* ... ошибка URL ... */ return; }
+    if (ApiBaseUrl.IsEmpty()) {  return; }
     if (FriendCodeToRemove.IsEmpty()) {
         UE_LOG(LogTemp, Warning, TEXT("RequestRemoveFriendByCode: FriendCodeToRemove is empty."));
         if (OnRemoveFriendAttemptCompletedDelegate.IsBound()) {
@@ -414,12 +406,10 @@ void UNetworkAuthManager::RequestRemoveFriendByCode(const FString& FriendCodeToR
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = HttpModule.CreateRequest();
 
     HttpRequest->SetVerb(TEXT("DELETE"));
-    // Формируем URL с friendCode как частью пути
     FString Url = FString::Printf(TEXT("%s/friends/remove-by-code/%s"), *ApiBaseUrl, *FriendCodeToRemove);
     HttpRequest->SetURL(Url);
     AddAuthorizationHeaderToRequest(HttpRequest, OwningGameInstance); // JWT токен
 
-    // Для DELETE тело запроса обычно не нужно
     HttpRequest->OnProcessRequestComplete().BindUObject(this, &UNetworkAuthManager::OnRemoveFriendByCodeResponseReceived); // Используем новый обработчик
 
     if (!HttpRequest->ProcessRequest()) {
@@ -433,30 +423,25 @@ void UNetworkAuthManager::RequestRemoveFriendByCode(const FString& FriendCodeToR
     }
 }
 
-// Переименовываем или создаем новый обработчик
+
 void UNetworkAuthManager::OnRemoveFriendByCodeResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-    // Логика этого обработчика остается такой же, как была в OnRemoveFriendResponseReceived
-    // Он просто сообщает об успехе или ошибке через OnRemoveFriendAttemptCompletedDelegate
+
     if (!OwningGameInstance) { UE_LOG(LogTemp, Error, TEXT("OnRemoveFriendByCodeResponseReceived: OwningGameInstance is null.")); return; }
 
     bool bRemoveSuccess = false;
     FString ResultMessage = TEXT("Неизвестная ошибка при удалении друга.");
 
-    // ... (дальнейшая логика парсинга ответа и вызова OnRemoveFriendAttemptCompletedDelegate.Broadcast(...)) ...
-    // Скопируйте сюда вашу существующую логику из OnRemoveFriendResponseReceived, она должна подойти.
-    // Главное, что она вызывается правильным запросом.
+
     if (bWasSuccessful && Response.IsValid())
     {
         int32 ResponseCode = Response->GetResponseCode();
         FString ResponseBody = Response->GetContentAsString();
-        if (ResponseCode == 200 || ResponseCode == 204) { // OK или No Content
+        if (ResponseCode == 200 || ResponseCode == 204) { 
             bRemoveSuccess = true;
-            // ... парсинг опционального message из JSON ...
             ResultMessage = TEXT("Друг успешно удален.");
         }
         else {
-            // ... парсинг JSON ошибки ...
             ResultMessage = FString::Printf(TEXT("Ошибка удаления друга (Код: %d)"), ResponseCode);
         }
     }
